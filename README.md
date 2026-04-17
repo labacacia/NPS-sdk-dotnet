@@ -2,7 +2,7 @@ English | [中文版](./README.cn.md)
 
 # NPS .NET SDK
 
-[![NuGet](https://img.shields.io/nuget/v/NPS.Core)](https://www.nuget.org/packages/NPS.Core)
+[![NuGet](https://img.shields.io/nuget/v/LabAcacia.NPS.Core)](https://www.nuget.org/packages/LabAcacia.NPS.Core)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](./LICENSE)
 
 .NET 10 / C# reference implementation of the **Neural Protocol Suite (NPS)** — a complete internet protocol suite designed for AI Agents and models.
@@ -13,29 +13,29 @@ English | [中文版](./README.cn.md)
 
 | Package | Version | Description |
 |---------|---------|-------------|
-| `NPS.Core` | 1.0.0-alpha.1 | Shared frame types, encoding/decoding (JSON/MsgPack), AnchorFrame cache |
-| `NPS.NWP` | 1.0.0-alpha.1 | Neural Web Protocol — NWM manifest, Query/Action frames, Memory Node middleware |
-| `NPS.NIP` | 1.0.0-alpha.1 | Neural Identity Protocol — CA, key generation, certificate issuance/revocation, OCSP, CRL |
-| `NPS.NDP` | 1.0.0-alpha.1 | Neural Discovery Protocol — announce/resolve frames, in-memory registry, Ed25519 validation |
-| `NPS.NOP` | 1.0.0-alpha.1 | Neural Orchestration Protocol — Task/Delegate/Sync/AlignStream frames, DAG validator, orchestration engine |
+| `LabAcacia.NPS.Core` | 1.0.0-alpha.1 | Shared frame types, encoding/decoding (JSON/MsgPack), AnchorFrame cache |
+| `LabAcacia.NPS.NWP` | 1.0.0-alpha.1 | Neural Web Protocol — NWM manifest, Query/Action frames, Memory Node middleware |
+| `LabAcacia.NPS.NIP` | 1.0.0-alpha.1 | Neural Identity Protocol — CA, key generation, certificate issuance/revocation, OCSP, CRL |
+| `LabAcacia.NPS.NDP` | 1.0.0-alpha.1 | Neural Discovery Protocol — announce/resolve frames, in-memory registry, Ed25519 validation |
+| `LabAcacia.NPS.NOP` | 1.0.0-alpha.1 | Neural Orchestration Protocol — Task/Delegate/Sync/AlignStream frames, DAG validator, orchestration engine |
 
 ## Installation
 
 ```bash
 # Core framing + codec (required by all packages)
-dotnet add package NPS.Core --version 1.0.0-alpha.1
+dotnet add package LabAcacia.NPS.Core --version 1.0.0-alpha.1
 
 # Neural Web Protocol
-dotnet add package NPS.NWP --version 1.0.0-alpha.1
+dotnet add package LabAcacia.NPS.NWP --version 1.0.0-alpha.1
 
 # Neural Identity Protocol
-dotnet add package NPS.NIP --version 1.0.0-alpha.1
+dotnet add package LabAcacia.NPS.NIP --version 1.0.0-alpha.1
 
 # Neural Discovery Protocol
-dotnet add package NPS.NDP --version 1.0.0-alpha.1
+dotnet add package LabAcacia.NPS.NDP --version 1.0.0-alpha.1
 
 # Neural Orchestration Protocol
-dotnet add package NPS.NOP --version 1.0.0-alpha.1
+dotnet add package LabAcacia.NPS.NOP --version 1.0.0-alpha.1
 ```
 
 ## Quick Start
