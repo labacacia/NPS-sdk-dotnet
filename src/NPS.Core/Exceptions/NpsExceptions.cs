@@ -1,0 +1,143 @@
+// Copyright 2026 INNO LOTUS PTY LTD
+// SPDX-License-Identifier: Apache-2.0
+
+namespace NPS.Core.Exceptions;
+
+/// <summary>Base exception for all NPS protocol errors.</summary>
+public class NpsException : Exception
+{
+    /// <summary>NPS status code (e.g. <c>NPS-CLIENT-NOT-FOUND</c>). Null for non-wire errors.</summary>
+    public string? NpsStatusCode { get; }
+
+    /// <summary>Protocol-level error code (e.g. <c>NCP-ANCHOR-NOT-FOUND</c>). Null for non-wire errors.</summary>
+    public string? ProtocolErrorCode { get; }
+
+    public NpsException(string message) : base(message) { }
+    public NpsException(string message, Exception inner) : base(message, inner) { }
+
+    public NpsException(string message, string npsStatusCode, string protocolErrorCode)
+        : base(message)
+    {
+        NpsStatusCode = npsStatusCode;
+        ProtocolErrorCode = protocolErrorCode;
+    }
+}
+
+/// <summary>Thrown when a frame cannot be parsed or its structure is invalid.</summary>
+public sealed class NpsFrameException : NpsException
+{
+    public NpsFrameException(string message) : base(message) { }
+    public NpsFrameException(string message, Exception inner) : base(message, inner) { }
+}
+
+/// <summary>Thrown when encoding or decoding fails at the codec layer.</summary>
+public sealed class NpsCodecException : NpsException
+{
+    public NpsCodecException(string message) : base(message) { }
+    public NpsCodecException(string message, Exception inner) : base(message, inner) { }
+}
+
+/// <summary>
+/// Thrown when an <c>anchor_ref</c> is referenced but not found in the cache.
+/// Error code: <c>NCP-ANCHOR-NOT-FOUND</c>.
+/// </summary>
+public sealed class NpsAnchorNotFoundException : NpsException
+{
+    public string AnchorId { get; }
+
+    public NpsAnchorNotFoundException(string anchorId)
+        : base($"AnchorFrame not found in cache: {anchorId}. " +
+               "Peer must resend AnchorFrame (0x01) before referencing it.",
+               NpsStatusCodes.ClientNotFound, "NCP-ANCHOR-NOT-FOUND")
+    {
+        AnchorId = anchorId;
+    }
+}
+
+/// <summary>
+/// Thrown when an incoming <c>AnchorFrame</c> carries a schema that conflicts with an
+/// existing cache entry. Error code: <c>NCP-ANCHOR-SCHEMA-INVALID</c>.
+/// </summary>
+public sealed class NpsAnchorPoisonException : NpsException
+{
+    public string AnchorId { get; }
+
+    public NpsAnchorPoisonException(string anchorId)
+        : base($"Anchor poisoning detected for {anchorId}: " +
+               "incoming schema does not match the cached schema for the same anchor_id.",
+               NpsStatusCodes.ClientBadFrame, "NCP-ANCHOR-SCHEMA-INVALID")
+    {
+        AnchorId = anchorId;
+    }
+}
+
+/// <summary>
+/// Thrown for errors involving a <c>StreamFrame</c> sequence.
+/// </summary>
+public sealed class NpsStreamException : NpsException
+{
+    public string StreamId { get; }
+
+    /// <summary>NPS error code, e.g. <c>NCP-STREAM-SEQ-GAP</c>.</summary>
+    public string ErrorCode { get; }
+
+    public NpsStreamException(string streamId, string errorCode, string message)
+        : base(message)
+    {
+        StreamId  = streamId;
+        ErrorCode = errorCode;
+    }
+}
+
+/// <summary>
+/// Thrown when a HelloFrame <c>min_version</c> is higher than the server supports.
+/// Error code: <c>NCP-VERSION-INCOMPATIBLE</c>.
+/// </summary>
+public sealed class NpsVersionIncompatibleException : NpsException
+{
+    public string ClientMinVersion  { get; }
+    public string ServerNpsVersion  { get; }
+
+    public NpsVersionIncompatibleException(string clientMinVersion, string serverNpsVersion)
+        : base($"NPS version incompatible: client requires >= {clientMinVersion}, server supports {serverNpsVersion}.",
+               NpsStatusCodes.ProtoVersionIncompatible, NcpErrorCodes.VersionIncompatible)
+    {
+        ClientMinVersion = clientMinVersion;
+        ServerNpsVersion = serverNpsVersion;
+    }
+}
+
+/// <summary>
+/// Thrown when a <see cref="Frames.Ncp.DiffFrame"/> uses <c>binary_bitset</c> format
+/// but the receiver does not support it.
+/// Error code: <c>NCP-DIFF-FORMAT-UNSUPPORTED</c>.
+/// </summary>
+public sealed class NpsDiffFormatUnsupportedException : NpsException
+{
+    public string PatchFormat { get; }
+
+    public NpsDiffFormatUnsupportedException(string patchFormat)
+        : base($"DiffFrame patch_format '{patchFormat}' is not supported by this peer.",
+               NpsStatusCodes.ClientBadFrame, NcpErrorCodes.DiffFormatUnsupported)
+    {
+        PatchFormat = patchFormat;
+    }
+}
+
+/// <summary>
+/// Thrown when an <c>anchor_ref</c> is known but the Schema has since been updated.
+/// Node SHOULD attach <c>inline_anchor</c> to the response.
+/// Error code: <c>NCP-ANCHOR-STALE</c>.
+/// </summary>
+public sealed class NpsAnchorStaleException : NpsException
+{
+    public string AnchorId { get; }
+
+    public NpsAnchorStaleException(string anchorId)
+        : base($"AnchorFrame with id {anchorId} is stale; schema has been updated. " +
+               "Check the inline_anchor field in the response for the latest schema.",
+               NpsStatusCodes.ClientConflict, NcpErrorCodes.AnchorStale)
+    {
+        AnchorId = anchorId;
+    }
+}

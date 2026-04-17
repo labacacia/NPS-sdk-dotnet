@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <RootNamespace>NPS.NDP</RootNamespace>
+    <PackageId>LabAcacia.NPS.NDP</PackageId>
+    <AssemblyName>NPS.NDP</AssemblyName>
+    <Version>1.0.0-alpha.1</Version>
+    <Description>NPS — Neural Discovery Protocol library. Announce, resolve and graph-sync NWP nodes and Agents. Embeddable in any ASP.NET Core app.</Description>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <Authors>LabAcacia / INNO LOTUS PTY LTD</Authors>
+    <Company>INNO LOTUS PTY LTD</Company>
+    <PackageTags>nps;ndp;ai;agent;discovery;dns</PackageTags>
+    <PackageProjectUrl>https://github.com/labacacia/nps</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/labacacia/nps</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NSec.Cryptography" Version="25.4.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NPS.Core\NPS.Core.csproj" />
+    <ProjectReference Include="..\NPS.NIP\NPS.NIP.csproj" />
+  </ItemGroup>
+
+</Project>
