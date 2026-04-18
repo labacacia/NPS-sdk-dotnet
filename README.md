@@ -1,3 +1,5 @@
+English | [中文版](./README.cn.md)
+
 # NPS .NET SDK
 
 [![NuGet](https://img.shields.io/nuget/v/LabAcacia.NPS.Core)](https://www.nuget.org/packages/LabAcacia.NPS.Core)
