@@ -1,47 +1,47 @@
-English | [中文版](./NPS.NIP.cn.md)
+[English Version](./NPS.NIP.md) | 中文版
 
-# `LabAcacia.NPS.NIP` — Class and Method Reference
+# `LabAcacia.NPS.NIP` — 类与方法参考
 
-> Root namespace: `NPS.NIP`
-> NuGet: `LabAcacia.NPS.NIP`
-> Spec: [NPS-3 NIP v0.2](https://github.com/labacacia/NPS-Release/blob/main/NPS-3-NIP.md)
+> 根命名空间：`NPS.NIP`
+> NuGet：`LabAcacia.NPS.NIP`
+> 规范：[NPS-3 NIP v0.2](https://github.com/labacacia/NPS-Release/blob/main/NPS-3-NIP.md)
 
-NIP is the identity / PKI layer. The package covers:
+NIP 是身份 / PKI 层。本包覆盖：
 
-1. Ed25519 key material and signing (`NipKeyManager`, `NipSigner`).
-2. A fully embeddable Certificate Authority service (`NipCaService` + `NipCaRouter`).
-3. The IdentFrame / TrustFrame / RevokeFrame types.
-4. A six-step node-side verifier (`NipIdentVerifier`) implementing `NPS-3 §7`.
-5. DI + pipeline extensions for CA servers and verifying nodes.
+1. Ed25519 密钥材料与签名（`NipKeyManager`、`NipSigner`）。
+2. 可完全嵌入的 CA 服务（`NipCaService` + `NipCaRouter`）。
+3. IdentFrame / TrustFrame / RevokeFrame 类型。
+4. 实现 `NPS-3 §7` 的六步节点侧验证器（`NipIdentVerifier`）。
+5. 供 CA 服务端和验证节点使用的 DI + 管道扩展。
 
 ---
 
-## Table of contents
+## 目录
 
-- [Key management](#key-management)
+- [密钥管理](#密钥管理)
   - [`NipKeyManager`](#nipkeymanager)
   - [`NipSigner`](#nipsigner)
-- [NIP frames](#nip-frames)
+- [NIP 帧](#nip-帧)
   - [`IdentFrame` + `IdentMetadata`](#identframe--identmetadata)
   - [`TrustFrame`](#trustframe)
   - [`RevokeFrame`](#revokeframe)
-- [Certificate Authority](#certificate-authority)
+- [证书颁发机构](#证书颁发机构)
   - [`NipCaOptions`](#nipcaoptions)
   - [`NipCertRecord` + `INipCaStore`](#nipcertrecord--inipcastore)
   - [`NipCaService`](#nipcaservice)
   - [`NipCaException` + `NipErrorCodes`](#nipcaexception--niperrorcodes)
   - [`NipCaRouter`](#nipcarouter)
   - [`PostgreSqlNipCaStore`](#postgresqlnipcastore)
-- [Node-side verification](#node-side-verification)
+- [节点侧验证](#节点侧验证)
   - [`NipVerifierOptions`](#nipverifieroptions)
   - [`NipVerifyContext`](#nipverifycontext)
   - [`NipIdentVerifyResult` / `NipVerifyResult`](#nipidentverifyresult--nipverifyresult)
   - [`NipIdentVerifier`](#nipidentverifier)
-- [DI extensions](#di-extensions)
+- [DI 扩展](#di-扩展)
 
 ---
 
-## Key management
+## 密钥管理
 
 ### `NipKeyManager`
 
@@ -53,24 +53,24 @@ public sealed class NipKeyManager
     public void   Generate(string path, string passphrase);
     public void   Load    (string path, string passphrase);
     public bool   IsLoaded { get; }
-    public byte[] PublicKey  { get; }    // 32 bytes
-    public byte[] PrivateKey { get; }    // 32 bytes (Ed25519 seed)
+    public byte[] PublicKey  { get; }    // 32 字节
+    public byte[] PrivateKey { get; }    // 32 字节（Ed25519 seed）
 }
 ```
 
-Persists the private key encrypted on disk with the following layout:
+以下列布局将私钥加密持久化到磁盘：
 
 ```
-[ 12 bytes nonce ][ 16 bytes GCM tag ][ encrypted 32-byte private key ][ plaintext 32-byte public key ]
+[ 12 字节 nonce ][ 16 字节 GCM tag ][ 加密的 32 字节私钥 ][ 明文 32 字节公钥 ]
 ```
 
-- Cipher: **AES-256-GCM**
-- KDF: **PBKDF2-HMAC-SHA256**, **600 000 iterations** (OWASP 2023 recommended minimum)
-- Salt is the first 16 bytes of the nonce buffer
+- 加密算法：**AES-256-GCM**
+- KDF：**PBKDF2-HMAC-SHA256**,**600 000 次迭代**（OWASP 2023 推荐最小值）
+- Salt 为 nonce 缓冲区的前 16 字节
 
-`Generate` writes a freshly rolled keypair atomically; `Load` fails fast if the GCM tag doesn't
-match (tampering or wrong passphrase). Both the public and private key are kept in memory for the
-lifetime of the manager; call `new NipKeyManager()` per process.
+`Generate` 原子地写入新生成的密钥对；`Load` 在 GCM tag 不匹配（篡改或口令错误）
+时快速失败。公钥与私钥均在 manager 生命期内留在内存；每进程调用一次
+`new NipKeyManager()`。
 
 ### `NipSigner`
 
@@ -81,23 +81,23 @@ public static class NipSigner
     public static bool   Verify<TFrame>(byte[] publicKey, TFrame frame, string signature);
 
     public static string  EncodePublicKey(byte[] key);     // "ed25519:{base64url}"
-    public static byte[]? DecodePublicKey(string encoded); // null on malformed input
+    public static byte[]? DecodePublicKey(string encoded); // 输入畸形时返回 null
 }
 ```
 
-Signing rules:
+签名规则：
 
-1. Serialise the frame as **canonical JSON** — keys sorted lexically, no whitespace — after
-   excluding the `signature` and `metadata` fields.
-2. Ed25519-sign the UTF-8 canonical bytes.
-3. Return the signature as `ed25519:{base64url(sig)}`.
+1. 将帧序列化为**规范 JSON** —— 键按字典序,无空白 —— 并排除
+   `signature` 与 `metadata` 字段。
+2. 对 UTF-8 规范字节做 Ed25519 签名。
+3. 以 `ed25519:{base64url(sig)}` 返回签名。
 
-`Verify` recomputes the canonical bytes and returns `false` on any failure (unknown prefix,
-malformed base64, wrong length, or cryptographic mismatch) — it does not throw.
+`Verify` 重新计算规范字节,遇任何失败（未知前缀、畸形 base64、长度错误、
+或密码学不匹配）返回 `false` —— 它不抛异常。
 
 ---
 
-## NIP frames
+## NIP 帧
 
 ### `IdentFrame` + `IdentMetadata`
 
@@ -115,9 +115,9 @@ public sealed record IdentFrame : IFrame
     public required DateTime      IssuedAt      { get; init; }
     public required DateTime      ExpiresAt     { get; init; }
     public required IReadOnlyList<string> Capabilities { get; init; }
-    public required JsonElement   Scope         { get; init; }   // e.g. {"nwp": ["api.example.com/*"]}
-    public required string        Signature     { get; init; }   // CA signature
-    public          IdentMetadata? Metadata     { get; init; }   // client-declared, not signed
+    public required JsonElement   Scope         { get; init; }   // 如 {"nwp": ["api.example.com/*"]}
+    public required string        Signature     { get; init; }   // CA 签名
+    public          IdentMetadata? Metadata     { get; init; }   // 客户端声明,不参与签名
 }
 
 public sealed record IdentMetadata
@@ -130,17 +130,17 @@ public sealed record IdentMetadata
 }
 ```
 
-`Metadata` is deliberately excluded from the signature context so agents can update human-readable
-tags without re-issuing the certificate.
+`Metadata` 被刻意排除在签名上下文之外,使得 agent 可在不重签证书的情况下
+更新人类可读标签。
 
 ### `TrustFrame`
 
 ```csharp
 public sealed record TrustFrame : IFrame
 {
-    public required string        Issuer     { get; init; }   // the delegator
-    public required string        Subject    { get; init; }   // the delegate NID
-    public required JsonElement   Scope      { get; init; }   // subset of issuer scope
+    public required string        Issuer     { get; init; }   // 委托方
+    public required string        Subject    { get; init; }   // 被委托 NID
+    public required JsonElement   Scope      { get; init; }   // 是 Issuer scope 的子集
     public required IReadOnlyList<string> Capabilities { get; init; }
     public required DateTime      NotBefore  { get; init; }
     public required DateTime      NotAfter   { get; init; }
@@ -148,7 +148,7 @@ public sealed record TrustFrame : IFrame
 }
 ```
 
-Used for A→A delegation within a session. The verifier validates `Scope ⊆ Issuer.Scope`.
+用于会话内 A→A 委托。校验器会校验 `Scope ⊆ Issuer.Scope`。
 
 ### `RevokeFrame`
 
@@ -160,13 +160,13 @@ public sealed record RevokeFrame : IFrame
     public required string   Reason    { get; init; }   // "keyCompromise"|"superseded"|...
     public required DateTime RevokedAt { get; init; }
     public required string   IssuedBy  { get; init; }   // CA NID
-    public required string   Signature { get; init; }   // CA signature
+    public required string   Signature { get; init; }   // CA 签名
 }
 ```
 
 ---
 
-## Certificate Authority
+## 证书颁发机构
 
 ### `NipCaOptions`
 
@@ -176,7 +176,7 @@ public sealed class NipCaOptions
     public required string   CaNid           { get; set; }
     public          string?  DisplayName     { get; set; }
     public required string   KeyFilePath     { get; set; }
-    public required string   KeyPassphrase   { get; set; }           // MUST come from env var
+    public required string   KeyPassphrase   { get; set; }           // 必须来自环境变量
     public          int      AgentCertValidityDays { get; set; } = 30;
     public          int      NodeCertValidityDays  { get; set; } = 90;
     public          int      RenewalWindowDays     { get; set; } = 7;
@@ -188,8 +188,8 @@ public sealed class NipCaOptions
 }
 ```
 
-Timing-oracle guard: `NormalizeOcspResponseTime = true` pads every OCSP response to ≥ 200 ms to
-prevent status inference from latency (`NPS-3 §10.2`).
+时序 oracle 防御：`NormalizeOcspResponseTime = true` 将每个 OCSP 响应
+padding 到 ≥ 200 ms,防止通过延迟推断状态（`NPS-3 §10.2`）。
 
 ### `NipCertRecord` + `INipCaStore`
 
@@ -221,8 +221,8 @@ public interface INipCaStore
 }
 ```
 
-`NextSerialAsync` MUST be atomic (PostgreSQL sequences satisfy this; the in-memory test double
-uses `Interlocked.Increment`).
+`NextSerialAsync` 必须原子（PostgreSQL 序列满足此要求；内存测试替身使用
+`Interlocked.Increment`）。
 
 ### `NipCaService`
 
@@ -241,18 +241,18 @@ public sealed class NipCaService
 }
 ```
 
-Behavioural notes:
+行为要点：
 
-- **`RegisterAsync`** allocates a fresh serial, builds an `IdentFrame` with `IssuedBy = CaNid`,
-  signs it with `NipKeyManager.PrivateKey`, persists the record, and returns the signed frame.
-- **`RenewAsync`** rejects with `NIP-RENEWAL-TOO-EARLY` when `now < expires_at - RenewalWindowDays`.
-- **`RevokeAsync`** records the revocation time and reason; subsequent `VerifyAsync`/OCSP return
-  `CertRevoked`.
-- **`VerifyAsync`** returns a `NipVerifyResult` suitable for OCSP responses (`active` /
-  `revoked` / `unknown`).
-- **`GetCrlAsync`** returns all revoked certificates as a signed CRL (list of `RevokeFrame`).
-- **`BuildNid`** is a helper: `BuildNid("agent", "example.com", "planner")` →
-  `urn:nps:agent:example.com:planner`.
+- **`RegisterAsync`** 分配新 serial,构建 `IssuedBy = CaNid` 的 `IdentFrame`,
+  使用 `NipKeyManager.PrivateKey` 签名,持久化记录,返回已签名的帧。
+- **`RenewAsync`** 在 `now < expires_at - RenewalWindowDays` 时以
+  `NIP-RENEWAL-TOO-EARLY` 拒绝。
+- **`RevokeAsync`** 记录吊销时间与原因；后续 `VerifyAsync`/OCSP 返回 `CertRevoked`。
+- **`VerifyAsync`** 返回适合 OCSP 响应的 `NipVerifyResult`
+  （`active` / `revoked` / `unknown`）。
+- **`GetCrlAsync`** 返回所有已吊销证书作为已签名的 CRL（`RevokeFrame` 列表）。
+- **`BuildNid`** 是辅助方法：`BuildNid("agent", "example.com", "planner")` →
+  `urn:nps:agent:example.com:planner`。
 
 ### `NipCaException` + `NipErrorCodes`
 
@@ -289,22 +289,21 @@ public static class NipCaRouter
 }
 ```
 
-Mounts the following routes (rooted at `opts.RoutePrefix`):
+挂载以下路由（以 `opts.RoutePrefix` 为根）：
 
-| Route                                | Verb  | Purpose                          |
-|--------------------------------------|-------|----------------------------------|
-| `/.well-known/nps-ca`                | GET   | CA metadata, public key          |
-| `/ca/register`                       | POST  | Issue a new certificate          |
-| `/ca/renew`                          | POST  | Renew an existing cert           |
-| `/ca/revoke`                         | POST  | Revoke a cert                    |
-| `/ca/ocsp`                           | POST  | OCSP status check                |
-| `/ca/crl`                            | GET   | Current CRL (list of RevokeFrame)|
-| `/ca/idents/{nid}`                   | GET   | Fetch a specific IdentFrame      |
+| 路由                                 | 动词  | 用途                                |
+|--------------------------------------|-------|-------------------------------------|
+| `/.well-known/nps-ca`                | GET   | CA 元数据、公钥                     |
+| `/ca/register`                       | POST  | 签发新证书                          |
+| `/ca/renew`                          | POST  | 续签已有证书                        |
+| `/ca/revoke`                         | POST  | 吊销证书                            |
+| `/ca/ocsp`                           | POST  | OCSP 状态检查                       |
+| `/ca/crl`                            | GET   | 当前 CRL（`RevokeFrame` 列表）      |
+| `/ca/idents/{nid}`                   | GET   | 取回指定 IdentFrame                 |
 
 ### `PostgreSqlNipCaStore`
 
-Production-grade `INipCaStore` implementation. Table layout is created idempotently on first
-connection:
+生产级 `INipCaStore` 实现。表结构在首次连接时幂等创建：
 
 ```
 nip_certificates (
@@ -325,39 +324,38 @@ nip_certificates (
 nip_serial_seq      sequence
 ```
 
-Constructor: `new PostgreSqlNipCaStore(connectionString)`.
+构造：`new PostgreSqlNipCaStore(connectionString)`。
 
 ---
 
-## Node-side verification
+## 节点侧验证
 
 ### `NipVerifierOptions`
 
 ```csharp
 public sealed class NipVerifierOptions
 {
-    // Map of CA NID → CA public key ("ed25519:{base64url}")
+    // CA NID → CA 公钥（"ed25519:{base64url}"）的映射
     public required IReadOnlyDictionary<string, string> TrustedIssuers { get; set; }
 
     public bool   EnableOcsp        { get; set; } = true;
     public string OcspEndpointPath  { get; set; } = "/ca/ocsp";
     public int    OcspTimeoutMs     { get; set; } = 500;
-    public bool   OcspFailOpen      { get; set; } = true;   // RFC 6960 §2.4 default
+    public bool   OcspFailOpen      { get; set; } = true;   // RFC 6960 §2.4 默认
     public bool   EnableCrlFallback { get; set; } = true;
 }
 ```
 
-`OcspFailOpen = true` means OCSP network failures do NOT reject the certificate — the verifier
-falls back to local CRL and treats unknown-status responses as "not revoked". This matches the
-default web-PKI behaviour.
+`OcspFailOpen = true` 意味着 OCSP 网络故障**不**拒绝证书 —— 验证器回退
+到本地 CRL,并将 unknown-status 响应视为"未吊销"。与默认的 web-PKI 行为一致。
 
 ### `NipVerifyContext`
 
 ```csharp
 public sealed record NipVerifyContext(
-    string? RequiredCapability,   // e.g. "nwp:query"
-    string? RequiredNwpPath,      // e.g. "nwp://api.example.com/products"
-    DateTime? Now = null);        // override clock for tests
+    string? RequiredCapability,   // 如 "nwp:query"
+    string? RequiredNwpPath,      // 如 "nwp://api.example.com/products"
+    DateTime? Now = null);        // 测试中覆盖 clock
 ```
 
 ### `NipIdentVerifyResult` / `NipVerifyResult`
@@ -400,27 +398,27 @@ public sealed class NipIdentVerifier
 }
 ```
 
-Executes the **six-step flow from NPS-3 §7** in order:
+按顺序执行 **NPS-3 §7 的六步流程**：
 
-1. **Expiry** — reject when `now ≥ ExpiresAt` (`CertExpired`).
-2. **Trusted issuer** — reject when `frame.IssuedBy` is not in `NipVerifierOptions.TrustedIssuers`
-   (`CertUntrusted`).
-3. **Signature** — `NipSigner.Verify` against the trusted issuer's public key (`CertSigInvalid`).
-4. **Revocation** — OCSP POST (honours `OcspFailOpen`), falling back to local CRL; reject when
-   status is `revoked` (`CertRevoked`).
-5. **Capability** — reject when `ctx.RequiredCapability` is not in `frame.Capabilities`
-   (`CertCapMissing`).
-6. **Scope** — reject when `ctx.RequiredNwpPath` is not covered by `frame.Scope["nwp"]`
-   (`CertScope`). The helper `NwpPathMatches` understands:
-   - `*` — match everything
-   - `api.example.com/*` — prefix match (trailing `/*`)
-   - exact matches otherwise
+1. **过期** —— 当 `now ≥ ExpiresAt` 时拒绝（`CertExpired`）。
+2. **可信颁发者** —— 当 `frame.IssuedBy` 不在 `NipVerifierOptions.TrustedIssuers`
+   中时拒绝（`CertUntrusted`）。
+3. **签名** —— 使用可信颁发者公钥调用 `NipSigner.Verify`（`CertSigInvalid`）。
+4. **吊销** —— OCSP POST（尊重 `OcspFailOpen`）,回退到本地 CRL；状态为
+   `revoked` 时拒绝（`CertRevoked`）。
+5. **能力** —— 当 `ctx.RequiredCapability` 不在 `frame.Capabilities` 中时拒绝
+   （`CertCapMissing`）。
+6. **Scope** —— 当 `ctx.RequiredNwpPath` 未被 `frame.Scope["nwp"]` 覆盖时拒绝
+   （`CertScope`）。助手 `NwpPathMatches` 理解：
+   - `*` —— 匹配一切
+   - `api.example.com/*` —— 前缀匹配（末尾 `/*`）
+   - 其他情况为精确匹配
 
-Any step returning `Fail` short-circuits — subsequent steps are skipped.
+任一步返回 `Fail` 即短路 —— 跳过后续步骤。
 
 ---
 
-## DI extensions
+## DI 扩展
 
 ```csharp
 namespace NPS.NIP.Extensions;
@@ -441,17 +439,17 @@ public static class NipServiceExtensions
 }
 ```
 
-- `AddNipCa` wires `NipCaOptions`, loads (or generates) the keypair, constructs the
-  `PostgreSqlNipCaStore`, and registers `NipCaService` as a singleton. Set
-  `generateKeyIfMissing = true` only in dev.
-- `AddNipVerifier` registers `NipIdentVerifier` together with its options. Supply an
-  `IHttpClientFactory` via `services.AddHttpClient()` to enable connection pooling for OCSP.
-- `MapNipCa` mounts the HTTP routes (`/.well-known/nps-ca`, `/ca/…`) on the router.
+- `AddNipCa` 连接 `NipCaOptions`、加载（或生成）密钥对、构造
+  `PostgreSqlNipCaStore`、并将 `NipCaService` 注册为单例。
+  `generateKeyIfMissing = true` 仅在开发中使用。
+- `AddNipVerifier` 将 `NipIdentVerifier` 连同其 options 一起注册。
+  通过 `services.AddHttpClient()` 提供 `IHttpClientFactory` 以启用 OCSP
+  连接池。
+- `MapNipCa` 在路由器上挂载 HTTP 路由（`/.well-known/nps-ca`、`/ca/…`）。
 
-### Registry extension
+### 注册表扩展
 
-Every `FrameRegistryBuilder` pipeline must pass through `AddNip()` to enable NCP decoding of NIP
-frames:
+每个 `FrameRegistryBuilder` 管道必须经过 `AddNip()` 以启用 NIP 帧的 NCP 解码：
 
 ```csharp
 namespace NPS.NIP.Registry;
@@ -464,7 +462,7 @@ public static class NipRegistryExtensions
 
 ---
 
-## End-to-end example — running a CA
+## 端到端示例 —— 运行 CA
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
@@ -489,7 +487,7 @@ app.MapNipCa();
 app.Run();
 ```
 
-## End-to-end example — verifying an incoming agent
+## 端到端示例 —— 验证入站 agent
 
 ```csharp
 builder.Services.AddHttpClient();
@@ -498,7 +496,7 @@ builder.Services.AddNipVerifier(o => o.TrustedIssuers = new Dictionary<string, s
     ["urn:nps:org:ca.example.com"] = "ed25519:AAAA...",
 });
 
-// Somewhere in middleware:
+// 在 middleware 某处：
 var verifier = sp.GetRequiredService<NipIdentVerifier>();
 var result = await verifier.VerifyAsync(identFrame,
     new NipVerifyContext(
