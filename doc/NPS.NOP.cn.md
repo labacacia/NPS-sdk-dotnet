@@ -1,31 +1,31 @@
-English | [中文版](./NPS.NOP.cn.md)
+[English Version](./NPS.NOP.md) | 中文版
 
-# `LabAcacia.NPS.NOP` — Class and Method Reference
+# `LabAcacia.NPS.NOP` — 类与方法参考
 
-> Root namespace: `NPS.NOP`
-> NuGet: `LabAcacia.NPS.NOP`
-> Spec: [NPS-5 NOP v0.3](https://github.com/labacacia/NPS-Release/blob/main/NPS-5-NOP.md)
+> 根命名空间：`NPS.NOP`
+> NuGet：`LabAcacia.NPS.NOP`
+> 规范：[NPS-5 NOP v0.3](https://github.com/labacacia/NPS-Release/blob/main/NPS-5-NOP.md)
 
-NOP is the orchestration layer. This package provides:
+NOP 是编排层。本包提供：
 
-1. The four NOP frame types (`Task 0x40`, `Delegate 0x41`, `Sync 0x42`, `AlignStream 0x43`).
-2. A DAG model and task priority / state enums.
-3. The **`NopOrchestrator`** — a full lifecycle engine (preflight → DAG execution → aggregation → callback)
-   with K-of-N sync support, retries with exponential backoff, condition-based skipping, and sender-NID validation.
-4. Validators (`DagValidator`, `NopCallbackValidator`).
-5. Helpers for condition evaluation and JSONPath-based input mapping.
-6. An in-memory `INopTaskStore` plus DI extensions.
+1. 四种 NOP 帧类型（`Task 0x40`、`Delegate 0x41`、`Sync 0x42`、`AlignStream 0x43`）。
+2. DAG 模型以及 task 优先级 / 状态枚举。
+3. **`NopOrchestrator`** —— 完整生命周期引擎（preflight → DAG 执行 → 聚合 → 回调）,
+   支持 K-of-N 同步、指数退避重试、基于条件的跳过与发送者 NID 校验。
+4. 验证器（`DagValidator`、`NopCallbackValidator`）。
+5. 条件求值与基于 JSONPath 的输入映射助手。
+6. 内存 `INopTaskStore` 以及 DI 扩展。
 
 ---
 
-## Table of contents
+## 目录
 
-- [Frames](#frames)
+- [帧](#帧)
   - [`TaskFrame`](#taskframe)
   - [`DelegateFrame`](#delegateframe)
   - [`SyncFrame`](#syncframe)
   - [`AlignStreamFrame`](#alignstreamframe)
-- [Task DAG model](#task-dag-model)
+- [Task DAG 模型](#task-dag-模型)
   - [`TaskDag` / `DagNode` / `DagEdge`](#taskdag--dagnode--dagedge)
   - [`TaskContext`](#taskcontext)
   - [`RetryPolicy` + `BackoffStrategy`](#retrypolicy--backoffstrategy)
@@ -38,21 +38,21 @@ NOP is the orchestration layer. This package provides:
   - [`INopWorkerClient` + `PreflightResult`](#inopworkerclient--preflightresult)
   - [`INopTaskStore` + `NopTaskRecord` / `NopSubtaskRecord`](#inoptaskstore--noptaskrecord--nopsubtaskrecord)
   - [`NopTaskResult`](#noptaskresult)
-- [Orchestration helpers](#orchestration-helpers)
+- [编排助手](#编排助手)
   - [`NopConditionEvaluator`](#nopconditionevaluator)
   - [`NopInputMapper`](#nopinputmapper)
   - [`NopResultAggregator`](#nopresultaggregator)
-- [Validation](#validation)
+- [校验](#校验)
   - [`DagValidator` + `DagValidationResult`](#dagvalidator--dagvalidationresult)
   - [`NopCallbackValidator`](#nopcallbackvalidator)
-- [Storage](#storage)
+- [存储](#存储)
   - [`InMemoryNopTaskStore`](#inmemorynoptaskstore)
-- [Constants and error codes](#constants-and-error-codes)
-- [DI extensions](#di-extensions)
+- [常量与错误码](#常量与错误码)
+- [DI 扩展](#di-扩展)
 
 ---
 
-## Frames
+## 帧
 
 ### `TaskFrame`
 
@@ -71,16 +71,16 @@ public sealed record TaskFrame : IFrame
     public          bool         Preflight     { get; init; }
     public          TaskContext? Context       { get; init; }
     public          string?      RequestId     { get; init; }
-    public          int          DelegateDepth { get; init; }   // 0 = root
+    public          int          DelegateDepth { get; init; }   // 0 = 根任务
 }
 ```
 
-Submit to the orchestrator via `INopOrchestrator.ExecuteAsync`. `DelegateDepth` is set automatically
-when the orchestrator issues sub-tasks; direct callers leave it at `0`.
+通过 `INopOrchestrator.ExecuteAsync` 提交给 orchestrator。
+`DelegateDepth` 在 orchestrator 派发子任务时自动设置；直接调用者将其保持为 `0`。
 
 ### `DelegateFrame`
 
-Orchestrator → Worker delegation.
+Orchestrator → Worker 委托。
 
 ```csharp
 public sealed record DelegateFrame : IFrame
@@ -91,7 +91,7 @@ public sealed record DelegateFrame : IFrame
     public required string       TargetAgentNid { get; init; }
     public required string       Action         { get; init; }   // "nwp://..." | "preflight" | "cancel"
     public          JsonElement? Params         { get; init; }
-    public required JsonElement  DelegatedScope { get; init; }   // ⊆ parent scope
+    public required JsonElement  DelegatedScope { get; init; }   // ⊆ 父 scope
     public required string       DeadlineAt     { get; init; }   // ISO 8601 UTC
     public          string?      IdempotencyKey { get; init; }
     public          string?      Priority       { get; init; }
@@ -100,11 +100,12 @@ public sealed record DelegateFrame : IFrame
 }
 ```
 
-Workers MUST reject further sub-delegation when `DelegateDepth ≥ NopConstants.MaxDelegateChainDepth`.
+当 `DelegateDepth ≥ NopConstants.MaxDelegateChainDepth` 时,worker **必须**
+拒绝进一步的子委托。
 
 ### `SyncFrame`
 
-K-of-N synchronisation barrier (NPS-5 §3.3).
+K-of-N 同步屏障（NPS-5 §3.3）。
 
 ```csharp
 public sealed record SyncFrame : IFrame
@@ -112,7 +113,7 @@ public sealed record SyncFrame : IFrame
     public required string                TaskId      { get; init; }
     public required string                SyncId      { get; init; }
     public required IReadOnlyList<string> WaitFor     { get; init; }
-    public          uint                  MinRequired { get; init; }   // 0 = all
+    public          uint                  MinRequired { get; init; }   // 0 = 全部
     public          string                Aggregate   { get; init; } = AggregateStrategy.Merge;
     public          uint?                 TimeoutMs   { get; init; }
 }
@@ -120,8 +121,8 @@ public sealed record SyncFrame : IFrame
 
 ### `AlignStreamFrame`
 
-Replaces the deprecated `AlignFrame (0x05)`. Binds to a task, carries a strictly-monotonic `Seq`,
-and requires the sender NID to match the expected agent (validated by the orchestrator).
+替代已弃用的 `AlignFrame (0x05)`。绑定到 task,携带严格单调 `Seq`,并要求
+发送者 NID 与期望的 agent 匹配（由 orchestrator 校验）。
 
 ```csharp
 public sealed record AlignStreamFrame : IFrame
@@ -132,16 +133,16 @@ public sealed record AlignStreamFrame : IFrame
     public required ulong        Seq         { get; init; }
     public          string?      PayloadRef  { get; init; }   // CapsFrame anchor ref
     public          JsonElement? Data        { get; init; }
-    public          uint?        WindowSize  { get; init; }   // back-pressure in NPT tokens
+    public          uint?        WindowSize  { get; init; }   // NPT token 反压
     public required bool         IsFinal     { get; init; }
     public required string       SenderNid   { get; init; }
-    public          StreamError? Error       { get; init; }   // populated when IsFinal && failed
+    public          StreamError? Error       { get; init; }   // IsFinal && 失败时填充
 }
 ```
 
 ---
 
-## Task DAG model
+## Task DAG 模型
 
 ### `TaskDag` / `DagNode` / `DagEdge`
 
@@ -161,8 +162,8 @@ public sealed record DagNode
     public          IReadOnlyDictionary<string, JsonElement>? InputMapping { get; init; }
     public          uint?   TimeoutMs   { get; init; }
     public          RetryPolicy? RetryPolicy { get; init; }
-    public          string? Condition   { get; init; }   // CEL subset
-    public          uint    MinRequired { get; init; }   // K-of-N (0 = all)
+    public          string? Condition   { get; init; }   // CEL 子集
+    public          uint    MinRequired { get; init; }   // K-of-N（0 = 全部）
 }
 
 public sealed record DagEdge(string From, string To);
@@ -170,14 +171,14 @@ public sealed record DagEdge(string From, string To);
 
 ### `TaskContext`
 
-OpenTelemetry W3C TraceContext propagation plus custom baggage.
+OpenTelemetry W3C TraceContext 传播加自定义 baggage。
 
 ```csharp
 public sealed record TaskContext
 {
     public string?  SessionId   { get; init; }
-    public string?  TraceId     { get; init; }   // 32 hex chars
-    public string?  SpanId      { get; init; }   // 16 hex chars
+    public string?  TraceId     { get; init; }   // 32 hex 字符
+    public string?  SpanId      { get; init; }   // 16 hex 字符
     public byte?    TraceFlags  { get; init; }
     public IReadOnlyDictionary<string, string>? Baggage { get; init; }
     public JsonElement? Custom  { get; init; }
@@ -206,17 +207,17 @@ public static class BackoffStrategy
 }
 ```
 
-`ComputeDelayMs` factor: `1` (fixed), `attempt + 1` (linear), or `2^attempt` (exponential).
+`ComputeDelayMs` 因子：`1`（fixed）、`attempt + 1`（linear）、或 `2^attempt`（exponential）。
 
 ### `AggregateStrategy` / `TaskPriority` / `TaskState`
 
 ```csharp
 public static class AggregateStrategy
 {
-    public const string Merge    = "merge";      // last-write-wins object merge
-    public const string First    = "first";      // first successful
-    public const string All      = "all";        // array of all
-    public const string FastestK = "fastest_k";  // first min_required, in order
+    public const string Merge    = "merge";      // 后写覆盖的对象 merge
+    public const string First    = "first";      // 第一个成功
+    public const string All      = "all";        // 全部数组
+    public const string FastestK = "fastest_k";  // 前 min_required 个（按顺序）
 }
 
 public static class TaskPriority
@@ -237,7 +238,7 @@ public enum TaskState
 ```csharp
 public sealed record StreamError
 {
-    public required string Code      { get; init; }   // e.g. NOP-TASK-TIMEOUT
+    public required string Code      { get; init; }   // 如 NOP-TASK-TIMEOUT
     public required string Message   { get; init; }
     public          bool   Retryable { get; init; }
 }
@@ -260,7 +261,7 @@ public interface INopOrchestrator
 
 ### `NopOrchestrator`
 
-Concrete engine. Constructor:
+具体引擎。构造函数：
 
 ```csharp
 public NopOrchestrator(
@@ -271,59 +272,59 @@ public NopOrchestrator(
     IHttpClientFactory?      httpFactory = null);
 ```
 
-#### `ExecuteAsync` lifecycle
+#### `ExecuteAsync` 生命周期
 
-1. **Delegation-depth gate** — reject with `NOP-DELEGATE-CHAIN-TOO-DEEP` when
-   `task.DelegateDepth ≥ NopConstants.MaxDelegateChainDepth` (3).
-2. **Callback URL validation** — `NopCallbackValidator.ValidateCallbackUrl` (HTTPS-only +
-   SSRF guard).
-3. **DAG validation** — `DagValidator.Validate`. Topological order is cached for execution.
-4. **Duplicate check** — reject if a record with the same `TaskId` already exists.
-5. **Persist initial record** with `TaskState.Pending`.
-6. **Create linked CTS** — bounded by `min(task.TimeoutMs, NopConstants.MaxTimeoutMs)` (1 h cap).
-7. **Preflight (optional)** — dedup by agent NID and call `INopWorkerClient.PreflightAsync` in
-   parallel. A single unavailable agent aborts the task with `NOP-RESOURCE-INSUFFICIENT`.
-8. **DAG execution loop** — see below.
-9. **Callback (optional)** — posts the `NopTaskResult` to `TaskFrame.CallbackUrl` with exponential
-   backoff (3 attempts, delays 0 s / 1 s / 2 s by default).
-10. **Finalisation** — persist terminal state and return the `NopTaskResult`.
+1. **委托深度闸门** —— 当 `task.DelegateDepth ≥ NopConstants.MaxDelegateChainDepth`(3)
+   时以 `NOP-DELEGATE-CHAIN-TOO-DEEP` 拒绝。
+2. **回调 URL 校验** —— `NopCallbackValidator.ValidateCallbackUrl`（仅 HTTPS + SSRF 防护）。
+3. **DAG 校验** —— `DagValidator.Validate`。拓扑序缓存供执行使用。
+4. **重复检查** —— 若相同 `TaskId` 的记录已存在则拒绝。
+5. **持久化初始记录**,状态为 `TaskState.Pending`。
+6. **创建链式 CTS** —— 以 `min(task.TimeoutMs, NopConstants.MaxTimeoutMs)`（1 小时上限）为边界。
+7. **Preflight（可选）** —— 按 agent NID 去重并并行调用
+   `INopWorkerClient.PreflightAsync`。任一 agent 不可用即以
+   `NOP-RESOURCE-INSUFFICIENT` 中止任务。
+8. **DAG 执行循环** —— 见下。
+9. **回调（可选）** —— 以指数退避（默认 3 次尝试,延迟 0s / 1s / 2s）将
+   `NopTaskResult` POST 到 `TaskFrame.CallbackUrl`。
+10. **最终化** —— 持久化终态并返回 `NopTaskResult`。
 
-#### DAG execution loop
+#### DAG 执行循环
 
-- Track `inFlight[nodeId] → Task<NodeOutcome>`, `nodeStates[nodeId] → TaskState`, and
-  `nodeResults[nodeId] → JsonElement` (completed only).
-- Each iteration:
-  - Identify ready nodes whose dependencies are done (considering `DagNode.MinRequired` for K-of-N).
-  - Pre-emptively mark nodes as `Failed` when K can no longer be satisfied.
-  - Dispatch up to `NopOrchestratorOptions.MaxConcurrentNodes` concurrently.
-  - Await the next completion via `Task.WhenAny`.
-  - On failure, run a reachability test (`CanReachEndNode`) and K-of-N recoverability check
-    (`CanEndNodeStillSucceed`): if no end node can still succeed, abort early.
-- Aggregate end-node results via `NopResultAggregator.AggregateEndNodes` using
-  `NopOrchestratorOptions.DefaultAggregateStrategy` (defaults to `"merge"`).
+- 追踪 `inFlight[nodeId] → Task<NodeOutcome>`、`nodeStates[nodeId] → TaskState`、
+  `nodeResults[nodeId] → JsonElement`（仅完成时）。
+- 每次迭代：
+  - 识别依赖已完成的就绪节点（考虑 `DagNode.MinRequired` 的 K-of-N）。
+  - 当 K 已不可能满足时抢先将节点标记为 `Failed`。
+  - 并发派发,最多 `NopOrchestratorOptions.MaxConcurrentNodes` 个。
+  - 经 `Task.WhenAny` 等待下一次完成。
+  - 失败时运行可达性检测（`CanReachEndNode`）与 K-of-N 可恢复性检测
+    （`CanEndNodeStillSucceed`）：若无 end node 仍可能成功,提前中止。
+- 通过 `NopResultAggregator.AggregateEndNodes` 使用
+  `NopOrchestratorOptions.DefaultAggregateStrategy`（默认 `"merge"`）聚合 end-node 结果。
 
-#### Per-node execution + retry
+#### 逐节点执行 + 重试
 
-For each DAG node:
+对每个 DAG 节点：
 
-1. Evaluate `Condition` (once, before the first attempt). A `false` result transitions the node to
-   `Skipped`. A `NopConditionException` transitions it to `Failed` with `NOP-CONDITION-EVAL-ERROR`.
-2. Resolve `InputMapping` via `NopInputMapper.BuildParams`.
-3. Construct a `DelegateFrame` with `DelegateDepth = task.DelegateDepth + 1`, a deadline derived
-   from `DagNode.TimeoutMs ?? task.TimeoutMs`, and a fresh subtask id.
-4. Dispatch through `INopWorkerClient.DelegateAsync` and consume the `AlignStreamFrame` stream:
-   - Enforce strict seq monotonicity — a gap returns `NOP-STREAM-SEQ-GAP`.
-   - Validate `SenderNid` against `DagNode.Agent` when `NopOrchestratorOptions.ValidateSenderNid`.
-   - When `IsFinal` is set: propagate any `StreamError`, otherwise capture `Data` as the node result.
-5. On non-final failure, consult `RetryPolicy.RetryOn` (if present) and `MaxRetries`. Retry delays
-   use `RetryPolicy.ComputeDelayMs`.
-6. Persist subtask state updates via `INopTaskStore.UpdateSubtaskAsync` at each transition.
+1. 求值 `Condition`（一次,首次尝试之前）。`false` 使节点转为 `Skipped`。
+   `NopConditionException` 以 `NOP-CONDITION-EVAL-ERROR` 使其转为 `Failed`。
+2. 经 `NopInputMapper.BuildParams` 解析 `InputMapping`。
+3. 构造 `DelegateFrame`,设 `DelegateDepth = task.DelegateDepth + 1`、
+   从 `DagNode.TimeoutMs ?? task.TimeoutMs` 派生的截止时间、一个新鲜的 subtask id。
+4. 经 `INopWorkerClient.DelegateAsync` 派发并消费 `AlignStreamFrame` 流：
+   - 强制严格 seq 单调 —— 出现跳变返回 `NOP-STREAM-SEQ-GAP`。
+   - 当 `NopOrchestratorOptions.ValidateSenderNid` 时对 `DagNode.Agent`
+     校验 `SenderNid`。
+   - 当 `IsFinal` 置位时：传播任何 `StreamError`,否则将 `Data` 捕获为节点结果。
+5. 非 final 失败时,参考 `RetryPolicy.RetryOn`（若存在）与 `MaxRetries`。
+   重试延迟使用 `RetryPolicy.ComputeDelayMs`。
+6. 经 `INopTaskStore.UpdateSubtaskAsync` 在每次状态转换处持久化子任务状态更新。
 
 #### `CancelAsync`
 
-Looks up the per-task `CancellationTokenSource` registered at submission time, cancels it, and
-updates the store state to `TaskState.Cancelled`. In-flight subtasks receive the cancellation
-signal through their linked CTS.
+查找在提交时注册的逐任务 `CancellationTokenSource`,将其取消,并将 store
+状态更新为 `TaskState.Cancelled`。进行中的子任务经其链式 CTS 收到取消信号。
 
 ### `NopOrchestratorOptions`
 
@@ -334,7 +335,7 @@ public sealed class NopOrchestratorOptions
     public bool   ValidateSenderNid        { get; set; } = true;
     public bool   EnableCallback           { get; set; } = true;
     public int    CallbackTimeoutMs        { get; set; } = 10_000;
-    public int    CallbackRetryBaseDelayMs { get; set; } = 1_000;   // 0 disables delay in tests
+    public int    CallbackRetryBaseDelayMs { get; set; } = 1_000;   // 0 在测试中禁用延迟
     public string DefaultAggregateStrategy { get; set; } = "merge";
 }
 ```
@@ -367,7 +368,7 @@ public sealed record PreflightResult
 }
 ```
 
-Implement this interface once per transport (HTTP/NWP, gRPC, in-process, test double).
+每种传输（HTTP/NWP、gRPC、进程内、测试替身）实现此接口一次。
 
 ### `INopTaskStore` + `NopTaskRecord` / `NopSubtaskRecord`
 
@@ -430,7 +431,7 @@ public sealed class NopTaskResult
 
 ---
 
-## Orchestration helpers
+## 编排助手
 
 ### `NopConditionEvaluator`
 
@@ -442,24 +443,24 @@ public static class NopConditionEvaluator
         IReadOnlyDictionary<string, JsonElement> context);   // nodeId → result
 }
 
-public sealed class NopConditionException : Exception { /* expression + message */ }
+public sealed class NopConditionException : Exception { /* 表达式 + 消息 */ }
 ```
 
-CEL-subset grammar:
+CEL 子集文法：
 
-| Construct    | Example                               |
-|--------------|---------------------------------------|
-| Comparison   | `$.classify.score > 0.7`              |
-| Equality     | `$.classify.label == "spam"`          |
-| Null test    | `$.classify.error != null`            |
-| Boolean      | `&&`, `\|\|`, `!`                     |
-| Grouping     | `(a && b) \|\| c`                     |
-| Literals     | numbers, `"strings"`, `true`, `false`, `null` |
-| Path access  | `$.<node_id>.<field>.<sub>`           |
+| 构造          | 示例                                    |
+|---------------|-----------------------------------------|
+| 比较          | `$.classify.score > 0.7`                |
+| 相等          | `$.classify.label == "spam"`            |
+| 空值测试      | `$.classify.error != null`              |
+| 布尔          | `&&`、`\|\|`、`!`                        |
+| 分组          | `(a && b) \|\| c`                        |
+| 字面量        | 数字、`"strings"`、`true`、`false`、`null` |
+| 路径访问      | `$.<node_id>.<field>.<sub>`             |
 
-Condition length is capped by `NopConstants.MaxConditionLength` (512). Any parse or resolution
-failure raises `NopConditionException`, which the orchestrator maps to
-`NOP-CONDITION-EVAL-ERROR` on the node.
+条件长度由 `NopConstants.MaxConditionLength`（512）限制。任何解析或解析失败
+抛出 `NopConditionException`,orchestrator 将其映射为节点上的
+`NOP-CONDITION-EVAL-ERROR`。
 
 ### `NopInputMapper`
 
@@ -478,17 +479,17 @@ public sealed class NopMappingException : Exception
 }
 ```
 
-Path rules:
+路径规则：
 
-- Must start with `$.`
-- `$` alone returns the full context as a JSON object
-- `$.node_id` returns the node's full result
-- `$.node_id.field.sub` navigates nested objects; depth capped by
-  `NopConstants.MaxInputMappingDepth` (8)
-- Missing properties resolve to `null` (no exception); depth overflow raises
-  `NopMappingException` with code `NOP-INPUT-MAPPING-ERROR`
+- 必须以 `$.` 起头
+- 仅 `$` 返回完整上下文作为 JSON 对象
+- `$.node_id` 返回节点的完整结果
+- `$.node_id.field.sub` 导航嵌套对象；深度由
+  `NopConstants.MaxInputMappingDepth`（8）限制
+- 缺失属性解析为 `null`（不抛异常）；深度溢出抛
+  `NopMappingException` 并使用错误码 `NOP-INPUT-MAPPING-ERROR`
 
-`BuildParams` accepts either a string path or an array of string paths per mapping key.
+`BuildParams` 每个映射键既接受字符串路径,也接受字符串路径数组。
 
 ### `NopResultAggregator`
 
@@ -509,13 +510,12 @@ public static class NopResultAggregator
 }
 ```
 
-`Merge` combines object results with last-write-wins on conflicting keys; non-object results are
-slotted under `"_result_{i}"`. `AggregateEndNodes` is what the orchestrator calls once the DAG
-reaches a terminal state.
+`Merge` 以后写覆盖合并对象结果;非对象结果放到 `"_result_{i}"` 槽。
+当 DAG 达到终态时,orchestrator 会调用 `AggregateEndNodes`。
 
 ---
 
-## Validation
+## 校验
 
 ### `DagValidator` + `DagValidationResult`
 
@@ -537,18 +537,18 @@ public sealed record DagValidationResult
 }
 ```
 
-Checks executed, in order:
+按顺序执行的检查：
 
-1. Non-empty node list (`NOP-TASK-DAG-INVALID`).
-2. `Nodes.Count ≤ NopConstants.MaxDagNodes` (32). Violation → `NOP-TASK-DAG-TOO-LARGE`.
-3. No duplicate node IDs.
-4. Every edge's `From` / `To` references a known node.
-5. Every node's `InputFrom` references a known node.
-6. At least one start node (no incoming edges) and one end node (no outgoing edges).
-7. Each `Condition` length ≤ `NopConstants.MaxConditionLength`.
-8. **Kahn's algorithm** topological sort — any remaining nodes indicate a cycle (`NOP-TASK-DAG-CYCLE`).
+1. 节点列表非空（`NOP-TASK-DAG-INVALID`）。
+2. `Nodes.Count ≤ NopConstants.MaxDagNodes`（32）。违反 → `NOP-TASK-DAG-TOO-LARGE`。
+3. 无重复节点 ID。
+4. 每条边的 `From` / `To` 引用已知节点。
+5. 每个节点的 `InputFrom` 引用已知节点。
+6. 至少一个 start 节点（无入边）和一个 end 节点（无出边）。
+7. 每个 `Condition` 长度 ≤ `NopConstants.MaxConditionLength`。
+8. **Kahn 算法**拓扑排序 —— 任何剩余节点说明存在环（`NOP-TASK-DAG-CYCLE`）。
 
-On success the validator returns the topological order, which the orchestrator consumes directly.
+成功时校验器返回拓扑序,orchestrator 直接消费。
 
 ### `NopCallbackValidator`
 
@@ -560,32 +560,32 @@ public static class NopCallbackValidator
 }
 ```
 
-Per `NPS-5 §8.4`:
+按 `NPS-5 §8.4`：
 
-- URL MUST be `https://`.
-- URL MUST NOT target localhost, `127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`,
-  `169.254.0.0/16`, IPv6 loopback / link-local / site-local, or `0.0.0.0/8`.
-- IPv4-mapped IPv6 addresses are normalised before the check.
-- No DNS resolution is performed — `IsPrivateHost` works on literal hostnames / IP strings only so
-  validation stays synchronous and free of network I/O.
+- URL 必须为 `https://`。
+- URL 不得指向 localhost、`127.0.0.0/8`、`10.0.0.0/8`、`172.16.0.0/12`、
+  `192.168.0.0/16`、`169.254.0.0/16`、IPv6 环回 / 链路本地 / 站点本地、
+  或 `0.0.0.0/8`。
+- IPv4 映射的 IPv6 地址在检查前被规范化。
+- 不执行 DNS 解析 —— `IsPrivateHost` 仅作用于字面主机名 / IP 字符串,
+  使校验保持同步且无网络 I/O。
 
 ---
 
-## Storage
+## 存储
 
 ### `InMemoryNopTaskStore`
 
 ```csharp
-public sealed class InMemoryNopTaskStore : INopTaskStore { /* ConcurrentDictionary-backed */ }
+public sealed class InMemoryNopTaskStore : INopTaskStore { /* ConcurrentDictionary 支持 */ }
 ```
 
-Thread-safe, non-durable. Fine for tests and single-process deployments. `AddNopOrchestrator`
-registers this by default; pass `useInMemoryStore: false` and register your own `INopTaskStore`
-for durable storage.
+线程安全、非持久。适合测试与单进程部署。`AddNopOrchestrator` 默认注册此实现；
+传 `useInMemoryStore: false` 并注册你自己的 `INopTaskStore` 以获得持久存储。
 
 ---
 
-## Constants and error codes
+## 常量与错误码
 
 ### `NopConstants`
 
@@ -597,9 +597,9 @@ public static class NopConstants
     public const int  MaxConditionLength    = 512;
     public const int  MaxInputMappingDepth  = 8;
     public const uint DefaultTimeoutMs      = 30_000;
-    public const uint MaxTimeoutMs          = 3_600_000;   // 1 hour
+    public const uint MaxTimeoutMs          = 3_600_000;   // 1 小时
     public const uint DefaultAnchorTtl      = 3_600;
-    public const int  CallbackMaxRetries    = 3;           // delays 0 s, 1 s, 2 s
+    public const int  CallbackMaxRetries    = 3;           // 延迟 0s、1s、2s
 }
 ```
 
@@ -631,7 +631,7 @@ public static class NopErrorCodes
 
 ---
 
-## DI extensions
+## DI 扩展
 
 ```csharp
 namespace NPS.NOP.Extensions;
@@ -645,16 +645,16 @@ public static class NopServiceExtensions
 }
 ```
 
-Prerequisite: register an `INopWorkerClient` implementation **before** calling this method. With
-`useInMemoryStore = true` (default) the orchestrator is paired with `InMemoryNopTaskStore`;
-pass `false` and register a custom `INopTaskStore` (e.g. a Postgres-backed store) beforehand.
+前置条件：调用此方法**之前**先注册一个 `INopWorkerClient` 实现。
+当 `useInMemoryStore = true`（默认）时,orchestrator 与 `InMemoryNopTaskStore`
+配对；传 `false` 并事先注册自定义 `INopTaskStore`（例如 Postgres 支持的 store）。
 
 ---
 
-## End-to-end sample
+## 端到端示例
 
 ```csharp
-// Your transport to Worker Agents
+// 你到 Worker Agent 的传输
 public sealed class HttpWorkerClient(IHttpClientFactory f) : INopWorkerClient { /* … */ }
 
 var builder = WebApplication.CreateBuilder(args);
@@ -700,5 +700,5 @@ var task = new TaskFrame
 
 var result = await orchestrator.ExecuteAsync(task);
 Console.WriteLine(result.FinalState);           // Completed / Failed / Cancelled
-Console.WriteLine(result.AggregatedResult);     // aggregated end-node JSON
+Console.WriteLine(result.AggregatedResult);     // 聚合的 end-node JSON
 ```

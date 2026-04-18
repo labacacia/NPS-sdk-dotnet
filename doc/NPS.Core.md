@@ -1,3 +1,5 @@
+English | [中文版](./NPS.Core.cn.md)
+
 # `LabAcacia.NPS.Core` — Class and Method Reference
 
 > Root namespace: `NPS.Core`
