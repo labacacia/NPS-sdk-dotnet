@@ -1,25 +1,26 @@
-English | [中文版](./NPS.NWP.cn.md)
+[English Version](./NPS.NWP.md) | 中文版
 
-# `LabAcacia.NPS.NWP` — Class and Method Reference
+# `LabAcacia.NPS.NWP` — 类与方法参考
 
-> Root namespace: `NPS.NWP`
-> NuGet: `LabAcacia.NPS.NWP`
-> Spec: [NPS-2 NWP v0.4](https://github.com/labacacia/NPS-Release/blob/main/NPS-2-NWP.md)
+> 根命名空间：`NPS.NWP`
+> NuGet：`LabAcacia.NPS.NWP`
+> 规范：[NPS-2 NWP v0.4](https://github.com/labacacia/NPS-Release/blob/main/NPS-2-NWP.md)
 
-NWP is the HTTP overlay for NPS. This package provides:
+NWP 是 NPS 的 HTTP 覆盖层。本包提供：
 
-1. Strongly-typed `QueryFrame` / `ActionFrame` / `AsyncActionResponse` request frames.
-2. The **Memory Node middleware** — a drop-in ASP.NET Core pipeline component that exposes a
-   data source as an NPS-compliant Memory Node at `/.nwm`, `/.schema`, `/query`, and `/stream`.
-3. The Neural Web Manifest object model used by `/.nwm`.
-4. HTTP header / MIME-type / error-code constants.
-5. DI extensions: `AddNwp`, `AddMemoryNode<T>`, `UseMemoryNode<T>`.
+1. 强类型 `QueryFrame` / `ActionFrame` / `AsyncActionResponse` 请求帧。
+2. **Memory Node middleware** —— 一个即插即用的 ASP.NET Core 管道组件,
+   将数据源暴露为符合 NPS 的 Memory Node,位于 `/.nwm`、`/.schema`、
+   `/query` 和 `/stream`。
+3. `/.nwm` 使用的 Neural Web Manifest 对象模型。
+4. HTTP 头 / MIME 类型 / 错误码常量。
+5. DI 扩展：`AddNwp`、`AddMemoryNode<T>`、`UseMemoryNode<T>`。
 
 ---
 
-## Table of contents
+## 目录
 
-- [NWP frames](#nwp-frames)
+- [NWP 帧](#nwp-帧)
   - [`QueryFrame`](#queryframe)
   - [`QueryOrderClause`](#queryorderclause)
   - [`VectorSearchOptions`](#vectorsearchoptions)
@@ -29,21 +30,21 @@ NWP is the HTTP overlay for NPS. This package provides:
   - [`NeuralWebManifest`](#neuralwebmanifest)
   - [`NodeCapabilities` / `NodeAuth` / `NodeEndpoints`](#nodecapabilities--nodeauth--nodeendpoints)
   - [`NodeGraph` / `NodeGraphRef`](#nodegraph--nodegraphref)
-- [HTTP surface](#http-surface)
+- [HTTP 表面](#http-表面)
   - [`NwpHttpHeaders`](#nwphttpheaders)
-  - [MIME types](#mime-types)
+  - [MIME 类型](#mime-类型)
   - [`NwpErrorCodes`](#nwperrorcodes)
 - [Memory Node](#memory-node)
   - [`IMemoryNodeProvider` + `MemoryNodeQueryResult`](#imemorynodeprovider--memorynodequeryresult)
   - [`MemoryNodeOptions`](#memorynodeoptions)
   - [`MemoryNodeSchema` / `MemoryNodeField`](#memorynodeschema--memorynodefield)
   - [`MemoryNodeMiddleware`](#memorynodemiddleware)
-- [`NptMeter` — token budget accounting](#nptmeter)
-- [DI extensions](#di-extensions)
+- [`NptMeter` — token budget 记账](#nptmeter)
+- [DI 扩展](#di-扩展)
 
 ---
 
-## NWP frames
+## NWP 帧
 
 ### `QueryFrame`
 
@@ -64,8 +65,8 @@ public sealed record QueryFrame : IFrame
 }
 ```
 
-Fields map 1:1 to `NPS-2 §5`. The Memory Node middleware interprets `Filter` via the
-provider's `QueryAsync`; the middleware itself does **not** execute a query DSL.
+字段与 `NPS-2 §5` 1:1 对应。Memory Node middleware 通过 provider 的
+`QueryAsync` 解释 `Filter`；middleware 本身**不**执行查询 DSL。
 
 ### `QueryOrderClause`
 
@@ -98,8 +99,9 @@ public sealed record ActionFrame : IFrame
 }
 ```
 
-Submit via `POST /invoke` with `Content-Type: application/nwp-frame`. If `Async = true` the server
-answers with an `AsyncActionResponse`; otherwise it returns an `ActionFrame` result envelope.
+使用 `Content-Type: application/nwp-frame` 通过 `POST /invoke` 提交。
+若 `Async = true` 服务端以 `AsyncActionResponse` 回应；否则返回
+`ActionFrame` 结果信封。
 
 ### `AsyncActionResponse`
 
@@ -133,8 +135,8 @@ public sealed record NeuralWebManifest
 }
 ```
 
-Returned from `GET /.nwm`. This is the Agent's first read — it describes everything the Agent needs
-before issuing queries.
+由 `GET /.nwm` 返回。这是 Agent 的第一次读取 —— 在发起查询之前,
+它描述 Agent 需要的一切。
 
 ### `NodeCapabilities` / `NodeAuth` / `NodeEndpoints`
 
@@ -150,7 +152,7 @@ public sealed record NodeCapabilities
 
 public sealed record NodeAuth
 {
-    public required string Scheme        { get; init; }  // e.g. "nip"
+    public required string Scheme        { get; init; }  // 如 "nip"
     public          bool   Required      { get; init; }
     public          IReadOnlyList<string>? RequiredCapabilities { get; init; }
 }
@@ -177,16 +179,15 @@ public sealed record NodeGraph
 public sealed record NodeGraphRef
 {
     public required string Nid          { get; init; }
-    public          string? Relationship { get; init; }   // e.g. "reads", "writes"
+    public          string? Relationship { get; init; }   // 如 "reads"、"writes"
 }
 ```
 
-Surfaces the node's declared upstream / downstream neighbours so Agents can traverse the graph
-without hitting the Registry.
+暴露节点声明的上游 / 下游邻居,使 Agent 无需访问 Registry 即可遍历图谱。
 
 ---
 
-## HTTP surface
+## HTTP 表面
 
 ### `NwpHttpHeaders`
 
@@ -205,17 +206,17 @@ public static class NwpHttpHeaders
 }
 ```
 
-Spec: `NPS-2 §6`. Clients MUST include `X-NWP-Agent-NID` when the node's manifest advertises
-`auth.required = true`.
+规范：`NPS-2 §6`。当节点 manifest 声明 `auth.required = true` 时,
+客户端**必须**附带 `X-NWP-Agent-NID`。
 
-### MIME types
+### MIME 类型
 
-| Constant                       | Value                                  |
-|--------------------------------|----------------------------------------|
-| `NwpMimeTypes.Frame`           | `application/nwp-frame`                |
-| `NwpMimeTypes.Capsule`         | `application/nwp-capsule`              |
-| `NwpMimeTypes.Manifest`        | `application/nwp-manifest+json`        |
-| `NwpMimeTypes.StreamEventBytes`| `application/nwp-stream-event-bytes`   |
+| 常量                            | 值                                     |
+|---------------------------------|----------------------------------------|
+| `NwpMimeTypes.Frame`            | `application/nwp-frame`                |
+| `NwpMimeTypes.Capsule`          | `application/nwp-capsule`              |
+| `NwpMimeTypes.Manifest`         | `application/nwp-manifest+json`        |
+| `NwpMimeTypes.StreamEventBytes` | `application/nwp-stream-event-bytes`   |
 
 ### `NwpErrorCodes`
 
@@ -272,11 +273,11 @@ public sealed record MemoryNodeQueryContext(
     string? TraceId);
 ```
 
-Implement once per backend (SQL Server, PostgreSQL, MongoDB, in-process store, …). The middleware
-invokes `QueryAsync` for `POST /query`, `StreamAsync` for `POST /stream`, and `CountAsync` for
-cursor-free total counts in responses.
+每种后端（SQL Server、PostgreSQL、MongoDB、进程内存储……）实现一次。
+middleware 为 `POST /query` 调用 `QueryAsync`,为 `POST /stream` 调用
+`StreamAsync`,为响应中的无游标总数调用 `CountAsync`。
 
-Providers are resolved from DI per request via `AddMemoryNode<T>`.
+Provider 通过 `AddMemoryNode<T>` 按请求从 DI 解析。
 
 ### `MemoryNodeOptions`
 
@@ -291,7 +292,7 @@ public sealed class MemoryNodeOptions
     public int      MaxLimit           { get; set; } = 1000;
     public bool     RequireAuth        { get; set; } = false;
     public long?    DefaultTokenBudget { get; set; }
-    public string   PathPrefix         { get; set; } = "";              // e.g. "/nodes/products"
+    public string   PathPrefix         { get; set; } = "";              // 如 "/nodes/products"
     public IReadOnlyList<string>? AdditionalCapabilities { get; set; }
 }
 ```
@@ -307,9 +308,9 @@ public sealed record MemoryNodeSchema
 
 public sealed record MemoryNodeField
 {
-    public required string  Name      { get; init; }   // public / logical name
+    public required string  Name      { get; init; }   // 公开 / 逻辑名
     public required string  Type      { get; init; }
-    public string?          ColumnName { get; init; }  // DB column override (falls back to Name)
+    public string?          ColumnName { get; init; }  // DB 列覆写（缺省回退到 Name）
     public string?          Semantic  { get; init; }
     public bool             PrimaryKey { get; init; }
     public bool             Required  { get; init; }
@@ -319,32 +320,32 @@ public sealed record MemoryNodeField
 }
 ```
 
-`ColumnName` exists so you can expose `price` in the schema while reading `unit_price_cents` from
-the database without forcing projection-layer aliases.
+`ColumnName` 存在的意义是:你可以在 schema 里暴露 `price`,同时从数据库读取
+`unit_price_cents`,无需在 projection 层强加别名。
 
 ### `MemoryNodeMiddleware`
 
-The middleware handles four sub-paths relative to `MemoryNodeOptions.PathPrefix`:
+Middleware 相对 `MemoryNodeOptions.PathPrefix` 处理四个子路径：
 
-| Path         | Verb | Purpose                                                          |
+| 路径         | 动词 | 用途                                                             |
 |--------------|------|------------------------------------------------------------------|
-| `/.nwm`      | GET  | Returns the `NeuralWebManifest` (`application/nwp-manifest+json`) |
-| `/.schema`   | GET  | Returns the `AnchorFrame` holding the node's schema              |
-| `/query`     | POST | Body: `QueryFrame` — returns a `CapsFrame`                       |
-| `/stream`    | POST | Body: `QueryFrame` — returns a stream of `StreamFrame`s          |
+| `/.nwm`      | GET  | 返回 `NeuralWebManifest`（`application/nwp-manifest+json`）      |
+| `/.schema`   | GET  | 返回持有节点 schema 的 `AnchorFrame`                             |
+| `/query`     | POST | 请求体：`QueryFrame` —— 返回 `CapsFrame`                         |
+| `/stream`    | POST | 请求体：`QueryFrame` —— 返回 `StreamFrame` 流                    |
 
-Per-request behaviour:
+每请求行为：
 
-1. Deserialise the request body using the tier declared by `X-NWP-Tier` or defaulted from `NpsCoreOptions.DefaultTier`.
-2. Enforce `MemoryNodeOptions.RequireAuth` — reject with status `NWP-AUTH-REQUIRED` when the
-   `X-NWP-Agent-NID` header is missing.
-3. Clamp `QueryFrame.Limit` to `MaxLimit`.
-4. Track NPT consumption via `NptMeter` — trim the result list if the caller-supplied `Budget`
-   would be exceeded and emit `X-NWP-Budget-Remaining` in the response.
-5. Encode the response back through the shared `NpsFrameCodec`.
+1. 按 `X-NWP-Tier` 声明或从 `NpsCoreOptions.DefaultTier` 缺省的 tier 反序列化请求体。
+2. 强制 `MemoryNodeOptions.RequireAuth` —— `X-NWP-Agent-NID` 头缺失时以
+   `NWP-AUTH-REQUIRED` 状态拒绝。
+3. 将 `QueryFrame.Limit` 钳制到 `MaxLimit`。
+4. 经 `NptMeter` 追踪 NPT 消耗 —— 若将超过调用者提供的 `Budget` 则修剪
+   结果列表,并在响应中发出 `X-NWP-Budget-Remaining`。
+5. 通过共享的 `NpsFrameCodec` 编码响应。
 
-Errors surface as `ErrorFrame` bodies with the appropriate status code; the `NwpErrorCodes`
-constant is always copied into `X-NWP-Error-Code`.
+错误以 `ErrorFrame` 作为响应体并带相应状态码；`NwpErrorCodes` 常量总是
+被拷贝到 `X-NWP-Error-Code`。
 
 ---
 
@@ -358,16 +359,16 @@ public sealed class NptMeter
     public long   Consumed        { get; }
     public long?  RemainingBudget { get; }
 
-    public bool   TryCharge(long cost);   // false = budget exhausted
+    public bool   TryCharge(long cost);   // false = 预算耗尽
 }
 ```
 
-Used internally by the middleware to decide whether the next row fits under the per-request NPT
-budget. Row costs follow the tokeniser-resolution chain specified by `spec/token-budget.md`.
+middleware 内部使用,用于判断下一行是否仍在每请求 NPT 预算内。
+行成本遵循 `spec/token-budget.md` 指定的 tokenizer 解析链。
 
 ---
 
-## DI extensions
+## DI 扩展
 
 ```csharp
 namespace NPS.NWP.Extensions;
@@ -387,15 +388,15 @@ public static class NwpServiceExtensions
 }
 ```
 
-- `AddNwp` registers the NWP frame types into the `FrameRegistryBuilder` pipeline and the
-  `NeuralWebManifest` factory helpers.
-- `AddMemoryNode<T>` registers the provider and the options. `TProvider` is resolved as **scoped**
-  (per-request); you can override the lifetime by registering it yourself before calling this method.
-- `UseMemoryNode<T>` mounts `MemoryNodeMiddleware` onto the application pipeline.
+- `AddNwp` 将 NWP 帧类型注册到 `FrameRegistryBuilder` 管道以及
+  `NeuralWebManifest` 工厂助手。
+- `AddMemoryNode<T>` 注册 provider 与 options。`TProvider` 以**Scoped**
+  （每请求）解析；在调用此方法之前你可以自行注册以覆盖生命周期。
+- `UseMemoryNode<T>` 将 `MemoryNodeMiddleware` 挂载到应用管道。
 
 ---
 
-## Putting it together
+## 整合示例
 
 ```csharp
 public sealed class ProductsProvider(ProductsDbContext db) : IMemoryNodeProvider { /* ... */ }
@@ -428,7 +429,7 @@ app.UseMemoryNode<ProductsProvider>();
 app.Run();
 ```
 
-An Agent now sees:
+此时 Agent 看到：
 
 ```http
 GET /.nwm
