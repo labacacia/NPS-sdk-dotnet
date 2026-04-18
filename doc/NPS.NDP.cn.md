@@ -1,39 +1,39 @@
-English | [中文版](./NPS.NDP.cn.md)
+[English Version](./NPS.NDP.md) | 中文版
 
-# `LabAcacia.NPS.NDP` — Class and Method Reference
+# `LabAcacia.NPS.NDP` — 类与方法参考
 
-> Root namespace: `NPS.NDP`
-> NuGet: `LabAcacia.NPS.NDP`
-> Spec: [NPS-4 NDP v0.2](https://github.com/labacacia/NPS-Release/blob/main/NPS-4-NDP.md)
+> 根命名空间：`NPS.NDP`
+> NuGet：`LabAcacia.NPS.NDP`
+> 规范：[NPS-4 NDP v0.2](https://github.com/labacacia/NPS-Release/blob/main/NPS-4-NDP.md)
 
-NDP is the discovery layer — the NPS analogue of DNS. This package provides the three NDP frame
-types, a thread-safe in-memory registry, an announce signature validator, and DI helpers.
+NDP 是发现层 —— NPS 对标 DNS。本包提供三种 NDP 帧类型、线程安全内存注册表、
+announce 签名校验器,以及 DI 助手。
 
-Dependencies: `LabAcacia.NPS.Core`, `LabAcacia.NPS.NIP` (`NdpAnnounceValidator` uses `NipSigner`).
+依赖：`LabAcacia.NPS.Core`、`LabAcacia.NPS.NIP`（`NdpAnnounceValidator` 使用 `NipSigner`）。
 
 ---
 
-## Table of contents
+## 目录
 
-- [NDP frames](#ndp-frames)
-  - [`NdpAddress` / `NdpResolveResult` / `NdpGraphNode`](#supporting-types)
+- [NDP 帧](#ndp-帧)
+  - [`NdpAddress` / `NdpResolveResult` / `NdpGraphNode`](#支撑类型)
   - [`AnnounceFrame`](#announceframe)
   - [`ResolveFrame`](#resolveframe)
   - [`GraphFrame`](#graphframe)
-- [Registry](#registry)
+- [注册表](#注册表)
   - [`INdpRegistry`](#indpregistry)
   - [`InMemoryNdpRegistry`](#inmemoryndpregistry)
-- [Announce validation](#announce-validation)
+- [Announce 校验](#announce-校验)
   - [`NdpAnnounceValidator`](#ndpannouncevalidator)
   - [`NdpAnnounceResult`](#ndpannounceresult)
 - [`NdpErrorCodes`](#ndperrorcodes)
-- [DI + registry extensions](#di--registry-extensions)
+- [DI + 注册表扩展](#di--注册表扩展)
 
 ---
 
-## NDP frames
+## NDP 帧
 
-### Supporting types
+### 支撑类型
 
 ```csharp
 public sealed record NdpAddress
@@ -54,7 +54,7 @@ public sealed record NdpResolveResult
 public sealed record NdpGraphNode
 {
     public required string                   Nid          { get; init; }
-    public          string?                  NodeType     { get; init; }   // "memory","action",…
+    public          string?                  NodeType     { get; init; }   // "memory"、"action"、…
     public required IReadOnlyList<NdpAddress> Addresses   { get; init; }
     public required IReadOnlyList<string>    Capabilities { get; init; }
 }
@@ -62,7 +62,7 @@ public sealed record NdpGraphNode
 
 ### `AnnounceFrame`
 
-Frame type `0x30` — publishes a node's physical reachability and TTL.
+帧类型 `0x30` —— 发布节点的物理可达性与 TTL。
 
 ```csharp
 public sealed record AnnounceFrame : IFrame
@@ -74,51 +74,51 @@ public sealed record AnnounceFrame : IFrame
     public          string?                  NodeType     { get; init; }
     public required IReadOnlyList<NdpAddress> Addresses   { get; init; }
     public required IReadOnlyList<string>    Capabilities { get; init; }
-    public required uint                     Ttl          { get; init; }   // 0 = orderly shutdown
+    public required uint                     Ttl          { get; init; }   // 0 = 有序关停
     public required string                   Timestamp    { get; init; }   // ISO 8601 UTC
     public required string                   Signature    { get; init; }   // ed25519:{base64url}
 }
 ```
 
-Signature semantics (NPS-4 §3.1):
+签名语义（NPS-4 §3.1）：
 
-- Canonicalise the frame with the `signature` field **excluded**.
-- Sign with the NID's own private key (the same key that backs the corresponding `IdentFrame`).
-- `Ttl = 0` must be signed and published before graceful shutdown so subscribers can evict.
+- 规范化帧时**排除** `signature` 字段。
+- 用 NID 自己的私钥（同一把背后支持相应 `IdentFrame` 的密钥）签名。
+- `Ttl = 0` 必须在优雅关停之前被签名并发布,使订阅者能够驱逐。
 
 ### `ResolveFrame`
 
-Frame type `0x31` — request/response envelope for resolving a `nwp://` URL. JSON is the preferred
-tier since resolve traffic is low-volume and human-debugged.
+帧类型 `0x31` —— 解析 `nwp://` URL 的请求 / 响应信封。因 resolve 流量小且常被
+人工调试,JSON 为优先 tier。
 
 ```csharp
 public sealed record ResolveFrame : IFrame
 {
     public required string            Target       { get; init; }   // "nwp://api.example.com/products"
     public          string?           RequesterNid { get; init; }
-    public          NdpResolveResult? Resolved     { get; init; }   // set on response
+    public          NdpResolveResult? Resolved     { get; init; }   // 响应时设置
 }
 ```
 
 ### `GraphFrame`
 
-Frame type `0x32` — topology sync between registries.
+帧类型 `0x32` —— 注册表间的拓扑同步。
 
 ```csharp
 public sealed record GraphFrame : IFrame
 {
     public required bool                       InitialSync { get; init; }
-    public          IReadOnlyList<NdpGraphNode>? Nodes     { get; init; }  // full snapshot when InitialSync = true
-    public          JsonElement?               Patch       { get; init; }  // RFC 6902 JSON Patch otherwise
-    public required ulong                      Seq         { get; init; }  // strictly monotonic per publisher
+    public          IReadOnlyList<NdpGraphNode>? Nodes     { get; init; }  // InitialSync = true 时为完整快照
+    public          JsonElement?               Patch       { get; init; }  // 否则为 RFC 6902 JSON Patch
+    public required ulong                      Seq         { get; init; }  // 按发布者严格单调
 }
 ```
 
-A gap in `Seq` MUST trigger a re-sync request signalled with `NDP-GRAPH-SEQ-GAP`.
+`Seq` 出现跳变**必须**触发以 `NDP-GRAPH-SEQ-GAP` 信号的重新同步请求。
 
 ---
 
-## Registry
+## 注册表
 
 ### `INdpRegistry`
 
@@ -134,7 +134,7 @@ public interface INdpRegistry
 
 ### `InMemoryNdpRegistry`
 
-Thread-safe, TTL-evicting, no background timer (expiry is evaluated lazily on every read).
+线程安全、TTL 驱逐、无后台 timer（过期在每次读取时惰性评估）。
 
 ```csharp
 public sealed class InMemoryNdpRegistry : INdpRegistry
@@ -150,35 +150,35 @@ public sealed class InMemoryNdpRegistry : INdpRegistry
 }
 ```
 
-Behaviour:
+行为：
 
-- **`Announce`** — `Ttl = 0` immediately evicts the entry; otherwise the entry is inserted (or
-  refreshed) with an absolute expiry = `Clock() + Ttl`.
-- **`Resolve`** — scans currently-live entries for the first whose NID covers the `nwp://` target,
-  returning the first advertised address. Non-matching/expired entries are purged during the scan.
-- **`GetByNid`** — exact NID lookup with on-demand purge.
-- **`Clock`** — injectable for deterministic unit tests.
+- **`Announce`** —— `Ttl = 0` 立即驱逐条目；否则以绝对过期时间
+  `Clock() + Ttl` 插入（或刷新）条目。
+- **`Resolve`** —— 扫描当前活跃条目,找到第一个 NID 覆盖 `nwp://` target 的条目,
+  返回第一个已广告地址。扫描过程中顺手清理不匹配 / 已过期条目。
+- **`GetByNid`** —— 精确 NID 查找,带按需清理。
+- **`Clock`** —— 可注入,便于确定性单元测试。
 
 #### `NwpTargetMatchesNid(nid, target)`
 
-Implements the NID ↔ target covering rule:
+实现 NID ↔ target 覆盖规则：
 
 ```
 NID:    urn:nps:node:{authority}:{name}
 Target: nwp://{authority}/{name}[/subpath]
 ```
 
-A node NID covers a target when:
+节点 NID 覆盖 target 的条件：
 
-1. The scheme is `nwp://`.
-2. The NID authority equals the target authority (case-insensitive).
-3. The target path starts with `/{name}` and either ends there or continues with `/…`.
+1. 协议为 `nwp://`。
+2. NID authority 与 target authority 相等（大小写不敏感）。
+3. target 路径以 `/{name}` 起头,并在此结束或继续以 `/…` 延伸。
 
-Returns `false` for malformed inputs rather than throwing.
+输入畸形时返回 `false` 而非抛出。
 
 ---
 
-## Announce validation
+## Announce 校验
 
 ### `NdpAnnounceValidator`
 
@@ -193,16 +193,17 @@ public sealed class NdpAnnounceValidator
 }
 ```
 
-Per `NPS-4 §7.1`, the validator:
+按 `NPS-4 §7.1`,校验器：
 
-1. Looks up the NID in `KnownPublicKeys`. Absence → `NDP-ANNOUNCE-NID-MISMATCH` (callers should
-   first verify the announcer's `IdentFrame` via `NipIdentVerifier` and then register its
-   `pub_key`).
-2. Decodes the stored key via `NipSigner.DecodePublicKey`.
-3. Verifies the `AnnounceFrame` signature via `NipSigner.Verify`.
-4. On any failure returns `NdpAnnounceResult.Fail(…)`; on success returns `NdpAnnounceResult.Ok()`.
+1. 在 `KnownPublicKeys` 中查找 NID。缺失 → `NDP-ANNOUNCE-NID-MISMATCH`
+   （调用者应先通过 `NipIdentVerifier` 验证发布者的 `IdentFrame`,
+   然后注册其 `pub_key`）。
+2. 经 `NipSigner.DecodePublicKey` 解码已存储的密钥。
+3. 经 `NipSigner.Verify` 校验 `AnnounceFrame` 签名。
+4. 任何失败时返回 `NdpAnnounceResult.Fail(…)`；成功时返回 `NdpAnnounceResult.Ok()`。
 
-The encoded key MUST use the `ed25519:{base64url}` form returned by `NipSigner.EncodePublicKey`.
+编码后的密钥必须使用 `NipSigner.EncodePublicKey` 返回的
+`ed25519:{base64url}` 形式。
 
 ### `NdpAnnounceResult`
 
@@ -210,7 +211,7 @@ The encoded key MUST use the `ed25519:{base64url}` form returned by `NipSigner.E
 public sealed record NdpAnnounceResult
 {
     public bool    IsValid   { get; init; }
-    public string? ErrorCode { get; init; }   // see NdpErrorCodes
+    public string? ErrorCode { get; init; }   // 见 NdpErrorCodes
     public string? Message   { get; init; }
 
     public static NdpAnnounceResult Ok();
@@ -237,7 +238,7 @@ public static class NdpErrorCodes
 
 ---
 
-## DI + registry extensions
+## DI + 注册表扩展
 
 ```csharp
 namespace NPS.NDP.Extensions;
@@ -255,22 +256,22 @@ public static class NdpRegistryExtensions
 }
 ```
 
-- `AddNdp` registers `INdpRegistry → InMemoryNdpRegistry` and `NdpAnnounceValidator` as singletons.
-  Substitute the implementation (e.g. a Redis-backed registry) by registering `INdpRegistry`
-  **before** calling `AddNdp`.
-- `AddNdp` on the `FrameRegistryBuilder` registers `AnnounceFrame`, `ResolveFrame`, `GraphFrame`
-  into the codec so they round-trip on the wire.
+- `AddNdp` 将 `INdpRegistry → InMemoryNdpRegistry` 与 `NdpAnnounceValidator`
+  注册为单例。通过在调用 `AddNdp` **之前**注册 `INdpRegistry` 来替换实现
+  （如 Redis 支持的注册表）。
+- 对 `FrameRegistryBuilder` 调用 `AddNdp` 将 `AnnounceFrame`、`ResolveFrame`、
+  `GraphFrame` 注册进编解码器,使其可在线路往返。
 
 ---
 
-## End-to-end sample
+## 端到端示例
 
 ```csharp
-// Build the shared registry
+// 构建共享注册表
 var registry  = new FrameRegistryBuilder().AddNcp().AddNip().AddNdp().Build();
 var codec     = new NpsFrameCodec(registry);
 
-// Configure discovery
+// 配置 discovery
 var services  = new ServiceCollection()
     .AddSingleton(codec)
     .AddNdp()
@@ -279,7 +280,7 @@ var services  = new ServiceCollection()
 var discovery = services.GetRequiredService<INdpRegistry>();
 var validator = services.GetRequiredService<NdpAnnounceValidator>();
 
-// A publisher node generates an Ed25519 identity and signs its announcement
+// 发布节点生成 Ed25519 身份并签署公告
 var identity = new NipKeyManager();
 identity.Generate("node.key", Environment.GetEnvironmentVariable("KEY_PASS")!);
 
@@ -297,14 +298,14 @@ var unsigned  = new AnnounceFrame
 var sig   = NipSigner.Sign(identity.PrivateKey, unsigned);
 var frame = unsigned with { Signature = sig };
 
-// Register the announcer's pub key, then validate + accept
+// 注册发布者的公钥,然后校验 + 接受
 validator.RegisterPublicKey(nid, NipSigner.EncodePublicKey(identity.PublicKey));
 var v = validator.Validate(frame);
 if (!v.IsValid) throw new InvalidOperationException(v.Message);
 
 discovery.Announce(frame);
 
-// Later, a consumer resolves
+// 之后,消费者解析
 var resolved = discovery.Resolve("nwp://api.example.com/products/items/42");
 // → NdpResolveResult { Host = "10.0.0.5", Port = 17433, Ttl = 300 }
 ```

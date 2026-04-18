@@ -1,3 +1,5 @@
+English | [中文版](./overview.cn.md)
+
 # NPS .NET SDK — Overview
 
 > Audience: library users building Memory Nodes, Agents, Orchestrators, or CA servers on the Neural Protocol Suite.
