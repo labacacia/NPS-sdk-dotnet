@@ -3,7 +3,7 @@
 > **Neural Orchestration Protocol** frames, DAG validation, and multi-Agent task orchestration for the **NPS — Neural Protocol Suite**.
 >
 > [![NuGet](https://img.shields.io/nuget/v/LabAcacia.NPS.NOP.svg)](https://www.nuget.org/packages/LabAcacia.NPS.NOP/)
-> Target: `net10.0` · License: Apache-2.0 · Spec: [NPS-5 NOP v0.3](https://github.com/labacacia/nps/blob/main/spec/NPS-5-NOP.md)
+> Target: `net10.0` · License: Apache-2.0 · Spec: [NPS-5 NOP v0.4](https://github.com/labacacia/nps/blob/main/spec/NPS-5-NOP.md)
 
 NOP is the SMTP/MQ of NPS — how multi-Agent workloads get planned, delegated
 and joined. This package provides the four NOP frames

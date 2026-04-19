@@ -3,7 +3,7 @@
 > **Neural Discovery Protocol** frames, in-memory registry, and announce validator for the **NPS — Neural Protocol Suite**.
 >
 > [![NuGet](https://img.shields.io/nuget/v/LabAcacia.NPS.NDP.svg)](https://www.nuget.org/packages/LabAcacia.NPS.NDP/)
-> Target: `net10.0` · License: Apache-2.0 · Spec: [NPS-4 NDP v0.2](https://github.com/labacacia/nps/blob/main/spec/NPS-4-NDP.md)
+> Target: `net10.0` · License: Apache-2.0 · Spec: [NPS-4 NDP v0.3](https://github.com/labacacia/nps/blob/main/spec/NPS-4-NDP.md)
 
 NDP is the DNS of NPS. This package provides the three NDP frame types
 (`AnnounceFrame`, `ResolveFrame`, `GraphFrame`), a thread-safe in-memory registry

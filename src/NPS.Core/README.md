@@ -3,7 +3,7 @@
 > Core frame types, codec pipeline, and AnchorFrame cache for the **NPS — Neural Protocol Suite**.
 >
 > [![NuGet](https://img.shields.io/nuget/v/LabAcacia.NPS.Core.svg)](https://www.nuget.org/packages/LabAcacia.NPS.Core/)
-> Target: `net10.0` · License: Apache-2.0 · Spec: [NPS-1 NCP v0.4](https://github.com/labacacia/nps/blob/main/spec/NPS-1-NCP.md)
+> Target: `net10.0` · License: Apache-2.0 · Spec: [NPS-1 NCP v0.5](https://github.com/labacacia/nps/blob/main/spec/NPS-1-NCP.md)
 
 This is the foundation package every other NPS library depends on. It implements
 the wire framing (4-byte default / 8-byte extended headers), the encoding tiers

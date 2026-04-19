@@ -22,9 +22,13 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\NPS.Core\NPS.Core.csproj" />
     <ProjectReference Include="..\..\src\NPS.NWP\NPS.NWP.csproj" />
+    <ProjectReference Include="..\..\src\NPS.NWP.Gateway\NPS.NWP.Gateway.csproj" />
     <ProjectReference Include="..\..\src\NPS.NOP\NPS.NOP.csproj" />
     <ProjectReference Include="..\..\src\NPS.NIP\NPS.NIP.csproj" />
     <ProjectReference Include="..\..\src\NPS.NDP\NPS.NDP.csproj" />
+    <ProjectReference Include="..\..\benchmarks\NPS.Benchmarks.TokenSavings\NPS.Benchmarks.TokenSavings.csproj" />
+    <ProjectReference Include="..\..\benchmarks\NPS.Benchmarks.WireSize\NPS.Benchmarks.WireSize.csproj" />
+    <ProjectReference Include="..\..\samples\NPS.Samples.NopDag\NPS.Samples.NopDag.csproj" />
   </ItemGroup>
 
 </Project>

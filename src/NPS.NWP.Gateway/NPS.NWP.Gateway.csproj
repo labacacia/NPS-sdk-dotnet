@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <RootNamespace>NPS.NWP.Gateway</RootNamespace>
+    <PackageId>LabAcacia.NPS.NWP.Gateway</PackageId>
+    <AssemblyName>NPS.NWP.Gateway</AssemblyName>
+    <Version>1.0.0-alpha.2</Version>
+    <Description>NPS — NWP Gateway Node: stateless AaaS entry point that translates inbound ActionFrames into NOP TaskFrames (NPS-AaaS §2).</Description>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <Authors>LabAcacia / INNO LOTUS PTY LTD</Authors>
+    <Company>INNO LOTUS PTY LTD</Company>
+    <PackageTags>nps;nwp;nop;aaas;gateway;agent;protocol</PackageTags>
+    <PackageProjectUrl>https://github.com/labacacia/nps</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/labacacia/nps</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NPS.Core\NPS.Core.csproj" />
+    <ProjectReference Include="..\NPS.NWP\NPS.NWP.csproj" />
+    <ProjectReference Include="..\NPS.NOP\NPS.NOP.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+</Project>
