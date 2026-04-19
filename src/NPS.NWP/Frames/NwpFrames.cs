@@ -128,6 +128,25 @@ public sealed record ActionFrame : IFrame
     /// </summary>
     [JsonPropertyName("async")]
     public bool Async { get; init; }
+
+    /// <summary>
+    /// Optional HTTPS callback URL invoked when an async task completes (NPS-2 §7.1).
+    /// MUST be <c>https://</c>. Nodes SHOULD reject private/loopback addresses to avoid SSRF.
+    /// </summary>
+    [JsonPropertyName("callback_url")]
+    public string? CallbackUrl { get; init; }
+
+    /// <summary>
+    /// Task priority hint: <c>"low"</c> / <c>"normal"</c> (default) / <c>"high"</c> (NPS-2 §7.1).
+    /// Nodes MAY use it for scheduling or reject unknown values with <c>NWP-ACTION-PARAMS-INVALID</c>.
+    /// </summary>
+    public string? Priority { get; init; }
+
+    /// <summary>
+    /// UUID v4 echoed back in the response and task status for client-side tracing (NPS-2 §7.1).
+    /// </summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
 }
 
 /// <summary>
@@ -146,4 +165,42 @@ public sealed record AsyncActionResponse
     /// <summary>NWP address to poll for task status updates.</summary>
     [JsonPropertyName("poll_url")]
     public required string PollUrl { get; init; }
+
+    /// <summary>Optional estimated execution time in milliseconds.</summary>
+    [JsonPropertyName("estimated_ms")]
+    public uint? EstimatedMs { get; init; }
+
+    /// <summary>Echo of <see cref="ActionFrame.RequestId"/> for tracing.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+}
+
+/// <summary>
+/// Full async task status returned by <c>system.task.status</c> (NPS-2 §7.3).
+/// </summary>
+public sealed record ActionTaskStatus
+{
+    [JsonPropertyName("task_id")]
+    public required string TaskId { get; init; }
+
+    /// <summary><c>"pending"</c> / <c>"running"</c> / <c>"completed"</c> / <c>"failed"</c> / <c>"cancelled"</c>.</summary>
+    public required string Status { get; init; }
+
+    /// <summary>Progress 0.0–1.0 when known.</summary>
+    public double? Progress { get; init; }
+
+    [JsonPropertyName("created_at")]
+    public required string CreatedAt { get; init; }
+
+    [JsonPropertyName("updated_at")]
+    public required string UpdatedAt { get; init; }
+
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
+    /// <summary>Result payload on <c>"completed"</c>; <c>null</c> otherwise.</summary>
+    public JsonElement? Result { get; init; }
+
+    /// <summary>Error payload on <c>"failed"</c>; <c>null</c> otherwise.</summary>
+    public JsonElement? Error { get; init; }
 }

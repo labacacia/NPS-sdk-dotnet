@@ -6,6 +6,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NPS.Core.Frames;
 using NPS.Core.Registry;
+using NPS.NWP.ActionNode;
+using NPS.NWP.ComplexNode;
 using NPS.NWP.Frames;
 using NPS.NWP.MemoryNode;
 
@@ -119,6 +121,122 @@ public static class NwpServiceExtensions
         {
             NodeId     = string.Empty,
             Schema     = null!,
+            PathPrefix = string.Empty,
+        };
+        configure(opts);
+        return opts;
+    }
+
+    // ── Action Node ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Registers an Action Node backed by <typeparamref name="TProvider"/> (NPS-2 §7).
+    /// Also registers the in-memory task store and idempotency cache — replace them with
+    /// distributed implementations for multi-instance deployments.
+    /// </summary>
+    public static IServiceCollection AddActionNode<TProvider>(
+        this IServiceCollection services,
+        Action<ActionNodeOptions> configure)
+        where TProvider : class, IActionNodeProvider
+    {
+        var opts = BuildActionOptions(configure);
+        services.AddSingleton(opts);
+        services.AddSingleton<TProvider>();
+        services.TryAddActionNodeInfrastructure();
+        return services;
+    }
+
+    /// <summary>
+    /// Wires up the Action Node middleware for <typeparamref name="TProvider"/> into the
+    /// ASP.NET Core pipeline. Call after <c>AddActionNode&lt;TProvider&gt;()</c>.
+    /// </summary>
+    public static IApplicationBuilder UseActionNode<TProvider>(
+        this IApplicationBuilder app,
+        Action<ActionNodeOptions> configure)
+        where TProvider : class, IActionNodeProvider
+    {
+        var opts = BuildActionOptions(configure);
+        return app.Use(next => ctx =>
+        {
+            var provider    = ctx.RequestServices.GetRequiredService<TProvider>();
+            var taskStore   = ctx.RequestServices.GetRequiredService<IActionTaskStore>();
+            var idempotency = ctx.RequestServices.GetRequiredService<IIdempotencyCache>();
+            var logger      = ctx.RequestServices.GetRequiredService<ILogger<ActionNodeMiddleware>>();
+            var mw = new ActionNodeMiddleware(next, provider, opts, taskStore, idempotency, logger);
+            return mw.InvokeAsync(ctx);
+        });
+    }
+
+    private static ActionNodeOptions BuildActionOptions(Action<ActionNodeOptions> configure)
+    {
+        var opts = new ActionNodeOptions
+        {
+            NodeId     = string.Empty,
+            Actions    = new Dictionary<string, ActionSpec>(),
+            PathPrefix = string.Empty,
+        };
+        configure(opts);
+        return opts;
+    }
+
+    private static void TryAddActionNodeInfrastructure(this IServiceCollection services)
+    {
+        // Register default in-memory stores only if the application hasn't already
+        // supplied a custom implementation (e.g. Redis-backed).
+        if (!services.Any(d => d.ServiceType == typeof(IActionTaskStore)))
+            services.AddSingleton<IActionTaskStore, InMemoryActionTaskStore>();
+        if (!services.Any(d => d.ServiceType == typeof(IIdempotencyCache)))
+            services.AddSingleton<IIdempotencyCache, InMemoryIdempotencyCache>();
+    }
+
+    // ── Complex Node ─────────────────────────────────────────────────────────
+
+    /// <summary>Named HTTP client used by the Complex Node for outbound child-node fetches.</summary>
+    public const string ComplexNodeHttpClientName = "nwp-complex-child";
+
+    /// <summary>
+    /// Registers a Complex Node backed by <typeparamref name="TProvider"/> (NPS-2 §11).
+    /// Also registers a named <see cref="HttpClient"/> (<see cref="ComplexNodeHttpClientName"/>)
+    /// used for outbound graph expansion.
+    /// </summary>
+    public static IServiceCollection AddComplexNode<TProvider>(
+        this IServiceCollection services,
+        Action<ComplexNodeOptions> configure)
+        where TProvider : class, IComplexNodeProvider
+    {
+        var opts = BuildComplexOptions(configure);
+        services.AddSingleton(opts);
+        services.AddSingleton<TProvider>();
+        services.AddHttpClient(ComplexNodeHttpClientName);
+        return services;
+    }
+
+    /// <summary>
+    /// Wires up the Complex Node middleware for <typeparamref name="TProvider"/> into the
+    /// ASP.NET Core pipeline. Call after <c>AddComplexNode&lt;TProvider&gt;()</c>.
+    /// </summary>
+    public static IApplicationBuilder UseComplexNode<TProvider>(
+        this IApplicationBuilder app,
+        Action<ComplexNodeOptions> configure)
+        where TProvider : class, IComplexNodeProvider
+    {
+        var opts = BuildComplexOptions(configure);
+        return app.Use(next => ctx =>
+        {
+            var provider = ctx.RequestServices.GetRequiredService<TProvider>();
+            var httpFact = ctx.RequestServices.GetRequiredService<IHttpClientFactory>();
+            var logger   = ctx.RequestServices.GetRequiredService<ILogger<ComplexNodeMiddleware>>();
+            var mw = new ComplexNodeMiddleware(next, provider, opts,
+                httpFact.CreateClient(ComplexNodeHttpClientName), logger);
+            return mw.InvokeAsync(ctx);
+        });
+    }
+
+    private static ComplexNodeOptions BuildComplexOptions(Action<ComplexNodeOptions> configure)
+    {
+        var opts = new ComplexNodeOptions
+        {
+            NodeId     = string.Empty,
             PathPrefix = string.Empty,
         };
         configure(opts);

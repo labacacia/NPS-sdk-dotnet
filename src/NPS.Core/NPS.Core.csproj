@@ -10,7 +10,7 @@
     <RootNamespace>NPS.Core</RootNamespace>
     <PackageId>LabAcacia.NPS.Core</PackageId>
     <AssemblyName>NPS.Core</AssemblyName>
-    <Version>1.0.0-alpha.1</Version>
+    <Version>1.0.0-alpha.2</Version>
     <Description>NPS — Neural Protocol Suite core frame types, codec pipeline, and AnchorFrame cache.</Description>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Authors>LabAcacia / INNO LOTUS PTY LTD</Authors>
@@ -27,7 +27,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="README.md" Pack="true" PackagePath="/" />
+    <None Include="../../../README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 
   <ItemGroup>

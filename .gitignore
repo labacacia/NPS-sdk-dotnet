@@ -419,3 +419,6 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Claude Code local ignore file (per-developer)
+.claudeignore

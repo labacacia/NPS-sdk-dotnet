@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>NPS.Samples.NopDag</RootNamespace>
+    <AssemblyName>NPS.Samples.NopDag</AssemblyName>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\NPS.Core\NPS.Core.csproj" />
+    <ProjectReference Include="..\..\src\NPS.NWP\NPS.NWP.csproj" />
+    <ProjectReference Include="..\..\src\NPS.NOP\NPS.NOP.csproj" />
+  </ItemGroup>
+
+</Project>

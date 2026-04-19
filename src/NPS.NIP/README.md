@@ -3,7 +3,7 @@
 > **Neural Identity Protocol** CA Server library and Agent verifier for the **NPS — Neural Protocol Suite**.
 >
 > [![NuGet](https://img.shields.io/nuget/v/LabAcacia.NPS.NIP.svg)](https://www.nuget.org/packages/LabAcacia.NPS.NIP/)
-> Target: `net10.0` · License: Apache-2.0 · Spec: [NPS-3 NIP v0.2](https://github.com/labacacia/nps/blob/main/spec/NPS-3-NIP.md)
+> Target: `net10.0` · License: Apache-2.0 · Spec: [NPS-3 NIP v0.3](https://github.com/labacacia/nps/blob/main/spec/NPS-3-NIP.md)
 
 NIP is the TLS/PKI of NPS. This package ships everything you need to run a CA
 Server that issues / renews / revokes NID certificates (Ed25519) and to verify

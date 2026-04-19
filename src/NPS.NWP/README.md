@@ -3,7 +3,7 @@
 > **Neural Web Protocol** frames, NWM manifest model, and ASP.NET Core integration for the **NPS — Neural Protocol Suite**.
 >
 > [![NuGet](https://img.shields.io/nuget/v/LabAcacia.NPS.NWP.svg)](https://www.nuget.org/packages/LabAcacia.NPS.NWP/)
-> Target: `net10.0` · License: Apache-2.0 · Spec: [NPS-2 NWP v0.4](https://github.com/labacacia/nps/blob/main/spec/NPS-2-NWP.md)
+> Target: `net10.0` · License: Apache-2.0 · Spec: [NPS-2 NWP v0.5](https://github.com/labacacia/nps/blob/main/spec/NPS-2-NWP.md)
 
 NWP is the HTTP-of-AI for NPS. This package provides the `QueryFrame` / `ActionFrame`
 request set, the `NeuralWebManifest` (`.nwm.json`) model, the `X-NWP-*` header
