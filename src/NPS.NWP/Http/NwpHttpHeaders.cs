@@ -83,6 +83,23 @@ public static class NwpErrorCodes
     public const string AuthNidUntrustedIssuer   = "NWP-AUTH-NID-UNTRUSTED-ISSUER";
     public const string AuthNidCapabilityMissing = "NWP-AUTH-NID-CAPABILITY-MISSING";
 
+    /// <summary>
+    /// Agent's <c>assurance_level</c> is below the node's
+    /// <c>min_assurance_level</c> (NWM §4.1) or per-action override
+    /// (§4.6). Response SHOULD include a <c>hint</c> pointing to a CA
+    /// enrolment URL. NPS-RFC-0003. → NPS-AUTH-FORBIDDEN.
+    /// </summary>
+    public const string AuthAssuranceTooLow     = "NWP-AUTH-ASSURANCE-TOO-LOW";
+
+    /// <summary>
+    /// Receiving Node's <c>reputation_policy</c> matched a
+    /// <c>reject_on</c> rule against the requesting <c>subject_nid</c>.
+    /// Reserved at NWP v0.7 (Phase 1 of NPS-RFC-0004); the policy
+    /// field shape that produces this error lands at NWP v0.8 (Phase
+    /// 2). → NPS-AUTH-FORBIDDEN.
+    /// </summary>
+    public const string AuthReputationBlocked   = "NWP-AUTH-REPUTATION-BLOCKED";
+
     // Query
     public const string QueryFilterInvalid       = "NWP-QUERY-FILTER-INVALID";
     public const string QueryFieldUnknown        = "NWP-QUERY-FIELD-UNKNOWN";

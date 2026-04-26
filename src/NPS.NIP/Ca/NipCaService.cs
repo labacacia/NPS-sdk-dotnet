@@ -301,4 +301,32 @@ public static class NipErrorCodes
     public const string ScopeExpansion   = "NIP-CA-SCOPE-EXPANSION-DENIED";
     public const string OcspUnavailable  = "NIP-OCSP-UNAVAILABLE";
     public const string TrustInvalid     = "NIP-TRUST-FRAME-INVALID";
+
+    /// <summary>
+    /// IdentFrame.assurance_level disagrees with the X.509 cert extension
+    /// id-nid-assurance-level (downgrade-attack defence). NPS-3 §5.1.1
+    /// (NPS-RFC-0003). → NPS-CLIENT-BAD-FRAME.
+    /// </summary>
+    public const string AssuranceMismatch = "NIP-ASSURANCE-MISMATCH";
+
+    /// <summary>
+    /// IdentFrame.assurance_level (or the X.509 extension) carries a
+    /// value outside the defined enum (anonymous / attested / verified).
+    /// NPS-3 §5.1.1 (NPS-RFC-0003). → NPS-CLIENT-BAD-FRAME.
+    /// </summary>
+    public const string AssuranceUnknown  = "NIP-ASSURANCE-UNKNOWN";
+
+    /// <summary>
+    /// Reputation log entry signature fails verification or canonical
+    /// (RFC 8785 JCS) form is malformed. NPS-3 §5.1.2 (NPS-RFC-0004).
+    /// → NPS-CLIENT-BAD-FRAME.
+    /// </summary>
+    public const string ReputationEntryInvalid = "NIP-REPUTATION-ENTRY-INVALID";
+
+    /// <summary>
+    /// A log operator referenced by a Node's reputation_policy cannot
+    /// be reached during admission evaluation. NPS-3 §5.1.2
+    /// (NPS-RFC-0004). → NPS-DOWNSTREAM-UNAVAILABLE.
+    /// </summary>
+    public const string ReputationLogUnreachable = "NIP-REPUTATION-LOG-UNREACHABLE";
 }

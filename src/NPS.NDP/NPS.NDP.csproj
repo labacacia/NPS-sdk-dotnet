@@ -9,7 +9,7 @@
     <RootNamespace>NPS.NDP</RootNamespace>
     <PackageId>LabAcacia.NPS.NDP</PackageId>
     <AssemblyName>NPS.NDP</AssemblyName>
-    <Version>1.0.0-alpha.2</Version>
+    <Version>1.0.0-alpha.3</Version>
     <Description>NPS — Neural Discovery Protocol library. Announce, resolve and graph-sync NWP nodes and Agents. Embeddable in any ASP.NET Core app.</Description>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Authors>LabAcacia / INNO LOTUS PTY LTD</Authors>

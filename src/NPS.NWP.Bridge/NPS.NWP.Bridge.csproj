@@ -5,17 +5,16 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <RootNamespace>NPS.Core</RootNamespace>
-    <PackageId>LabAcacia.NPS.Core</PackageId>
-    <AssemblyName>NPS.Core</AssemblyName>
+    <RootNamespace>NPS.NWP.Bridge</RootNamespace>
+    <PackageId>LabAcacia.NPS.NWP.Bridge</PackageId>
+    <AssemblyName>NPS.NWP.Bridge</AssemblyName>
     <Version>1.0.0-alpha.3</Version>
-    <Description>NPS — Neural Protocol Suite core frame types, codec pipeline, and AnchorFrame cache.</Description>
+    <Description>NPS — NWP Bridge Node skeleton: stateless translator from NPS frames to non-NPS protocols (HTTP / gRPC / MCP / A2A target adapters). Phase 1 ships the public type surface only; concrete adapters per target protocol arrive in follow-up CRs.</Description>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Authors>LabAcacia / INNO LOTUS PTY LTD</Authors>
     <Company>INNO LOTUS PTY LTD</Company>
-    <PackageTags>nps;ncp;ai;agent;protocol;msgpack</PackageTags>
+    <PackageTags>nps;nwp;bridge;translation;agent;protocol</PackageTags>
     <PackageProjectUrl>https://github.com/labacacia/nps</PackageProjectUrl>
     <RepositoryUrl>https://github.com/labacacia/nps</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
@@ -35,10 +34,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="MessagePack" Version="3.0.300" />
-    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.0" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.0" />
+    <ProjectReference Include="..\NPS.Core\NPS.Core.csproj" />
+    <ProjectReference Include="..\NPS.NWP\NPS.NWP.csproj" />
   </ItemGroup>
 
 </Project>
