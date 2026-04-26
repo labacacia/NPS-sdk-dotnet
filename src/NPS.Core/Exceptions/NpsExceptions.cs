@@ -141,3 +141,24 @@ public sealed class NpsAnchorStaleException : NpsException
         AnchorId = anchorId;
     }
 }
+
+/// <summary>
+/// Thrown by <see cref="Ncp.NcpPreamble.Validate"/> when a native-mode
+/// connection's first 8 bytes do not match the constant preamble
+/// <c>b"NPS/1.0\n"</c>. Per NPS-RFC-0001 / NPS-1 §2.6.1, the calling
+/// transport SHOULD log the reason, MUST NOT emit an <c>ErrorFrame</c>,
+/// and MUST close the connection within 500 ms.
+/// Error code: <c>NCP-PREAMBLE-INVALID</c>.
+/// </summary>
+public sealed class NcpPreambleInvalidException : NpsException
+{
+    /// <summary>Short, human-readable cause suitable for log lines.</summary>
+    public string Reason { get; }
+
+    public NcpPreambleInvalidException(string reason)
+        : base($"Native-mode connection preamble invalid: {reason}",
+               NpsStatusCodes.ProtoPreambleInvalid, NcpErrorCodes.PreambleInvalid)
+    {
+        Reason = reason;
+    }
+}

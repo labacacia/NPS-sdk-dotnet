@@ -3,25 +3,25 @@
 
 using System.Collections.Concurrent;
 
-namespace NPS.NWP.Gateway;
+namespace NPS.NWP.Anchor;
 
 /// <summary>
-/// Process-local implementation of <see cref="IGatewayRateLimiter"/> using
+/// Process-local implementation of <see cref="IAnchorRateLimiter"/> using
 /// per-consumer sliding-window counters. Adequate for single-instance
-/// gateways or testing; replace with a distributed counter (Redis
-/// <c>INCRBY</c>, etc.) when deploying across multiple gateway instances.
+/// anchors or testing; replace with a distributed counter (Redis
+/// <c>INCRBY</c>, etc.) when deploying across multiple anchor instances.
 /// </summary>
-public sealed class InMemoryGatewayRateLimiter : IGatewayRateLimiter
+public sealed class InMemoryAnchorRateLimiter : IAnchorRateLimiter
 {
     private readonly ConcurrentDictionary<string, ConsumerState> _state = new();
 
     /// <summary>Clock override, primarily for tests. Defaults to <see cref="DateTime.UtcNow"/>.</summary>
     public Func<DateTime> Clock { get; init; } = () => DateTime.UtcNow;
 
-    public GatewayRateLimitResult TryAcquire(
+    public AnchorRateLimitResult TryAcquire(
         string             consumerKey,
         uint               nptCost,
-        GatewayRateLimits? limits)
+        AnchorRateLimits? limits)
     {
         if (limits is null ||
             (limits.RequestsPerMinute == 0 &&
@@ -32,7 +32,7 @@ public sealed class InMemoryGatewayRateLimiter : IGatewayRateLimiter
             // updated so Release() is always safe to call.
             var st = _state.GetOrAdd(consumerKey, _ => new ConsumerState());
             Interlocked.Increment(ref st.Concurrent);
-            return new GatewayRateLimitResult(true);
+            return new AnchorRateLimitResult(true);
         }
 
         var now = Clock();
@@ -48,7 +48,7 @@ public sealed class InMemoryGatewayRateLimiter : IGatewayRateLimiter
                 {
                     var oldest = state.RequestTimes.Peek();
                     var retry  = (int)Math.Ceiling((oldest.AddMinutes(1) - now).TotalSeconds);
-                    return new GatewayRateLimitResult(false,
+                    return new AnchorRateLimitResult(false,
                         $"requests_per_minute limit ({limits.RequestsPerMinute}) exceeded.",
                         retry < 1 ? 1 : retry);
                 }
@@ -57,7 +57,7 @@ public sealed class InMemoryGatewayRateLimiter : IGatewayRateLimiter
             // 2. max concurrent
             if (limits.MaxConcurrent > 0 && state.Concurrent >= limits.MaxConcurrent)
             {
-                return new GatewayRateLimitResult(false,
+                return new AnchorRateLimitResult(false,
                     $"max_concurrent limit ({limits.MaxConcurrent}) exceeded.", 1);
             }
 
@@ -73,7 +73,7 @@ public sealed class InMemoryGatewayRateLimiter : IGatewayRateLimiter
                         ? state.NptHistory.Peek().At
                         : now;
                     var retry  = (int)Math.Ceiling((oldest.AddHours(1) - now).TotalSeconds);
-                    return new GatewayRateLimitResult(false,
+                    return new AnchorRateLimitResult(false,
                         $"npt_per_hour limit ({limits.NptPerHour}) exceeded (need {nptCost}, consumed {consumed}).",
                         retry < 1 ? 1 : retry);
                 }
@@ -83,7 +83,7 @@ public sealed class InMemoryGatewayRateLimiter : IGatewayRateLimiter
             // Commit.
             if (limits.RequestsPerMinute > 0) state.RequestTimes.Enqueue(now);
             state.Concurrent++;
-            return new GatewayRateLimitResult(true);
+            return new AnchorRateLimitResult(true);
         }
     }
 

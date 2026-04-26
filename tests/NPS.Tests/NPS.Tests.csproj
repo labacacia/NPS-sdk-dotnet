@@ -22,7 +22,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\NPS.Core\NPS.Core.csproj" />
     <ProjectReference Include="..\..\src\NPS.NWP\NPS.NWP.csproj" />
-    <ProjectReference Include="..\..\src\NPS.NWP.Gateway\NPS.NWP.Gateway.csproj" />
+    <ProjectReference Include="..\..\src\NPS.NWP.Anchor\NPS.NWP.Anchor.csproj" />
     <ProjectReference Include="..\..\src\NPS.NOP\NPS.NOP.csproj" />
     <ProjectReference Include="..\..\src\NPS.NIP\NPS.NIP.csproj" />
     <ProjectReference Include="..\..\src\NPS.NDP\NPS.NDP.csproj" />

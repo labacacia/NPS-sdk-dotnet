@@ -4,6 +4,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using NPS.Core.Frames;
+using NPS.NIP;
 
 namespace NPS.NIP.Frames;
 
@@ -65,6 +66,18 @@ public sealed record IdentFrame : IFrame
     /// <summary>Optional agent metadata (model_family, tokenizer, runtime). Not signed.</summary>
     [JsonPropertyName("metadata")]
     public IdentMetadata? Metadata { get; init; }
+
+    /// <summary>
+    /// Agent identity assurance level (NPS-RFC-0003 / NPS-3 §5.1.1).
+    /// Optional on the wire — pre-RFC-0003 publishers omit it. Receivers
+    /// MUST treat an absent field as <see cref="AssuranceLevel.Anonymous"/>
+    /// (backward compatibility with v1.0-alpha.2 publishers). When the
+    /// NID's certificate carries the <c>id-nid-assurance-level</c>
+    /// extension, this field MUST equal it; mismatch is
+    /// <c>NIP-ASSURANCE-MISMATCH</c>.
+    /// </summary>
+    [JsonPropertyName("assurance_level")]
+    public AssuranceLevel? AssuranceLevel { get; init; }
 }
 
 /// <summary>
