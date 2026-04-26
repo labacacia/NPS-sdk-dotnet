@@ -9,7 +9,7 @@
     <RootNamespace>NPS.NOP</RootNamespace>
     <PackageId>LabAcacia.NPS.NOP</PackageId>
     <AssemblyName>NPS.NOP</AssemblyName>
-    <Version>1.0.0-alpha.2</Version>
+    <Version>1.0.0-alpha.3</Version>
     <Description>NPS — Neural Orchestration Protocol frame types, DAG validation, and multi-Agent task orchestration.</Description>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Authors>LabAcacia / INNO LOTUS PTY LTD</Authors>

@@ -14,16 +14,16 @@ using NPS.NWP.Frames;
 using NPS.NWP.Http;
 using NPS.NWP.Nwm;
 
-namespace NPS.NWP.Gateway;
+namespace NPS.NWP.Anchor;
 
 /// <summary>
-/// ASP.NET Core middleware exposing a single Gateway Node
+/// ASP.NET Core middleware exposing a single Anchor Node
 /// (NPS-AaaS §2) at a configurable path prefix. Sub-paths:
 /// <c>/.nwm</c>, <c>/.schema</c>, <c>/actions</c>, <c>/invoke</c>.
 ///
 /// <para>
 /// On <c>/invoke</c> the middleware validates auth + rate limits, hands the
-/// <see cref="ActionFrame"/> to the registered <see cref="IGatewayRouter"/>,
+/// <see cref="ActionFrame"/> to the registered <see cref="IAnchorRouter"/>,
 /// then dispatches the resulting <see cref="NPS.NOP.Frames.TaskFrame"/> to
 /// the local <see cref="INopOrchestrator"/>. Synchronous actions return a
 /// <see cref="CapsFrame"/> with the aggregated result; asynchronous actions
@@ -31,17 +31,17 @@ namespace NPS.NWP.Gateway;
 /// <c>system.task.status</c> against the backing Action Node).
 /// </para>
 ///
-/// <para>The Gateway itself is stateless — it owns no business logic, no
+/// <para>The Anchor itself is stateless — it owns no business logic, no
 /// persistent state, and no downstream caches. That lets it scale
 /// horizontally behind a load balancer without coordination.</para>
 /// </summary>
-public sealed class GatewayNodeMiddleware
+public sealed class AnchorNodeMiddleware
 {
     private readonly RequestDelegate       _next;
-    private readonly GatewayNodeOptions    _options;
-    private readonly IGatewayRouter        _router;
+    private readonly AnchorNodeOptions    _options;
+    private readonly IAnchorRouter        _router;
     private readonly INopOrchestrator      _orchestrator;
-    private readonly IGatewayRateLimiter   _limiter;
+    private readonly IAnchorRateLimiter   _limiter;
     private readonly ILogger               _log;
 
     private readonly string _nwmJson;
@@ -55,13 +55,13 @@ public sealed class GatewayNodeMiddleware
         WriteIndented               = false,
     };
 
-    public GatewayNodeMiddleware(
+    public AnchorNodeMiddleware(
         RequestDelegate                 next,
-        GatewayNodeOptions              options,
-        IGatewayRouter                  router,
+        AnchorNodeOptions              options,
+        IAnchorRouter                  router,
         INopOrchestrator                orchestrator,
-        IGatewayRateLimiter             limiter,
-        ILogger<GatewayNodeMiddleware>  logger)
+        IAnchorRateLimiter             limiter,
+        ILogger<AnchorNodeMiddleware>  logger)
     {
         _next         = next;
         _options      = options;
@@ -132,7 +132,7 @@ public sealed class GatewayNodeMiddleware
     {
         ctx.Response.StatusCode  = 200;
         ctx.Response.ContentType = NwpHttpHeaders.MimeManifest;
-        ctx.Response.Headers[NwpHttpHeaders.NodeType] = "gateway";
+        ctx.Response.Headers[NwpHttpHeaders.NodeType] = "anchor";
         return ctx.Response.WriteAsync(_nwmJson);
     }
 
@@ -206,7 +206,7 @@ public sealed class GatewayNodeMiddleware
 
         try
         {
-            var routeCtx = new GatewayRouteContext
+            var routeCtx = new AnchorRouteContext
             {
                 Spec               = spec,
                 AgentNid           = agentNid,
@@ -224,11 +224,11 @@ public sealed class GatewayNodeMiddleware
             }
             catch (Exception ex)
             {
-                _log.LogError(ex, "Gateway router failed to build TaskFrame for {ActionId}",
+                _log.LogError(ex, "Anchor router failed to build TaskFrame for {ActionId}",
                     frame.ActionId);
                 await WriteError(ctx, 500, "NPS-SERVER-INTERNAL",
                     NwpErrorCodes.NodeUnavailable,
-                    "gateway failed to route the action.");
+                    "anchor failed to route the action.");
                 return;
             }
 
@@ -264,7 +264,7 @@ public sealed class GatewayNodeMiddleware
             {
                 await WriteError(ctx, 504, "NPS-SERVER-TIMEOUT",
                     NwpErrorCodes.NodeUnavailable,
-                    "gateway task timed out.");
+                    "anchor task timed out.");
                 return;
             }
             catch (Exception ex)
@@ -272,7 +272,7 @@ public sealed class GatewayNodeMiddleware
                 _log.LogError(ex, "Orchestration failed for action {ActionId}", frame.ActionId);
                 await WriteError(ctx, 500, "NPS-SERVER-INTERNAL",
                     NwpErrorCodes.NodeUnavailable,
-                    "gateway task execution failed.");
+                    "anchor task execution failed.");
                 return;
             }
 
@@ -301,7 +301,7 @@ public sealed class GatewayNodeMiddleware
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    private uint ClampTimeout(uint requested, GatewayActionSpec spec)
+    private uint ClampTimeout(uint requested, AnchorActionSpec spec)
     {
         var specMax = spec.TimeoutMsMax ?? _options.MaxTimeoutMs;
         var hardMax = Math.Min(specMax, _options.MaxTimeoutMs);
@@ -322,8 +322,8 @@ public sealed class GatewayNodeMiddleware
     /// <summary>
     /// Build or forward a W3C <see cref="TaskContext"/>. Consumer can supply
     /// <c>traceparent</c> / <c>tracestate</c>; otherwise — when
-    /// <see cref="GatewayNodeOptions.AutoInjectTraceContext"/> is set — the
-    /// gateway mints a fresh trace id so downstream NOP spans link up.
+    /// <see cref="AnchorNodeOptions.AutoInjectTraceContext"/> is set — the
+    /// anchor mints a fresh trace id so downstream NOP spans link up.
     /// </summary>
     private TaskContext? BuildTraceContext(HttpContext ctx)
     {
@@ -352,7 +352,7 @@ public sealed class GatewayNodeMiddleware
         if (parts[1].Length != 32 || parts[2].Length != 16 || parts[3].Length != 2)
             return (null, null, null);
         byte.TryParse(parts[3], System.Globalization.NumberStyles.HexNumber, null, out var flags);
-        // Per W3C, the gateway becomes a new parent — mint a fresh span_id so downstream
+        // Per W3C, the anchor becomes a new parent — mint a fresh span_id so downstream
         // children link back to it rather than the caller's span.
         return (parts[1], RandomHex(8), flags);
     }
@@ -387,7 +387,7 @@ public sealed class GatewayNodeMiddleware
         };
         ctx.Response.StatusCode  = 202;
         ctx.Response.ContentType = "application/json";
-        ctx.Response.Headers[NwpHttpHeaders.NodeType] = "gateway";
+        ctx.Response.Headers[NwpHttpHeaders.NodeType] = "anchor";
         return ctx.Response.WriteAsync(JsonSerializer.Serialize(body, Json));
     }
 
@@ -409,7 +409,7 @@ public sealed class GatewayNodeMiddleware
 
         ctx.Response.StatusCode  = 200;
         ctx.Response.ContentType = NwpHttpHeaders.MimeCapsule;
-        ctx.Response.Headers[NwpHttpHeaders.NodeType] = "gateway";
+        ctx.Response.Headers[NwpHttpHeaders.NodeType] = "anchor";
         if (!string.IsNullOrEmpty(anchorRef))
             ctx.Response.Headers[NwpHttpHeaders.Schema] = anchorRef;
         if (tokenEst is { } est && est > 0)
@@ -435,7 +435,7 @@ public sealed class GatewayNodeMiddleware
 
     // ── NWM payload ──────────────────────────────────────────────────────────
 
-    private static (string nwmJson, string actionsJson) BuildStaticPayloads(GatewayNodeOptions opt)
+    private static (string nwmJson, string actionsJson) BuildStaticPayloads(AnchorNodeOptions opt)
     {
         var baseUrl = opt.PathPrefix.TrimEnd('/');
 
@@ -443,7 +443,7 @@ public sealed class GatewayNodeMiddleware
         {
             Nwp             = "0.4",
             NodeId          = opt.NodeId,
-            NodeType        = "gateway",
+            NodeType        = "anchor",
             DisplayName     = opt.DisplayName,
             WireFormats     = ["ncp-capsule", "json"],
             PreferredFormat = "json",

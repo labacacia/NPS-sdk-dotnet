@@ -1,16 +1,16 @@
 // Copyright 2026 INNO LOTUS PTY LTD
 // SPDX-License-Identifier: Apache-2.0
 
-namespace NPS.NWP.Gateway;
+namespace NPS.NWP.Anchor;
 
 /// <summary>
-/// Configuration for a single Gateway Node (NPS-AaaS §2). Gateway Nodes are
+/// Configuration for a single Anchor Node (NPS-AaaS §2). Anchor Nodes are
 /// the stateless entry point for AaaS deployments: every <c>ActionFrame</c>
 /// received at <c>/invoke</c> is translated to a NOP <c>TaskFrame</c> and
-/// dispatched to the local orchestrator; the Gateway itself does not execute
+/// dispatched to the local orchestrator; the Anchor itself does not execute
 /// business logic.
 /// </summary>
-public sealed class GatewayNodeOptions
+public sealed class AnchorNodeOptions
 {
     // ── Identity ─────────────────────────────────────────────────────────────
 
@@ -20,7 +20,7 @@ public sealed class GatewayNodeOptions
     /// <summary>Human-readable name shown in the NWM manifest.</summary>
     public string? DisplayName { get; set; }
 
-    /// <summary>HTTP path prefix where the gateway listens, e.g. <c>"/gw"</c>.</summary>
+    /// <summary>HTTP path prefix where the anchor listens, e.g. <c>"/gw"</c>.</summary>
     public required string PathPrefix { get; set; }
 
     // ── Actions ──────────────────────────────────────────────────────────────
@@ -30,12 +30,12 @@ public sealed class GatewayNodeOptions
     /// identifiers (NPS-2 §4.6). The router is responsible for producing a
     /// <c>TaskFrame</c> for each declared action.
     /// </summary>
-    public required IReadOnlyDictionary<string, GatewayActionSpec> Actions { get; set; }
+    public required IReadOnlyDictionary<string, AnchorActionSpec> Actions { get; set; }
 
     // ── Auth ─────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// When <c>true</c> (default for Gateway — NPS-AaaS §2.3 auth.required=true),
+    /// When <c>true</c> (default for Anchor — NPS-AaaS §2.3 auth.required=true),
     /// requests without <c>X-NWP-Agent</c> are rejected with 401.
     /// </summary>
     public bool RequireAuth { get; set; } = true;
@@ -48,7 +48,7 @@ public sealed class GatewayNodeOptions
 
     // ── Timeouts ─────────────────────────────────────────────────────────────
 
-    /// <summary>Default timeout when neither <see cref="GatewayActionSpec.TimeoutMsDefault"/>
+    /// <summary>Default timeout when neither <see cref="AnchorActionSpec.TimeoutMsDefault"/>
     /// nor <c>ActionFrame.TimeoutMs</c> are set. Default 30000 ms.</summary>
     public uint DefaultTimeoutMs { get; set; } = 30_000;
 
@@ -59,10 +59,10 @@ public sealed class GatewayNodeOptions
 
     /// <summary>
     /// Declarative rate limit block advertised in the NWM. Enforcement is
-    /// performed by the registered <see cref="IGatewayRateLimiter"/>
+    /// performed by the registered <see cref="IAnchorRateLimiter"/>
     /// (in-memory default; swap for a distributed implementation in production).
     /// </summary>
-    public GatewayRateLimits? RateLimits { get; set; }
+    public AnchorRateLimits? RateLimits { get; set; }
 
     // ── Token budget ─────────────────────────────────────────────────────────
 

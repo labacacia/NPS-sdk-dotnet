@@ -69,6 +69,24 @@ public sealed record NeuralWebManifest
 
     /// <summary>Sub-node graph declaration. Only present on Complex Nodes (NPS-2 §9).</summary>
     public NodeGraph? Graph { get; init; }
+
+    /// <summary>
+    /// Minimum required Agent identity assurance level (NPS-2 §4.1 /
+    /// NPS-3 §5.1.1 / NPS-RFC-0003). One of <c>"anonymous"</c>
+    /// (default), <c>"attested"</c>, <c>"verified"</c>. Requests whose
+    /// presented level is lower MUST be rejected with
+    /// <c>NWP-AUTH-ASSURANCE-TOO-LOW</c> (<c>NPS-AUTH-FORBIDDEN</c>).
+    /// Per-action overrides are permitted via <c>auth.min_assurance_level</c>
+    /// on individual <c>ActionSpec</c>s (§4.6).
+    /// <para>
+    /// In Phase 1 of NPS-RFC-0003 the reference NWM model parses and
+    /// round-trips this field but enforcement is opt-in — Nodes that
+    /// declare a stricter level MUST wire enforcement through their
+    /// own request pipeline until Phase 2 ships.
+    /// </para>
+    /// </summary>
+    [JsonPropertyName("min_assurance_level")]
+    public string? MinAssuranceLevel { get; init; }
 }
 
 /// <summary>

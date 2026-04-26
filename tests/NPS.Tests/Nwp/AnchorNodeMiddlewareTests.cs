@@ -15,18 +15,18 @@ using NPS.NOP.Frames;
 using NPS.NOP.Models;
 using NPS.NOP.Orchestration;
 using NPS.NWP.Frames;
-using NPS.NWP.Gateway;
+using NPS.NWP.Anchor;
 using NPS.NWP.Http;
 
 namespace NPS.Tests.Nwp;
 
 /// <summary>
-/// Integration tests for <see cref="GatewayNodeMiddleware"/>. Uses a fake
-/// <see cref="IGatewayRouter"/> that records the <see cref="TaskFrame"/>
+/// Integration tests for <see cref="AnchorNodeMiddleware"/>. Uses a fake
+/// <see cref="IAnchorRouter"/> that records the <see cref="TaskFrame"/>
 /// produced for each action, and a fake <see cref="INopOrchestrator"/> so
 /// tests stay hermetic.
 /// </summary>
-public sealed class GatewayNodeMiddlewareTests : IAsyncLifetime
+public sealed class AnchorNodeMiddlewareTests : IAsyncLifetime
 {
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -35,8 +35,8 @@ public sealed class GatewayNodeMiddlewareTests : IAsyncLifetime
         PropertyNameCaseInsensitive = true,
     };
 
-    private static readonly IReadOnlyDictionary<string, GatewayActionSpec> Actions =
-        new Dictionary<string, GatewayActionSpec>
+    private static readonly IReadOnlyDictionary<string, AnchorActionSpec> Actions =
+        new Dictionary<string, AnchorActionSpec>
         {
             ["analysis.run"] = new()
             {
@@ -56,12 +56,12 @@ public sealed class GatewayNodeMiddlewareTests : IAsyncLifetime
 
     private IHost                _host         = null!;
     private HttpClient           _client       = null!;
-    private FakeGatewayRouter    _router       = null!;
+    private FakeAnchorRouter    _router       = null!;
     private FakeNopOrchestrator  _orchestrator = null!;
 
     public async Task InitializeAsync()
     {
-        _router       = new FakeGatewayRouter();
+        _router       = new FakeAnchorRouter();
         _orchestrator = new FakeNopOrchestrator();
         _host         = await BuildHost();
         _client       = _host.GetTestClient();
@@ -77,19 +77,19 @@ public sealed class GatewayNodeMiddlewareTests : IAsyncLifetime
     // ── /.nwm advertisement ─────────────────────────────────────────────────
 
     [Fact]
-    public async Task Nwm_AdvertisesGatewayTypeAndActions()
+    public async Task Nwm_AdvertisesAnchorTypeAndActions()
     {
         _client.DefaultRequestHeaders.Add(NwpHttpHeaders.Agent, "urn:nps:agent:caller");
 
         var resp = await _client.GetAsync("/gw/.nwm");
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
-        Assert.Equal("gateway", resp.Headers.GetValues(NwpHttpHeaders.NodeType).Single());
+        Assert.Equal("anchor", resp.Headers.GetValues(NwpHttpHeaders.NodeType).Single());
         Assert.Equal(NwpHttpHeaders.MimeManifest, resp.Content.Headers.ContentType!.MediaType);
 
         var body = await resp.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(body);
 
-        Assert.Equal("gateway", doc.RootElement.GetProperty("node_type").GetString());
+        Assert.Equal("anchor", doc.RootElement.GetProperty("node_type").GetString());
         Assert.Equal("urn:nps:node:test:gw", doc.RootElement.GetProperty("node_id").GetString());
 
         // Actions embedded directly in the NWM (NPS-AaaS §2.3).
@@ -140,7 +140,7 @@ public sealed class GatewayNodeMiddlewareTests : IAsyncLifetime
 
         var resp = await _client.PostAsync("/gw/invoke", content);
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
-        Assert.Equal("gateway", resp.Headers.GetValues(NwpHttpHeaders.NodeType).Single());
+        Assert.Equal("anchor", resp.Headers.GetValues(NwpHttpHeaders.NodeType).Single());
 
         var body = await resp.Content.ReadAsStringAsync();
         Assert.Contains("\"ok\":true",  body);
@@ -269,7 +269,7 @@ public sealed class GatewayNodeMiddlewareTests : IAsyncLifetime
 
         var seen = _router.LastContext!;
         Assert.Equal(traceId, seen.TraceId);           // propagated
-        Assert.NotEqual(inboundSpan, seen.SpanId);     // gateway forked a new span
+        Assert.NotEqual(inboundSpan, seen.SpanId);     // anchor forked a new span
     }
 
     // ── Rate limiting ───────────────────────────────────────────────────────
@@ -278,7 +278,7 @@ public sealed class GatewayNodeMiddlewareTests : IAsyncLifetime
     public async Task Invoke_ExceedsRequestsPerMinute_Returns429()
     {
         _host.Dispose();
-        _host = await BuildHost(rateLimits: new GatewayRateLimits
+        _host = await BuildHost(rateLimits: new AnchorRateLimits
         {
             RequestsPerMinute = 1,
         });
@@ -347,11 +347,11 @@ public sealed class GatewayNodeMiddlewareTests : IAsyncLifetime
 
     // ── Host builder ────────────────────────────────────────────────────────
 
-    private async Task<IHost> BuildHost(GatewayRateLimits? rateLimits = null)
+    private async Task<IHost> BuildHost(AnchorRateLimits? rateLimits = null)
     {
         var router       = _router;
         var orchestrator = _orchestrator;
-        var limits       = rateLimits ?? new GatewayRateLimits
+        var limits       = rateLimits ?? new AnchorRateLimits
         {
             RequestsPerMinute = 60,
             MaxConcurrent     = 10,
@@ -365,16 +365,16 @@ public sealed class GatewayNodeMiddlewareTests : IAsyncLifetime
                 web.ConfigureServices(services =>
                 {
                     services.AddLogging(b => b.AddDebug().SetMinimumLevel(LogLevel.Warning));
-                    services.AddSingleton<IGatewayRouter>(router);
+                    services.AddSingleton<IAnchorRouter>(router);
                     services.AddSingleton<INopOrchestrator>(orchestrator);
-                    services.AddSingleton<IGatewayRateLimiter, InMemoryGatewayRateLimiter>();
+                    services.AddSingleton<IAnchorRateLimiter, InMemoryAnchorRateLimiter>();
                 });
                 web.Configure(app =>
                 {
-                    app.UseGatewayNode(opts =>
+                    app.UseAnchorNode(opts =>
                     {
                         opts.NodeId      = "urn:nps:node:test:gw";
-                        opts.DisplayName = "Test Gateway";
+                        opts.DisplayName = "Test Anchor";
                         opts.PathPrefix  = "/gw";
                         opts.Actions     = Actions;
                         opts.RequireAuth = true;
@@ -392,14 +392,14 @@ public sealed class GatewayNodeMiddlewareTests : IAsyncLifetime
 
 // ── Fakes ───────────────────────────────────────────────────────────────────
 
-internal sealed class FakeGatewayRouter : IGatewayRouter
+internal sealed class FakeAnchorRouter : IAnchorRouter
 {
     public List<ActionFrame> Built       { get; } = new();
     public TaskContext?      LastContext { get; private set; }
     public string?           LastTaskId  { get; private set; }
 
     public Task<TaskFrame> BuildTaskAsync(
-        ActionFrame frame, GatewayRouteContext ctx, CancellationToken cancel = default)
+        ActionFrame frame, AnchorRouteContext ctx, CancellationToken cancel = default)
     {
         Built.Add(frame);
         LastContext = ctx.TraceContext;

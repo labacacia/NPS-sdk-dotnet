@@ -74,6 +74,15 @@ public sealed class ComplexNodeOptions
     /// </summary>
     public bool RejectPrivateChildUrls { get; set; } = true;
 
+    /// <summary>
+    /// Dev/demo escape hatch: when <c>true</c>, child URLs with the <c>http://</c>
+    /// scheme are accepted (NPS-2 §13.2 otherwise mandates <c>https://</c>).
+    /// MUST only be enabled when <see cref="RejectPrivateChildUrls"/> is
+    /// <c>false</c> — i.e. the operator has already opted into loopback/private
+    /// targets. Default <c>false</c>.
+    /// </summary>
+    public bool AllowHttpChildUrls { get; set; } = false;
+
     // ── Auth / limits ────────────────────────────────────────────────────────
 
     /// <summary>When <c>true</c>, requests without <c>X-NWP-Agent</c> are rejected with 401.</summary>

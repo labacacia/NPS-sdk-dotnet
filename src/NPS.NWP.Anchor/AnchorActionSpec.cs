@@ -3,15 +3,15 @@
 
 using System.Text.Json.Serialization;
 
-namespace NPS.NWP.Gateway;
+namespace NPS.NWP.Anchor;
 
 /// <summary>
-/// Declarative description of one action exposed by a Gateway Node
-/// (NPS-AaaS §2.3). The gateway advertises these entries in its NWM so that
+/// Declarative description of one action exposed by a Anchor Node
+/// (NPS-AaaS §2.3). The anchor advertises these entries in its NWM so that
 /// consumers can introspect the service catalogue; the router then maps each
 /// <c>action_id</c> to a concrete <c>TaskFrame</c> when the action is invoked.
 /// </summary>
-public sealed class GatewayActionSpec
+public sealed class AnchorActionSpec
 {
     /// <summary>Human-readable description of the operation.</summary>
     public string? Description { get; init; }
@@ -26,7 +26,7 @@ public sealed class GatewayActionSpec
 
     /// <summary>
     /// When <c>true</c>, consumers may set <c>ActionFrame.Async = true</c>
-    /// (gateway fires-and-forgets the orchestration).
+    /// (anchor fires-and-forgets the orchestration).
     /// </summary>
     public required bool Async { get; init; }
 

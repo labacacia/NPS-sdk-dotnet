@@ -68,4 +68,13 @@ public static class NcpErrorCodes
 
     /// <summary>E2E Auth Tag verification failed (possible tampering). → NPS-CLIENT-BAD-FRAME</summary>
     public const string EncAuthFailed         = "NCP-ENC-AUTH-FAILED";
+
+    // ── Connection-level errors ───────────────────────────────────────────────
+    /// <summary>
+    /// Native-mode connection opened with bytes other than the constant
+    /// preamble <c>b"NPS/1.0\n"</c>. Server closes silently within 500 ms;
+    /// no ErrorFrame is emitted on the wire (NPS-RFC-0001 / NPS-1 §2.6.1).
+    /// → NPS-PROTO-PREAMBLE-INVALID
+    /// </summary>
+    public const string PreambleInvalid       = "NCP-PREAMBLE-INVALID";
 }

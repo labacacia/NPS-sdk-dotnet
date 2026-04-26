@@ -38,6 +38,15 @@ public static class NpsStatusCodes
     public const string ServerTimeout             = "NPS-SERVER-TIMEOUT";
     public const string ServerEncodingUnsupported = "NPS-SERVER-ENCODING-UNSUPPORTED";
 
+    /// <summary>
+    /// A required downstream service that this node depends on
+    /// (reputation log operator, external auth service, etc.) is
+    /// unreachable. Distinct from <see cref="ServerUnavailable"/> so
+    /// that clients can retry against an alternate downstream when
+    /// policy permits. (NPS-RFC-0004)
+    /// </summary>
+    public const string DownstreamUnavailable     = "NPS-DOWNSTREAM-UNAVAILABLE";
+
     // ── Stream errors ────────────────────────────────────────────────────────
     public const string StreamSeqGap   = "NPS-STREAM-SEQ-GAP";
     public const string StreamNotFound = "NPS-STREAM-NOT-FOUND";
@@ -46,4 +55,12 @@ public static class NpsStatusCodes
     // ── Protocol errors ──────────────────────────────────────────────────────
     /// <summary>Client min_version is incompatible with the Server's supported NPS version.</summary>
     public const string ProtoVersionIncompatible = "NPS-PROTO-VERSION-INCOMPATIBLE";
+
+    /// <summary>
+    /// Native-mode connection opened with bytes other than the constant
+    /// preamble <c>b"NPS/1.0\n"</c>. Server closes silently within 500 ms;
+    /// no ErrorFrame is emitted on the wire (NPS-RFC-0001 / NPS-1 NCP §2.6.1).
+    /// This constant exists for SDK-internal telemetry classification.
+    /// </summary>
+    public const string ProtoPreambleInvalid = "NPS-PROTO-PREAMBLE-INVALID";
 }
