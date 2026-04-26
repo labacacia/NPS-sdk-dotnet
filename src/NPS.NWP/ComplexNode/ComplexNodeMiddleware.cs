@@ -282,7 +282,8 @@ public sealed class ComplexNodeMiddleware
         HttpContext       parentCtx)
     {
         var ssrfError = ComplexChildUrlValidator.Validate(
-            gref.NodeUrl, _options.AllowedChildUrlPrefixes, _options.RejectPrivateChildUrls);
+            gref.NodeUrl, _options.AllowedChildUrlPrefixes,
+            _options.RejectPrivateChildUrls, _options.AllowHttpChildUrls);
         if (ssrfError is not null)
         {
             return new ChildFetchResult

@@ -25,7 +25,8 @@ public static class ComplexChildUrlValidator
     public static string? Validate(
         string                     childUrl,
         IReadOnlyList<string>      allowedPrefixes,
-        bool                       rejectPrivate = true)
+        bool                       rejectPrivate = true,
+        bool                       allowHttp     = false)
     {
         if (string.IsNullOrWhiteSpace(childUrl))
             return "child node URL must not be empty.";
@@ -33,7 +34,9 @@ public static class ComplexChildUrlValidator
         if (!Uri.TryCreate(childUrl, UriKind.Absolute, out var uri))
             return $"child node URL '{childUrl}' is not a valid absolute URI.";
 
-        if (!string.Equals(uri.Scheme, "https", StringComparison.OrdinalIgnoreCase))
+        var isHttps = string.Equals(uri.Scheme, "https", StringComparison.OrdinalIgnoreCase);
+        var isHttp  = string.Equals(uri.Scheme, "http",  StringComparison.OrdinalIgnoreCase);
+        if (!isHttps && !(allowHttp && isHttp))
             return $"child node URL MUST use the https:// scheme (got '{uri.Scheme}://').";
 
         if (allowedPrefixes.Count > 0)

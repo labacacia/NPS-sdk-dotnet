@@ -1,10 +1,10 @@
 // Copyright 2026 INNO LOTUS PTY LTD
 // SPDX-License-Identifier: Apache-2.0
 
-namespace NPS.NWP.Gateway;
+namespace NPS.NWP.Anchor;
 
 /// <summary>
-/// Outcome of a <see cref="IGatewayRateLimiter.TryAcquire"/> call.
+/// Outcome of a <see cref="IAnchorRateLimiter.TryAcquire"/> call.
 /// </summary>
 /// <param name="Allowed">
 /// <c>true</c> when the request fits within every declared limit and a token
@@ -18,40 +18,40 @@ namespace NPS.NWP.Gateway;
 /// Suggested Retry-After (seconds). Populated on rejection when a window-based
 /// limit caused the denial.
 /// </param>
-public readonly record struct GatewayRateLimitResult(
+public readonly record struct AnchorRateLimitResult(
     bool    Allowed,
     string? Reason            = null,
     int?    RetryAfterSeconds = null);
 
 /// <summary>
-/// Per-consumer rate-limit gate for Gateway Nodes (NPS-AaaS §2.3,
+/// Per-consumer rate-limit gate for Anchor Nodes (NPS-AaaS §2.3,
 /// <c>rate_limits</c> block). Implementations MUST be thread-safe.
 ///
 /// <para>
-/// The in-memory default (<see cref="InMemoryGatewayRateLimiter"/>) is
-/// adequate for single-instance deployments; multi-instance gateways should
+/// The in-memory default (<see cref="InMemoryAnchorRateLimiter"/>) is
+/// adequate for single-instance deployments; multi-instance anchors should
 /// register a Redis- or Dragonfly-backed implementation.
 /// </para>
 /// </summary>
-public interface IGatewayRateLimiter
+public interface IAnchorRateLimiter
 {
     /// <summary>
     /// Attempt to acquire a request slot for the given consumer. Returns
-    /// <c>GatewayRateLimitResult(Allowed=true)</c> when the request fits all
+    /// <c>AnchorRateLimitResult(Allowed=true)</c> when the request fits all
     /// limits (requests/min, concurrent, NPT/hour).
     /// </summary>
     /// <param name="consumerKey">Consumer identifier — typically the Agent NID.</param>
     /// <param name="nptCost">Estimated NPT cost to deduct from the hourly bucket.</param>
     /// <param name="limits">Rate limit values from the node options; may be <c>null</c>.</param>
-    GatewayRateLimitResult TryAcquire(
+    AnchorRateLimitResult TryAcquire(
         string             consumerKey,
         uint               nptCost,
-        GatewayRateLimits? limits);
+        AnchorRateLimits? limits);
 
     /// <summary>
     /// Release a concurrent slot previously acquired by <see cref="TryAcquire"/>.
     /// Safe to call even when the acquire was short-circuited by an
-    /// unlimited <see cref="GatewayRateLimits.MaxConcurrent"/>.
+    /// unlimited <see cref="AnchorRateLimits.MaxConcurrent"/>.
     /// </summary>
     void Release(string consumerKey);
 }

@@ -28,4 +28,17 @@ public sealed record NipVerifyContext
     /// Leave null in production.
     /// </summary>
     public DateTime? AsOf { get; init; }
+
+    /// <summary>
+    /// Minimum required Agent assurance level
+    /// (NPS-3 §5.1.1 / NPS-RFC-0003). When set, requests whose
+    /// presented level is lower MUST be rejected with
+    /// <c>NWP-AUTH-ASSURANCE-TOO-LOW</c>.
+    /// <para>
+    /// In Phase 1 of NPS-RFC-0003 the reference verifier carries this
+    /// value through but does not enforce — enforcement is deferred to
+    /// Phase 2 once all six SDKs implement the field.
+    /// </para>
+    /// </summary>
+    public AssuranceLevel? MinAssuranceLevel { get; init; }
 }

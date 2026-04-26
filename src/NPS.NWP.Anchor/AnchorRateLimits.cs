@@ -3,13 +3,13 @@
 
 using System.Text.Json.Serialization;
 
-namespace NPS.NWP.Gateway;
+namespace NPS.NWP.Anchor;
 
 /// <summary>
 /// Rate limit declaration published in the NWM <c>rate_limits</c> block
 /// (NPS-AaaS §2.3). Values of <c>0</c> mean "no limit" for that dimension.
 /// </summary>
-public sealed class GatewayRateLimits
+public sealed class AnchorRateLimits
 {
     /// <summary>Maximum requests per minute per consumer NID. 0 = unlimited.</summary>
     [JsonPropertyName("requests_per_minute")]
