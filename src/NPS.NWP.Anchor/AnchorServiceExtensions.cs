@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using NPS.NOP.Orchestration;
+using NPS.NWP.Anchor.Topology;
 
 namespace NPS.NWP.Anchor;
 
@@ -21,6 +22,12 @@ public static class AnchorServiceExtensions
     /// <para>The default <see cref="IAnchorRateLimiter"/> is
     /// <see cref="InMemoryAnchorRateLimiter"/>; register your own
     /// (e.g. Redis-backed) before this call to override.</para>
+    ///
+    /// <para>Topology read-back (<c>topology.snapshot</c> /
+    /// <c>topology.stream</c>, NPS-2 §12) is optional; call
+    /// <see cref="AddInMemoryAnchorTopology"/> after this to opt in to the
+    /// reference implementation, or register a custom
+    /// <see cref="IAnchorTopologyService"/> manually.</para>
     /// </summary>
     public static IServiceCollection AddAnchorNode<TRouter>(
         this IServiceCollection       services,
@@ -31,6 +38,29 @@ public static class AnchorServiceExtensions
         services.AddSingleton(opts);
         services.AddSingleton<IAnchorRouter, TRouter>();
         services.TryAddSingleton<IAnchorRateLimiter, InMemoryAnchorRateLimiter>();
+        return services;
+    }
+
+    /// <summary>
+    /// Registers <see cref="InMemoryAnchorTopologyService"/> as the
+    /// <see cref="IAnchorTopologyService"/> implementation, satisfying L2-08
+    /// (NPS-AaaS-Profile §4.3) for single-node deployments. Production
+    /// multi-node deployments SHOULD register a distributed-store-backed
+    /// implementation instead.
+    /// </summary>
+    /// <param name="services">DI container.</param>
+    /// <param name="anchorNid">Identity surfaced in <see cref="TopologySnapshot.AnchorNid"/>.</param>
+    /// <param name="retention">Ring buffer size for stream replay; default <see cref="InMemoryAnchorTopologyService.DefaultRetention"/>.</param>
+    public static IServiceCollection AddInMemoryAnchorTopology(
+        this IServiceCollection services,
+        string                  anchorNid,
+        int?                    retention = null)
+    {
+        var instance = retention is { } r
+            ? new InMemoryAnchorTopologyService(anchorNid, r)
+            : new InMemoryAnchorTopologyService(anchorNid);
+        services.AddSingleton(instance);
+        services.AddSingleton<IAnchorTopologyService>(instance);
         return services;
     }
 

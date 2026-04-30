@@ -8,6 +8,81 @@
 
 ---
 
+## [1.0.0-alpha.4] —— 2026-04-30
+
+.NET SDK 仍是 NPS 套件的**参考实现**。本次落地 NPS-RFC-0002（X.509 + ACME）
+Phase A/B、NPS-RFC-0001 Phase 2（NCP preamble 运行时对齐）、
+以及 NPS-CR-0002（Anchor topology 查询）。
+
+### 新增
+
+- **`NPS.NIP.X509`** + **`NPS.NIP.Acme`**（NPS-RFC-0002 Phase A/B —— X.509
+  NID 证书 + ACME `agent-01` 参考实现）。新增类型：
+  - `X509.NipCertBuilder` —— 构造携带 NID 自定义 OID 的 X.509 证书
+    （subject、assurance level、key authorisation）。
+  - `X509.NipX509Verifier` —— 校验 X.509 leaf + chain 与配置的 trust
+    anchor，返回提取出的 NID + assurance level。
+  - `Acme.AcmeAgent01Server` —— ACME `agent-01` 挑战签发 + 校验的服务端
+    （challenge mint、key authorisation 哈希、JWS 签名 wire 包络）。
+  - `Acme.AcmeAgent01Client` —— 客户端：nonce 拉取、account 注册、
+    order、key-authorisation 应答、finalize、获取签发的证书链。
+- **`NPS.NIP.Verification.NipIdentVerifier` dual-trust 路径** —— 校验器
+  现在同时接受 `cert_format=v1`（Ed25519，alpha.3 wire 格式）与
+  `cert_format=x509`（X.509 leaf + chain）的 IdentFrame。alpha.3 写出
+  的 v1 IdentFrame 仍可被 alpha.4 校验。
+- **`NPS.NWP.Anchor.Topology`** + **`NPS.NWP.Anchor.Client`**
+  （NPS-CR-0002 —— Anchor Node topology 查询）。新增类型：
+  - `Topology.TopologyTypes` —— `topology.snapshot` + `topology.stream`
+    查询类型，含 `IncludeMembers` / `IncludeCapabilities` /
+    `IncludeTags` / `IncludeMetrics` 过滤标志，以及
+    `AnchorStateVersionRebased` rebase 帧。
+  - `IAnchorTopologyService`（在 `Topology/`）—— 可插拔的 topology
+    存储后端接口（默认内存实现）。
+  - `Client.AnchorNodeClient` —— 强类型客户端，调用
+    `topology.snapshot`（一次性）或订阅 `topology.stream`（长连接，
+    显式处理 `AnchorStateVersionRebased`）。
+  - 10 个 NPS-AaaS L2 conformance 测试（`AnchorTopology*Tests`）全绿。
+- **NPS-RFC-0001 Phase 2** —— 线缆级 NCP preamble 运行时对齐：alpha.3
+  的 `NcpPreamble` helper 类不变，但运行时已经把它接到原生模式传输边界
+  （preamble parser + writer 接进 .NET 帧管线）。
+
+### 变更
+
+- 全部已发布包升至 `1.0.0-alpha.4`：`LabAcacia.NPS.Core`、
+  `LabAcacia.NPS.NWP`、`LabAcacia.NPS.NWP.Anchor`、
+  `LabAcacia.NPS.NWP.Bridge`、`LabAcacia.NPS.NIP`、`LabAcacia.NPS.NDP`、
+  `LabAcacia.NPS.NOP`。
+- `NPS.NIP.Frames.IdentFrame` wire 形状扩展，可携带可选
+  `cert_format` 判别器 + `x509_chain`（DER 编码 leaf chain），与现有
+  v1 字段并存。
+- `NPS.NIP.Crypto.NipSigner` 增加 X.509 格式 IdentFrame 签发分支（按
+  X.509 issuer 配置触发）；默认行为（仅 Ed25519）不变。
+- 639 tests 全绿（alpha.3 时 575；+64 来自 RFC-0002 X.509 + ACME 端口、
+  CR-0002 Anchor topology、RFC-0001 Phase 2 运行时）。
+
+### 套件级 alpha.4 要点
+
+- **NPS-RFC-0002 X.509 + ACME** —— 完整跨 SDK 端口波：
+  .NET（本仓）/ Java / Python / TypeScript / Go / Rust 全部携带 X.509
+  builder + ACME `agent-01` 全流程。本包内的
+  `NPS.NIP.Acme.AcmeAgent01Server` 是 ACME 的 canonical server 端
+  实现，SDK 消费者可以直接嵌入自己的 HTTP host。
+- **`nps-registry` SQLite 实仓** + **`nps-ledger` Phase 2**（RFC 9162
+  Merkle 树 + operator 签名 STH + inclusion proof）在对应 daemon 仓库
+  交付。
+
+### 推迟到 alpha.5+
+
+- **NPS-RFC-0004 Phase 3** —— `nps-ledger` operator 之间 STH gossip 联邦
+  （跨组织审计冗余）。
+- **NPS-CR-0002 Phase 2** —— 来自 Anchor Node 中间件的服务端推送
+  topology 更新（alpha.4 交付协议 + 客户端 + conformance 测试；
+  中间件侧推送集成是后续工作）。
+- 入库 reputation log entry 的完整 Ed25519 签名验证（alpha.4 仍只校验
+  `ed25519:` 前缀结构）。
+
+---
+
 ## [1.0.0-alpha.3] —— 2026-04-25
 
 .NET SDK 是 NPS `v1.0.0-alpha.3` 套件里程碑的**参考实现** —— 每条新 Accepted 的 RFC 和 CR 都先在这里以可工作代码落地。
@@ -70,6 +145,7 @@
 
 作为 NPS 套件 `v1.0.0-alpha.1` 的一部分首次公开 alpha。
 
+[1.0.0-alpha.4]: https://gitee.com/labacacia/NPS-sdk-dotnet/releases/tag/v1.0.0-alpha.4
 [1.0.0-alpha.3]: https://github.com/LabAcacia/NPS-Dev/releases/tag/v1.0.0-alpha.3
 [1.0.0-alpha.2]: https://github.com/LabAcacia/NPS-Dev/releases/tag/v1.0.0-alpha.2
 [1.0.0-alpha.1]: https://github.com/LabAcacia/NPS-Dev/releases/tag/v1.0.0-alpha.1

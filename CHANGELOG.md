@@ -8,6 +8,87 @@ Until NPS reaches v1.0 stable, every repository in the suite is synchronized to 
 
 ---
 
+## [1.0.0-alpha.4] — 2026-04-30
+
+The .NET SDK remains the **reference implementation** for the NPS suite. This
+release lands NPS-RFC-0002 (X.509 + ACME) Phase A/B, NPS-RFC-0001 Phase 2
+(NCP preamble runtime parity), and NPS-CR-0002 (Anchor topology queries).
+
+### Added
+
+- **`NPS.NIP.X509`** + **`NPS.NIP.Acme`** (NPS-RFC-0002 Phase A/B —
+  X.509 NID certificates + ACME `agent-01` reference). New types:
+  - `X509.NipCertBuilder` — builds X.509 certificates carrying NID
+    custom OIDs (subject, assurance level, key authorisation).
+  - `X509.NipX509Verifier` — verifies the X.509 leaf + chain against
+    a configured trust anchor, returns the extracted NID + assurance
+    level.
+  - `Acme.AcmeAgent01Server` — server side of ACME `agent-01`
+    challenge issuance + verification (challenge mint, key
+    authorisation hashing, JWS-signed wire envelope).
+  - `Acme.AcmeAgent01Client` — client side: nonce fetch, account
+    register, order, key-authorisation answer, finalize, retrieve
+    issued cert chain.
+- **`NPS.NIP.Verification.NipIdentVerifier` dual-trust path** — the
+  verifier now accepts IdentFrames carrying either `cert_format=v1`
+  (Ed25519, alpha.3 wire format) or `cert_format=x509` (X.509 leaf +
+  chain). v1 IdentFrames written by alpha.3 consumers continue to
+  verify unchanged.
+- **`NPS.NWP.Anchor.Topology`** + **`NPS.NWP.Anchor.Client`**
+  (NPS-CR-0002 — Anchor Node topology queries). New types:
+  - `Topology.TopologyTypes` — `topology.snapshot` + `topology.stream`
+    query types, including the `IncludeMembers` / `IncludeCapabilities`
+    / `IncludeTags` / `IncludeMetrics` filter flags and the
+    `AnchorStateVersionRebased` rebase frame.
+  - `IAnchorTopologyService` (in `Topology/`) — pluggable topology
+    backing store interface (default in-memory implementation).
+  - `Client.AnchorNodeClient` — typed client for invoking
+    `topology.snapshot` (one-shot) and subscribing to `topology.stream`
+    (long-lived, with explicit `AnchorStateVersionRebased` handling).
+  - 10 NPS-AaaS L2 conformance tests (`AnchorTopology*Tests`) green.
+- **NPS-RFC-0001 Phase 2** — wire-level NCP preamble runtime parity:
+  the alpha.3 `NcpPreamble` helper is now invoked at the native-mode
+  transport boundary (preamble parser + writer wired into the .NET
+  framing pipeline).
+
+### Changed
+
+- All published packages bumped to `1.0.0-alpha.4`:
+  `LabAcacia.NPS.Core`, `LabAcacia.NPS.NWP`, `LabAcacia.NPS.NWP.Anchor`,
+  `LabAcacia.NPS.NWP.Bridge`, `LabAcacia.NPS.NIP`, `LabAcacia.NPS.NDP`,
+  `LabAcacia.NPS.NOP`.
+- `NPS.NIP.Frames.IdentFrame` wire shape extended with optional
+  `cert_format` discriminator + `x509_chain` (DER-encoded leaf chain)
+  alongside the existing v1 fields.
+- `NPS.NIP.Crypto.NipSigner` learns to emit X.509-format IdentFrames
+  when configured with an X.509 issuer; default behaviour
+  (Ed25519-only) is unchanged.
+- 639 tests green (was 575 at alpha.3; +64 from RFC-0002 X.509 + ACME
+  port + CR-0002 Anchor topology + RFC-0001 Phase 2 runtime tests).
+
+### Suite-wide highlights at alpha.4
+
+- **NPS-RFC-0002 X.509 + ACME** — full cross-SDK port wave:
+  .NET (this) / Java / Python / TypeScript / Go / Rust all carry
+  parity X.509 builders + ACME `agent-01` round-trip. Server side of
+  ACME runs in `NPS.NIP.Acme.AcmeAgent01Server` (this package); SDK
+  consumers can embed it directly into their HTTP host.
+- **`nps-registry` SQLite-backed real registry** + **`nps-ledger`
+  Phase 2** (RFC 9162 Merkle tree + operator-signed STH + inclusion
+  proofs) shipped in the daemon repos.
+
+### Deferred to alpha.5+
+
+- **NPS-RFC-0004 Phase 3** — STH gossip federation between
+  `nps-ledger` operators (cross-organisation audit redundancy).
+- **NPS-CR-0002 Phase 2** — server-side push of topology updates
+  from Anchor Node middleware (alpha.4 ships the protocol + client +
+  conformance tests; middleware-side push integration is a follow-up).
+- Full Ed25519 signature verification on incoming reputation log
+  entries (alpha.4 still validates the `ed25519:` prefix structurally).
+
+---
+
 ## [1.0.0-alpha.3] — 2026-04-25
 
 The .NET SDK is the **reference implementation** for the NPS `v1.0.0-alpha.3` suite milestone — this release is where each newly Accepted RFC and CR lands as working code first.
@@ -70,6 +151,7 @@ The .NET SDK is the **reference implementation** for the NPS `v1.0.0-alpha.3` su
 
 First public alpha as part of the NPS suite `v1.0.0-alpha.1` release.
 
+[1.0.0-alpha.4]: https://github.com/labacacia/NPS-sdk-dotnet/releases/tag/v1.0.0-alpha.4
 [1.0.0-alpha.3]: https://github.com/LabAcacia/NPS-Dev/releases/tag/v1.0.0-alpha.3
 [1.0.0-alpha.2]: https://github.com/LabAcacia/NPS-Dev/releases/tag/v1.0.0-alpha.2
 [1.0.0-alpha.1]: https://github.com/LabAcacia/NPS-Dev/releases/tag/v1.0.0-alpha.1

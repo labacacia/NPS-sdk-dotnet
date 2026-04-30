@@ -78,6 +78,45 @@ public sealed record IdentFrame : IFrame
     /// </summary>
     [JsonPropertyName("assurance_level")]
     public AssuranceLevel? AssuranceLevel { get; init; }
+
+    /// <summary>
+    /// Cert format discriminator for NPS-RFC-0002 §4.5.
+    /// <list type="bullet">
+    /// <item><c>null</c> or <c>"v1-proprietary"</c> — the legacy CA-signed JSON
+    /// IdentFrame (this record's other fields). v1.0-alpha.3 default.</item>
+    /// <item><c>"v2-x509"</c> — additionally carries a DER X.509 cert chain in
+    /// <see cref="CertChain"/>. The legacy <see cref="Signature"/> field is
+    /// still populated (CA Ed25519 over canonical JSON) so v1 verifiers
+    /// remain functional; v2 verifiers ALSO validate the X.509 chain
+    /// (EKU, SAN URI, subject CN, issuer signature).</item>
+    /// </list>
+    /// Wire-level dual mode keeps the migration non-breaking during Phase 1
+    /// (RFC §8.1) while letting both verifier paths exercise the same frame.
+    /// </summary>
+    [JsonPropertyName("cert_format")]
+    public string? CertFormat { get; init; }
+
+    /// <summary>
+    /// X.509 certificate chain (NPS-RFC-0002 §4.1), populated only when
+    /// <see cref="CertFormat"/> is <c>"v2-x509"</c>. Each element is a
+    /// base64url-encoded DER certificate. Element <c>[0]</c> is the leaf
+    /// (containing the agent's public key + NPS EKU + SAN URI matching
+    /// <see cref="Nid"/>); subsequent elements are intermediates up to but
+    /// not including the trusted root.
+    /// </summary>
+    [JsonPropertyName("cert_chain")]
+    public IReadOnlyList<string>? CertChain { get; init; }
+}
+
+/// <summary>String constants for <see cref="IdentFrame.CertFormat"/>
+/// (NPS-RFC-0002 §4.5).</summary>
+public static class IdentCertFormat
+{
+    /// <summary>Legacy CA-signed JSON cert (default before NPS-RFC-0002).</summary>
+    public const string V1Proprietary = "v1-proprietary";
+
+    /// <summary>X.509 DER cert chain in <see cref="IdentFrame.CertChain"/>.</summary>
+    public const string V2X509        = "v2-x509";
 }
 
 /// <summary>
