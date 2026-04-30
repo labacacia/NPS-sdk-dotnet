@@ -5,11 +5,13 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NPS.Core.Frames.Ncp;
 using NPS.NOP.Frames;
 using NPS.NOP.Models;
 using NPS.NOP.Orchestration;
+using NPS.NWP.Anchor.Topology;
 using NPS.NWP.Frames;
 using NPS.NWP.Http;
 using NPS.NWP.Nwm;
@@ -120,10 +122,403 @@ public sealed class AnchorNodeMiddleware
                 await HandleInvoke(ctx);
                 break;
 
+            case "/query":
+            case "/query/":
+                if (ctx.Request.Method != HttpMethods.Post)
+                {
+                    ctx.Response.StatusCode = 405;
+                    return;
+                }
+                await HandleQuery(ctx);
+                break;
+
+            case "/subscribe":
+            case "/subscribe/":
+                if (ctx.Request.Method != HttpMethods.Post)
+                {
+                    ctx.Response.StatusCode = 405;
+                    return;
+                }
+                await HandleSubscribe(ctx);
+                break;
+
             default:
                 await _next(ctx);
                 break;
         }
+    }
+
+    // ── /query (reserved query types — NPS-2 §12) ────────────────────────────
+
+    private async Task HandleQuery(HttpContext ctx)
+    {
+        JsonElement body;
+        try
+        {
+            body = await ReadJson(ctx);
+        }
+        catch (Exception ex)
+        {
+            await WriteError(ctx, 400, "NPS-CLIENT-BAD-REQUEST",
+                NwpErrorCodes.QueryFilterInvalid, ex.Message);
+            return;
+        }
+
+        var type = body.TryGetProperty("type", out var t) ? t.GetString() : null;
+        if (type != TopologyWire.TypeSnapshot)
+        {
+            // The Anchor Node only exposes /query for reserved query types per §12.
+            // Default per-anchor query semantics belong to Memory Nodes, not Anchors.
+            await WriteError(ctx, 404, "NPS-CLIENT-NOT-FOUND",
+                NwpErrorCodes.ActionNotFound,
+                type is null
+                    ? "Anchor /query requires a reserved type per NPS-2 §12."
+                    : $"Unknown reserved query type '{type}'.");
+            return;
+        }
+
+        var topology = ctx.RequestServices.GetService<IAnchorTopologyService>();
+        if (topology is null)
+        {
+            await WriteError(ctx, 501, "NPS-SERVER-UNSUPPORTED",
+                NwpErrorCodes.NodeUnavailable,
+                "topology.snapshot is not available — IAnchorTopologyService is not registered.");
+            return;
+        }
+
+        TopologySnapshotRequest req;
+        try
+        {
+            req = ParseSnapshotRequest(body);
+        }
+        catch (TopologyProtocolException ex)
+        {
+            await WriteError(ctx, ex.NpsStatus == "NPS-AUTH-FORBIDDEN" ? 403 : 400,
+                ex.NpsStatus, ex.NwpErrorCode, ex.Message);
+            return;
+        }
+
+        try
+        {
+            var snapshot = await topology.GetSnapshotAsync(req, ctx.RequestAborted);
+            var capsData = JsonSerializer.SerializeToElement(snapshot, Json);
+
+            var caps = new CapsFrame
+            {
+                AnchorRef = TopologyWire.SnapshotAnchorRef,
+                Count     = 1,
+                Data      = new[] { capsData },
+            };
+
+            ctx.Response.StatusCode  = 200;
+            ctx.Response.ContentType = NwpHttpHeaders.MimeCapsule;
+            ctx.Response.Headers[NwpHttpHeaders.NodeType] = "anchor";
+            ctx.Response.Headers[NwpHttpHeaders.Schema]   = TopologyWire.SnapshotAnchorRef;
+            await ctx.Response.WriteAsync(JsonSerializer.Serialize(caps, Json));
+        }
+        catch (TopologyProtocolException ex)
+        {
+            await WriteError(ctx, ex.NpsStatus == "NPS-AUTH-FORBIDDEN" ? 403 : 400,
+                ex.NpsStatus, ex.NwpErrorCode, ex.Message);
+        }
+        catch (OperationCanceledException) { /* client disconnected */ }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "topology.snapshot failed");
+            await WriteError(ctx, 500, "NPS-SERVER-INTERNAL",
+                NwpErrorCodes.NodeUnavailable, "topology snapshot failed.");
+        }
+    }
+
+    // ── /subscribe (reserved subscribe types — NPS-2 §12) ────────────────────
+
+    private async Task HandleSubscribe(HttpContext ctx)
+    {
+        JsonElement body;
+        try
+        {
+            body = await ReadJson(ctx);
+        }
+        catch (Exception ex)
+        {
+            await WriteError(ctx, 400, "NPS-CLIENT-BAD-REQUEST",
+                NwpErrorCodes.QueryFilterInvalid, ex.Message);
+            return;
+        }
+
+        var type = body.TryGetProperty("type", out var t) ? t.GetString() : null;
+        if (type != TopologyWire.TypeStream)
+        {
+            await WriteError(ctx, 404, "NPS-CLIENT-NOT-FOUND",
+                NwpErrorCodes.SubscribeFilterUnsupported,
+                type is null
+                    ? "Anchor /subscribe requires a reserved type per NPS-2 §12."
+                    : $"Unknown reserved subscribe type '{type}'.");
+            return;
+        }
+
+        var topology = ctx.RequestServices.GetService<IAnchorTopologyService>();
+        if (topology is null)
+        {
+            await WriteError(ctx, 501, "NPS-SERVER-UNSUPPORTED",
+                NwpErrorCodes.NodeUnavailable,
+                "topology.stream is not available — IAnchorTopologyService is not registered.");
+            return;
+        }
+
+        TopologyStreamRequest req;
+        string streamId;
+        try
+        {
+            (req, streamId) = ParseStreamRequest(body);
+        }
+        catch (TopologyProtocolException ex)
+        {
+            await WriteError(ctx, ex.NpsStatus == "NPS-AUTH-FORBIDDEN" ? 403 : 400,
+                ex.NpsStatus, ex.NwpErrorCode, ex.Message);
+            return;
+        }
+
+        ctx.Response.StatusCode  = 200;
+        ctx.Response.ContentType = NwpHttpHeaders.MimeCapsule;
+        ctx.Response.Headers[NwpHttpHeaders.NodeType] = "anchor";
+
+        // First line: subscription ack (mirrors §8.3 ack CapsFrame in NDJSON form).
+        var ack = new TopologySubscribeAck
+        {
+            StreamId = streamId,
+            Status   = "subscribed",
+            LastSeq  = 0,
+            Resumed  = req.SinceVersion is not null,
+        };
+        await WriteJsonLine(ctx, ack);
+
+        try
+        {
+            await foreach (var ev in topology.SubscribeAsync(req, ctx.RequestAborted))
+            {
+                if (ctx.RequestAborted.IsCancellationRequested) break;
+                var envelope = ToEnvelope(streamId, ev);
+                await WriteJsonLine(ctx, envelope);
+                if (ev is ResyncRequired) break;   // §12.2: subscriber MUST re-snapshot
+            }
+        }
+        catch (OperationCanceledException) { /* client disconnected */ }
+        catch (TopologyProtocolException ex)
+        {
+            // Mid-stream protocol error: emit a final-line error envelope so
+            // the client can surface it without parsing an HTTP-level error.
+            var err = new ErrorFrame
+            {
+                Status  = ex.NpsStatus,
+                Error   = ex.NwpErrorCode,
+                Message = ex.Message,
+            };
+            await WriteJsonLine(ctx, err);
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "topology.stream failed mid-stream");
+        }
+    }
+
+    // ── Reserved-type request parsing ───────────────────────────────────────
+
+    private static TopologySnapshotRequest ParseSnapshotRequest(JsonElement body)
+    {
+        if (!body.TryGetProperty("topology", out var topo) || topo.ValueKind != JsonValueKind.Object)
+            throw new TopologyProtocolException(NwpTopologyErrorCodes.UnsupportedScope,
+                "NPS-CLIENT-BAD-PARAM",
+                "topology.snapshot requires a 'topology' object per NPS-2 §12.1.");
+
+        var scope = ParseScope(topo);
+        var include = ParseInclude(topo);
+        var depth = ParseDepth(topo);
+        string? targetNid = null;
+        if (topo.TryGetProperty("target_nid", out var tn) && tn.ValueKind == JsonValueKind.String)
+            targetNid = tn.GetString();
+
+        if (scope == TopologyScope.Member && string.IsNullOrEmpty(targetNid))
+            throw new TopologyProtocolException(NwpTopologyErrorCodes.UnsupportedScope,
+                "NPS-CLIENT-BAD-PARAM",
+                "topology.target_nid is required when topology.scope = \"member\".");
+
+        return new TopologySnapshotRequest
+        {
+            Scope     = scope,
+            Include   = include,
+            Depth     = depth,
+            TargetNid = targetNid,
+        };
+    }
+
+    private static (TopologyStreamRequest req, string streamId) ParseStreamRequest(JsonElement body)
+    {
+        if (!body.TryGetProperty("topology", out var topo) || topo.ValueKind != JsonValueKind.Object)
+            throw new TopologyProtocolException(NwpTopologyErrorCodes.UnsupportedScope,
+                "NPS-CLIENT-BAD-PARAM",
+                "topology.stream requires a 'topology' object per NPS-2 §12.2.");
+
+        var scope = ParseScope(topo);
+
+        TopologyFilter? filter = null;
+        if (topo.TryGetProperty("filter", out var f) && f.ValueKind == JsonValueKind.Object)
+        {
+            filter = JsonSerializer.Deserialize<TopologyFilter>(f.GetRawText(), Json);
+            ValidateFilterKeys(f);
+        }
+
+        ulong? since = null;
+        if (topo.TryGetProperty("since_version", out var sv) && sv.TryGetUInt64(out var svVal))
+            since = svVal;
+        else if (body.TryGetProperty("resume_from_seq", out var rfs) && rfs.TryGetUInt64(out var rfsVal))
+            // §12.2: topology.since_version is the topology synonym of
+            // SubscribeFrame.resume_from_seq. Accept either; the topology
+            // form takes precedence when both are present (already handled
+            // above by the if/else order).
+            since = rfsVal;
+
+        var streamId = body.TryGetProperty("stream_id", out var sid) && sid.ValueKind == JsonValueKind.String
+            ? sid.GetString() ?? Guid.NewGuid().ToString("N")
+            : Guid.NewGuid().ToString("N");
+
+        return (new TopologyStreamRequest
+        {
+            Scope        = scope,
+            Filter       = filter,
+            SinceVersion = since,
+        }, streamId);
+    }
+
+    private static TopologyScope ParseScope(JsonElement topo)
+    {
+        if (!topo.TryGetProperty("scope", out var s) || s.ValueKind != JsonValueKind.String)
+            return TopologyScope.Cluster;
+        var v = s.GetString();
+        return v switch
+        {
+            TopologyWire.ScopeCluster => TopologyScope.Cluster,
+            TopologyWire.ScopeMember  => TopologyScope.Member,
+            _ => throw new TopologyProtocolException(NwpTopologyErrorCodes.UnsupportedScope,
+                "NPS-CLIENT-BAD-PARAM", $"unknown topology.scope '{v}'."),
+        };
+    }
+
+    private static TopologyInclude ParseInclude(JsonElement topo)
+    {
+        if (!topo.TryGetProperty("include", out var i) || i.ValueKind != JsonValueKind.Array)
+            return TopologyInclude.Default;
+        var flags = TopologyInclude.None;
+        foreach (var item in i.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.String) continue;
+            flags |= item.GetString() switch
+            {
+                TopologyWire.IncludeMembers      => TopologyInclude.Members,
+                TopologyWire.IncludeCapabilities => TopologyInclude.Capabilities,
+                TopologyWire.IncludeTags         => TopologyInclude.Tags,
+                TopologyWire.IncludeMetrics      => TopologyInclude.Metrics,
+                _ => TopologyInclude.None,
+            };
+        }
+        return flags == TopologyInclude.None ? TopologyInclude.Default : flags;
+    }
+
+    private static byte ParseDepth(JsonElement topo)
+    {
+        if (topo.TryGetProperty("depth", out var d) && d.TryGetByte(out var v))
+            return v == 0 ? (byte)1 : v;
+        return 1;
+    }
+
+    private static void ValidateFilterKeys(JsonElement filter)
+    {
+        // Documented keys per §12.2 — anything else is a wire-format error.
+        foreach (var prop in filter.EnumerateObject())
+        {
+            switch (prop.Name)
+            {
+                case "tags_any":
+                case "tags_all":
+                case "node_kind":
+                    continue;
+                default:
+                    throw new TopologyProtocolException(NwpTopologyErrorCodes.FilterUnsupported,
+                        "NPS-CLIENT-BAD-PARAM",
+                        $"topology.filter key '{prop.Name}' is not recognized.");
+            }
+        }
+    }
+
+    private static TopologyEventEnvelope ToEnvelope(string streamId, TopologyEvent ev)
+    {
+        var ts = DateTimeOffset.UtcNow.ToString("O");
+        return ev switch
+        {
+            MemberJoined j => new TopologyEventEnvelope
+            {
+                StreamId  = streamId,
+                Seq       = j.Version,
+                EventType = TopologyWire.EventMemberJoined,
+                Timestamp = ts,
+                Payload   = JsonSerializer.SerializeToElement(j.Member, Json),
+            },
+            MemberLeft l => new TopologyEventEnvelope
+            {
+                StreamId  = streamId,
+                Seq       = l.Version,
+                EventType = TopologyWire.EventMemberLeft,
+                Timestamp = ts,
+                Payload   = JsonSerializer.SerializeToElement(new { nid = l.Nid }, Json),
+            },
+            MemberUpdated u => new TopologyEventEnvelope
+            {
+                StreamId  = streamId,
+                Seq       = u.Version,
+                EventType = TopologyWire.EventMemberUpdated,
+                Timestamp = ts,
+                Payload   = JsonSerializer.SerializeToElement(new
+                {
+                    nid     = u.Nid,
+                    changes = u.Changes,
+                }, Json),
+            },
+            AnchorState s => new TopologyEventEnvelope
+            {
+                StreamId  = streamId,
+                Seq       = s.Version,
+                EventType = TopologyWire.EventAnchorState,
+                Timestamp = ts,
+                Payload   = JsonSerializer.SerializeToElement(new
+                {
+                    field   = s.Field,
+                    details = s.Details,
+                }, Json),
+            },
+            ResyncRequired r => new TopologyEventEnvelope
+            {
+                StreamId  = streamId,
+                Seq       = null,
+                EventType = TopologyWire.EventResyncRequired,
+                Timestamp = ts,
+                Payload   = JsonSerializer.SerializeToElement(new { reason = r.Reason }, Json),
+            },
+            _ => throw new InvalidOperationException($"unknown TopologyEvent subtype: {ev.GetType().Name}"),
+        };
+    }
+
+    private static async Task WriteJsonLine<T>(HttpContext ctx, T value)
+    {
+        await ctx.Response.WriteAsync(JsonSerializer.Serialize(value, Json) + "\n");
+        await ctx.Response.Body.FlushAsync(ctx.RequestAborted);
+    }
+
+    private static async Task<JsonElement> ReadJson(HttpContext ctx)
+    {
+        using var ms = new MemoryStream();
+        await ctx.Request.Body.CopyToAsync(ms);
+        ms.Position = 0;
+        return JsonSerializer.Deserialize<JsonElement>(ms.ToArray(), Json);
     }
 
     // ── Static endpoints ─────────────────────────────────────────────────────

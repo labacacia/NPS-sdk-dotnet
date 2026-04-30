@@ -112,6 +112,13 @@ public static class NwpErrorCodes
     public const string TaskNotFound                 = "NWP-TASK-NOT-FOUND";
     public const string TaskAlreadyCancelled         = "NWP-TASK-ALREADY-CANCELLED";
 
+    // Subscribe
+    public const string SubscribeStreamNotFound  = "NWP-SUBSCRIBE-STREAM-NOT-FOUND";
+    public const string SubscribeLimitExceeded   = "NWP-SUBSCRIBE-LIMIT-EXCEEDED";
+    public const string SubscribeFilterUnsupported = "NWP-SUBSCRIBE-FILTER-UNSUPPORTED";
+    public const string SubscribeInterrupted     = "NWP-SUBSCRIBE-INTERRUPTED";
+    public const string SubscribeSeqTooOld       = "NWP-SUBSCRIBE-SEQ-TOO-OLD";
+
     // Capacity / graph
     public const string BudgetExceeded           = "NWP-BUDGET-EXCEEDED";
     public const string DepthExceeded            = "NWP-DEPTH-EXCEEDED";

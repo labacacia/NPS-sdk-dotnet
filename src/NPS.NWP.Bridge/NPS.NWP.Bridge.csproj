@@ -9,7 +9,7 @@
     <RootNamespace>NPS.NWP.Bridge</RootNamespace>
     <PackageId>LabAcacia.NPS.NWP.Bridge</PackageId>
     <AssemblyName>NPS.NWP.Bridge</AssemblyName>
-    <Version>1.0.0-alpha.3</Version>
+    <Version>1.0.0-alpha.4</Version>
     <Description>NPS — NWP Bridge Node skeleton: stateless translator from NPS frames to non-NPS protocols (HTTP / gRPC / MCP / A2A target adapters). Phase 1 ships the public type surface only; concrete adapters per target protocol arrive in follow-up CRs.</Description>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Authors>LabAcacia / INNO LOTUS PTY LTD</Authors>
