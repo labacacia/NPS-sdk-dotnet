@@ -1,6 +1,8 @@
 // Copyright 2026 INNO LOTUS PTY LTD
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Security.Cryptography.X509Certificates;
+
 namespace NPS.NIP.Verification;
 
 /// <summary>
@@ -28,4 +30,15 @@ public sealed class NipVerifierOptions
     /// Useful for offline scenarios and unit tests.
     /// </summary>
     public IReadOnlySet<string>? LocalRevokedSerials { get; init; }
+
+    /// <summary>
+    /// Trusted X.509 root certificates for verifying
+    /// <see cref="Frames.IdentFrame"/>s with
+    /// <see cref="Frames.IdentFrame.CertFormat"/> = <c>"v2-x509"</c>
+    /// (NPS-RFC-0002 §4.1). Step 3b chains the leaf up to a root that
+    /// matches one of these by Subject DN. Empty / null means the verifier
+    /// rejects all v2 chains — which is the safe default while v1 remains
+    /// the primary path during Phase 1.
+    /// </summary>
+    public IReadOnlyList<X509Certificate2>? TrustedX509Roots { get; init; }
 }

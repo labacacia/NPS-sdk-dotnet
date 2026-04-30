@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using NPS.NIP.Ca;
 using NPS.NIP.Crypto;
 using NPS.NIP.Frames;
+using NPS.NIP.X509;
 
 namespace NPS.NIP.Verification;
 
@@ -84,6 +85,37 @@ public sealed class NipIdentVerifier
             return NipIdentVerifyResult.Fail(3,
                 NipErrorCodes.CertSigInvalid,
                 "Certificate signature verification failed.");
+        }
+
+        // ── Step 3b: X.509 chain (NPS-RFC-0002, only when cert_format=v2-x509) ─
+        // Layered on top of the v1 Ed25519 check rather than replacing it
+        // (RFC §8.1 Phase 1: v1 + v2 coexist).
+        //
+        // <para>A "v1-only" verifier (one that has NOT been configured with
+        // X.509 trust anchors) MUST treat a v2 frame as if it were v1 — i.e.
+        // ignore cert_chain entirely. That's how a node running pre-RFC-0002
+        // code can keep accepting traffic from agents that have already
+        // upgraded. We detect this stance by the absence of
+        // <see cref="NipVerifierOptions.TrustedX509Roots"/>.</para>
+        //
+        // <para>A "v2-aware" verifier (TrustedX509Roots populated) runs BOTH
+        // the v1 Ed25519 check (above) AND the X.509 chain check (here).</para>
+        var trustedX509 = _opts.TrustedX509Roots;
+        var hasV2Trust  = trustedX509 is { Count: > 0 };
+        if (hasV2Trust &&
+            string.Equals(frame.CertFormat, IdentCertFormat.V2X509, StringComparison.Ordinal))
+        {
+            var x509Result = NipX509Verifier.Verify(
+                certChainBase64UrlDer:    frame.CertChain ?? Array.Empty<string>(),
+                assertedNid:              frame.Nid,
+                assertedAssuranceLevel:   frame.AssuranceLevel,
+                trustedRootCerts:         trustedX509!);
+            if (!x509Result.Valid)
+            {
+                return NipIdentVerifyResult.Fail(3,
+                    x509Result.ErrorCode ?? NipErrorCodes.CertFormatInvalid,
+                    x509Result.Message   ?? "X.509 chain validation failed.");
+            }
         }
 
         // ── Step 4: Revocation ────────────────────────────────────────────────
