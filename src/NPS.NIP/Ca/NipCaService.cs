@@ -1,9 +1,12 @@
 // Copyright 2026 INNO LOTUS PTY LTD
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using NPS.NIP.Crypto;
 using NPS.NIP.Frames;
+using NPS.NIP.X509;
 
 namespace NPS.NIP.Ca;
 
@@ -72,6 +75,95 @@ public sealed class NipCaService
         await _store.SaveAsync(record, ct);
 
         return frame;
+    }
+
+    // ── Register X.509 (NPS-RFC-0002 prototype) ───────────────────────────────
+
+    /// <summary>
+    /// Registers a new Agent or Node and issues an <see cref="IdentFrame"/>
+    /// with both the legacy CA-signed JSON proof <b>and</b> a DER-encoded
+    /// X.509 certificate chain per NPS-RFC-0002 §4.1. The same
+    /// <see cref="NipCertRecord"/> is persisted so the existing renew /
+    /// revoke / OCSP machinery covers v2 certs without further changes.
+    ///
+    /// <para>The chain currently has a single self-signed root supplied via
+    /// <paramref name="rootCert"/>; the prototype intentionally does not
+    /// implement intermediate hierarchy depth — that's deferred to a
+    /// follow-up.</para>
+    /// </summary>
+    public async Task<IdentFrame> RegisterX509Async(
+        string                 entityType,
+        string                 identifier,
+        string                 pubKey,
+        IReadOnlyList<string>  capabilities,
+        string                 scopeJson,
+        X509Certificate2       rootCert,
+        AssuranceLevel         assuranceLevel = AssuranceLevel.Anonymous,
+        string?                metadataJson   = null,
+        CancellationToken      ct             = default)
+    {
+        var nid      = BuildNid(entityType, identifier);
+        var existing = await _store.GetByNidAsync(nid, ct);
+        if (existing is not null)
+            throw new NipCaException($"NID already exists: {nid}", NipErrorCodes.NidAlreadyExists);
+
+        var validDays = entityType == "node" ? _opts.NodeCertValidityDays : _opts.AgentCertValidityDays;
+        var now       = DateTime.UtcNow;
+        var expiresAt = now.AddDays(validDays);
+        var serial    = await _store.NextSerialAsync(ct);
+
+        // Build the legacy v1 frame first — gives us the CA Ed25519 signature,
+        // serial, and snake_case scope JsonElement that v2 verifiers also rely on.
+        // Pass the assurance level through so it lands in the v1 signature
+        // (RFC-0003) and the X.509 leaf extension (RFC-0002 §4.1) consistently.
+        var v1Frame = IssueFrame(nid, pubKey, capabilities, scopeJson,
+            now, expiresAt, serial, metadataJson, assuranceLevel);
+
+        // Layer X.509 on top.
+        var subjectPubRaw = ExtractEd25519Raw(pubKey);
+        var leafSerial    = ParseSerialBytes(serial);
+        var role          = entityType == "node"
+            ? NipX509Builder.LeafRole.Node
+            : NipX509Builder.LeafRole.Agent;
+
+        var leafCert = NipX509Builder.IssueLeaf(
+            subjectNid:      nid,
+            subjectPubKeyRaw: subjectPubRaw,
+            caPrivateKey:    _keys.PrivateKey,
+            issuerNid:       _opts.CaNid,
+            role:            role,
+            assuranceLevel:  assuranceLevel,
+            notBefore:       now,
+            notAfter:        expiresAt,
+            serialNumber:    leafSerial);
+
+        var chainB64Url = new[]
+        {
+            Base64Url(leafCert.RawData),
+            Base64Url(rootCert.RawData),
+        };
+
+        var record = new NipCertRecord
+        {
+            Nid          = nid,
+            EntityType   = entityType,
+            Serial       = serial,
+            PubKey       = pubKey,
+            Capabilities = capabilities.ToArray(),
+            ScopeJson    = scopeJson,
+            IssuedBy     = _opts.CaNid,
+            IssuedAt     = now,
+            ExpiresAt    = expiresAt,
+            MetadataJson = metadataJson,
+        };
+        await _store.SaveAsync(record, ct);
+
+        return v1Frame with
+        {
+            CertFormat = IdentCertFormat.V2X509,
+            CertChain  = chainB64Url,
+            // AssuranceLevel already set by IssueFrame(...) above.
+        };
     }
 
     // ── Renew ─────────────────────────────────────────────────────────────────
@@ -215,25 +307,43 @@ public sealed class NipCaService
         string scopeJson,
         DateTime issuedAt, DateTime expiresAt,
         string serial,
-        string? metadataJson)
+        string? metadataJson,
+        AssuranceLevel? assuranceLevel = null)
     {
         var scope   = JsonDocument.Parse(scopeJson).RootElement;
         var issuedAtStr  = issuedAt.ToString("O");
         var expiresAtStr = expiresAt.ToString("O");
 
-        // Canonical payload for signing (alphabetical key order, no metadata)
-        var payload = new
-        {
-            capabilities,
-            expires_at = expiresAtStr,
-            frame      = "0x20",
-            issued_at  = issuedAtStr,
-            issued_by  = _opts.CaNid,
-            nid,
-            pub_key    = pubKey,
-            scope,
-            serial,
-        };
+        // Canonical payload for signing — alphabetical order is enforced by
+        // NipSigner.CanonicalJson. We include assurance_level in the signed
+        // payload only when set, matching the wire convention that an absent
+        // field defaults to "anonymous" for backward compatibility.
+        object payload = assuranceLevel is null
+            ? new
+              {
+                  capabilities,
+                  expires_at = expiresAtStr,
+                  frame      = "0x20",
+                  issued_at  = issuedAtStr,
+                  issued_by  = _opts.CaNid,
+                  nid,
+                  pub_key    = pubKey,
+                  scope,
+                  serial,
+              }
+            : new
+              {
+                  assurance_level = assuranceLevel.Value,
+                  capabilities,
+                  expires_at = expiresAtStr,
+                  frame      = "0x20",
+                  issued_at  = issuedAtStr,
+                  issued_by  = _opts.CaNid,
+                  nid,
+                  pub_key    = pubKey,
+                  scope,
+                  serial,
+              };
         var signature = NipSigner.Sign(_keys.PrivateKey, payload);
 
         IdentMetadata? metadata = null;
@@ -242,16 +352,17 @@ public sealed class NipCaService
 
         return new IdentFrame
         {
-            Nid          = nid,
-            PubKey       = pubKey,
-            Capabilities = capabilities,
-            Scope        = scope.Clone(),
-            IssuedBy     = _opts.CaNid,
-            IssuedAt     = issuedAtStr,
-            ExpiresAt    = expiresAtStr,
-            Serial       = serial,
-            Signature    = signature,
-            Metadata     = metadata,
+            Nid            = nid,
+            PubKey         = pubKey,
+            Capabilities   = capabilities,
+            Scope          = scope.Clone(),
+            IssuedBy       = _opts.CaNid,
+            IssuedAt       = issuedAtStr,
+            ExpiresAt      = expiresAtStr,
+            Serial         = serial,
+            Signature      = signature,
+            Metadata       = metadata,
+            AssuranceLevel = assuranceLevel,
         };
     }
 
@@ -259,6 +370,45 @@ public sealed class NipCaService
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
     };
+
+    // ── X.509 helpers (NPS-RFC-0002 prototype) ────────────────────────────────
+
+    private static byte[] ExtractEd25519Raw(string encoded)
+    {
+        const string prefix = "ed25519:";
+        if (!encoded.StartsWith(prefix, StringComparison.Ordinal))
+            throw new NipCaException(
+                $"X.509 issuance requires an ed25519:* pubkey; got '{encoded}'.",
+                NipErrorCodes.CertFormatInvalid);
+        var b64u = encoded[prefix.Length..];
+        var raw  = NipSigner.FromBase64Url(b64u);
+        if (raw.Length != 32)
+            throw new NipCaException(
+                $"Ed25519 pubkey must be 32 bytes; got {raw.Length}.",
+                NipErrorCodes.CertFormatInvalid);
+        return raw;
+    }
+
+    private static byte[] ParseSerialBytes(string serial)
+    {
+        // Accept "0x<hex>" or plain hex. X509 serials must be positive — pad
+        // with a leading 0x00 byte if the high bit is set.
+        var hex = serial.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
+            ? serial[2..] : serial;
+        if (hex.Length % 2 != 0) hex = "0" + hex;
+        var bytes = Convert.FromHexString(hex);
+        if (bytes.Length == 0) bytes = new byte[] { 0x01 };
+        if ((bytes[0] & 0x80) != 0)
+        {
+            var padded = new byte[bytes.Length + 1];
+            Buffer.BlockCopy(bytes, 0, padded, 1, bytes.Length);
+            return padded;
+        }
+        return bytes;
+    }
+
+    private static string Base64Url(byte[] data) =>
+        Convert.ToBase64String(data).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 }
 
 // ── Result types ──────────────────────────────────────────────────────────────
@@ -315,6 +465,34 @@ public static class NipErrorCodes
     /// NPS-3 §5.1.1 (NPS-RFC-0003). → NPS-CLIENT-BAD-FRAME.
     /// </summary>
     public const string AssuranceUnknown  = "NIP-ASSURANCE-UNKNOWN";
+
+    /// <summary>
+    /// IdentFrame.cert_chain bytes are not DER-encoded X.509 or fail ASN.1
+    /// parsing. NPS-RFC-0002 §4.3. → NPS-CLIENT-BAD-FRAME.
+    /// </summary>
+    public const string CertFormatInvalid    = "NIP-CERT-FORMAT-INVALID";
+
+    /// <summary>
+    /// IdentFrame.cert_chain leaf certificate is missing the required NPS
+    /// EKU (<c>agent-identity</c> or <c>node-identity</c>). EKU MUST be
+    /// marked critical to prevent cross-purpose use as a TLS server cert.
+    /// NPS-RFC-0002 §4.3. → NPS-CLIENT-BAD-FRAME.
+    /// </summary>
+    public const string CertEkuMissing       = "NIP-CERT-EKU-MISSING";
+
+    /// <summary>
+    /// X.509 cert subject CN or SAN URI does not match the
+    /// <see cref="Frames.IdentFrame.Nid"/> field. NPS-RFC-0002 §4.3.
+    /// → NPS-CLIENT-BAD-FRAME.
+    /// </summary>
+    public const string CertSubjectNidMismatch = "NIP-CERT-SUBJECT-NID-MISMATCH";
+
+    /// <summary>
+    /// ACME <c>agent-01</c> challenge validation failed at the CA side
+    /// (signature missing, token mismatch, replay, etc.). NPS-RFC-0002
+    /// §4.3 / §4.4. → NPS-CLIENT-BAD-FRAME.
+    /// </summary>
+    public const string AcmeChallengeFailed  = "NIP-ACME-CHALLENGE-FAILED";
 
     /// <summary>
     /// Reputation log entry signature fails verification or canonical

@@ -96,7 +96,20 @@ public static class NipSigner
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
     };
 
-    private static readonly HashSet<string> s_excluded = ["signature", "metadata"];
+    /// <summary>
+    /// Field names excluded from the canonical JSON over which the v1
+    /// IdentFrame signature is computed.
+    /// <list type="bullet">
+    ///   <item><c>signature</c> — the signature itself, by definition.</item>
+    ///   <item><c>metadata</c> — informational, not signed (NPS-3 §5.1).</item>
+    ///   <item><c>cert_format</c> + <c>cert_chain</c> — NPS-RFC-0002 v2 X.509
+    ///     fields. Trust on the v2 path comes from the X.509 chain itself,
+    ///     not the v1 CA Ed25519 signature; excluding them here lets v1 and
+    ///     v2 frames coexist on the wire (RFC §8.1 Phase 1) without
+    ///     re-signing.</item>
+    /// </list>
+    /// </summary>
+    private static readonly HashSet<string> s_excluded = ["signature", "metadata", "cert_format", "cert_chain"];
 
     private static void WriteCanonical(JsonElement el, StringBuilder sb)
     {
