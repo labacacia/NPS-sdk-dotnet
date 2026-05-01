@@ -8,6 +8,57 @@ Until NPS reaches v1.0 stable, every repository in the suite is synchronized to 
 
 ---
 
+## [1.0.0-alpha.5] — 2026-05-01
+
+The .NET SDK remains the **reference implementation** for the NPS suite. This
+release adds the alpha.5 spec suite (STH gossip error codes, `NPS-SERVER-UNSUPPORTED`,
+topology capability gate, `npt_est` per-event), the `AssuranceLevel` empty-string fix,
+and full NDP DNS TXT fallback resolution.
+
+### Added
+
+- **`NPS.NWP.Anchor` — `NWP-RESERVED-TYPE-UNSUPPORTED` enforcement**: `AnchorNodeMiddleware`
+  now returns HTTP 501 / `NPS-SERVER-UNSUPPORTED` / `NWP-RESERVED-TYPE-UNSUPPORTED` when
+  `/anchor/query` or `/anchor/subscribe` receive an unrecognised reserved `type` value.
+  Previously returned 404 / `NWP-ACTION-NOT-FOUND` (incorrect per spec).
+
+- **`NPS.NWP.Anchor` — `topology:read` capability gate**: New `AnchorNodeOptions.RequireTopologyCapability`
+  (default `false`). When `true`, both `/query` and `/subscribe` check the `X-NWP-Capabilities`
+  request header for `"topology:read"` (case-insensitive, comma-separated); missing capability
+  returns HTTP 403 / `NPS-AUTH-FORBIDDEN` / `NWP-TOPOLOGY-UNAUTHORIZED`. New
+  `NwpHttpHeaders.Capabilities = "X-NWP-Capabilities"` constant added.
+
+- **`NPS.NWP.Anchor` — `npt_est` on `TopologyEventEnvelope`**: New nullable `npt_est: uint?`
+  field populated with `Math.Max(1, UTF8.GetByteCount(payload) / 4)` on every pushed event
+  (per spec/token-budget.md §7.2 SHOULD).
+
+- **`NPS.NDP` — `ResolveViaDns` DNS TXT fallback resolution**: New
+  `InMemoryNdpRegistry.ResolveViaDns(target, dnsLookup?)` falls back to `_nps-node.{host}`
+  TXT record lookup (NPS-4 §5) when no in-memory entry matches. New `IDnsTxtLookup` interface
+  + `SystemDnsTxtLookup` (DnsClient v1.8.0 NuGet); `InMemoryNdpRegistry.ParseNpsTxtRecord`
+  helper; `ResolveViaDns` added to `INdpRegistry` interface (with default `null` lookup for
+  backward compatibility). Tests: 655 → 665.
+
+### Changed
+
+- **`NPS.NIP` — `AssuranceLevels.FromWireOrAnonymous("")` fix**: Empty string `""` now returns
+  `Anonymous` (consistent with `null`). `FromWireOrAnonymous` doc updated; `FromWireOrAnonymous_UnknownNonEmpty_Throws`
+  test added to enforce spec m6 forward-compat rule.
+
+- **All 7 packages bumped to `1.0.0-alpha.5`** — synchronized with NPS suite alpha.5 release.
+
+### Tests
+
+- Test count: **629 → 665** (all passing).
+  - 13 new `GossipStateTests` (STH gossip interval, peer storage, multi-peer, `FromEnvironment`
+    parsing, NipSigner round-trip).
+  - `AnchorTopologyTests` — 501 assertion updated from 404; new `MissingCapability_Returns403`.
+  - `AssuranceLevelTests` — `NullOrEmpty_ReturnsAnonymous` + `UnknownNonEmpty_Throws` (m6 fix).
+  - `NdpRegistryTests` — 10 new DNS TXT tests (happy path, invalid records, host extraction,
+    in-memory priority, injectable mock resolver).
+
+---
+
 ## [1.0.0-alpha.4] — 2026-04-30
 
 The .NET SDK remains the **reference implementation** for the NPS suite. This

@@ -49,11 +49,12 @@ public sealed record MemberInfo
     public required string Nid { get; init; }
 
     /// <summary>
-    /// NDP <c>node_kind</c> values for this member (NPS-4 §3.1; array form
-    /// introduced by NPS-CR-0001). Always at least one entry.
+    /// NDP <c>node_roles</c> values for this member (NPS-4 §3.1; renamed from
+    /// <c>node_kind</c> by M1 / NPS-CR-0001; parsers MUST accept <c>node_kind</c>
+    /// as alias through alpha.5). Always at least one entry.
     /// </summary>
-    [JsonPropertyName("node_kind")]
-    public required IReadOnlyList<string> NodeKind { get; init; }
+    [JsonPropertyName("node_roles")]
+    public required IReadOnlyList<string> NodeRoles { get; init; }
 
     /// <summary>
     /// NDP <c>activation_mode</c>: <c>ephemeral</c> / <c>resident</c> / <c>hybrid</c>.
@@ -161,9 +162,9 @@ public sealed record TopologyFilter
     [JsonPropertyName("tags_all")]
     public IReadOnlyList<string>? TagsAll { get; init; }
 
-    /// <summary>Member's <c>node_kind</c> array MUST contain at least one of these values.</summary>
-    [JsonPropertyName("node_kind")]
-    public IReadOnlyList<string>? NodeKind { get; init; }
+    /// <summary>Member's <c>node_roles</c> array MUST contain at least one of these values.</summary>
+    [JsonPropertyName("node_roles")]
+    public IReadOnlyList<string>? NodeRoles { get; init; }
 }
 
 // ── Stream events ────────────────────────────────────────────────────────────
@@ -207,7 +208,8 @@ public sealed record MemberUpdated : TopologyEvent
 /// </summary>
 public sealed record MemberChanges
 {
-    public IReadOnlyList<string>? NodeKind { get; init; }
+    [JsonPropertyName("node_roles")]
+    public IReadOnlyList<string>? NodeRoles { get; init; }
     public string? ActivationMode { get; init; }
     public IReadOnlyList<string>? Tags { get; init; }
     public uint? MemberCount { get; init; }
@@ -255,6 +257,14 @@ internal sealed record TopologyEventEnvelope
 
     [JsonPropertyName("payload")]
     public required JsonElement Payload { get; init; }
+
+    /// <summary>
+    /// Estimated NPT cost of this event's payload (UTF-8/4 fallback per
+    /// token-budget §3, §7.2). Consumers MAY use this to track running
+    /// budget consumption across a <c>topology.stream</c> session.
+    /// </summary>
+    [JsonPropertyName("npt_est")]
+    public uint? NptEst { get; init; }
 }
 
 /// <summary>

@@ -11,6 +11,13 @@ namespace NPS.NWP.Anchor.Topology;
 /// </summary>
 public static class NwpTopologyErrorCodes
 {
+    /// <summary>NWP-RESERVED-TYPE-UNSUPPORTED → NPS-SERVER-UNSUPPORTED (HTTP 501).
+    /// Returned when a <c>QueryFrame</c> or <c>SubscribeFrame</c> carries a <c>type</c>
+    /// field in a reserved namespace that this node does not implement.
+    /// MUST NOT be confused with <c>NWP-ACTION-NOT-FOUND</c> — use this code when
+    /// <c>type</c> is the unknown operand, not <c>action_id</c>.</summary>
+    public const string ReservedTypeUnsupported = "NWP-RESERVED-TYPE-UNSUPPORTED";
+
     /// <summary>NWP-TOPOLOGY-UNAUTHORIZED → NPS-AUTH-FORBIDDEN.</summary>
     public const string Unauthorized = "NWP-TOPOLOGY-UNAUTHORIZED";
 
