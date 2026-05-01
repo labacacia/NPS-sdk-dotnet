@@ -8,6 +8,51 @@
 
 ---
 
+## [1.0.0-alpha.5] —— 2026-05-01
+
+.NET SDK 仍是 NPS 套件的**参考实现**。本次带来 alpha.5 规范（STH gossip 错误码、
+`NPS-SERVER-UNSUPPORTED`、topology 能力门控、`npt_est` 逐事件字段）、
+`AssuranceLevel` 空字符串修复，以及完整的 NDP DNS TXT 回退解析。
+
+### 新增
+
+- **`NPS.NWP.Anchor` —— `NWP-RESERVED-TYPE-UNSUPPORTED` 强制执行**：`AnchorNodeMiddleware`
+  对 `/anchor/query` 或 `/anchor/subscribe` 收到未知保留 `type` 值时，返回 HTTP 501 /
+  `NPS-SERVER-UNSUPPORTED` / `NWP-RESERVED-TYPE-UNSUPPORTED`。原来错误地返回 404 /
+  `NWP-ACTION-NOT-FOUND`。
+
+- **`NPS.NWP.Anchor` —— `topology:read` 能力门控**：新增 `AnchorNodeOptions.RequireTopologyCapability`
+  （默认 `false`）。启用后，`/query` 与 `/subscribe` 均检查请求头 `X-NWP-Capabilities` 是否包含
+  `"topology:read"`（大小写不敏感、逗号分隔）；缺少时返回 HTTP 403 / `NPS-AUTH-FORBIDDEN` /
+  `NWP-TOPOLOGY-UNAUTHORIZED`。新增常量 `NwpHttpHeaders.Capabilities = "X-NWP-Capabilities"`。
+
+- **`NPS.NWP.Anchor` —— `TopologyEventEnvelope.npt_est`**：新增可空字段 `npt_est: uint?`，
+  每次推送事件时填充 `Math.Max(1, UTF8.GetByteCount(payload) / 4)`（符合 spec/token-budget.md §7.2 SHOULD）。
+
+- **`NPS.NDP` —— `ResolveViaDns` DNS TXT 回退解析**：新增
+  `InMemoryNdpRegistry.ResolveViaDns(target, dnsLookup?)`，当内存注册表无匹配时回退查询
+  `_nps-node.{host}` TXT 记录（NPS-4 §5）。新增 `IDnsTxtLookup` 接口 + `SystemDnsTxtLookup`
+  （DnsClient v1.8.0 NuGet）；`InMemoryNdpRegistry.ParseNpsTxtRecord` 辅助方法；
+  `INdpRegistry` 接口新增 `ResolveViaDns`（dnsLookup 默认 `null`，向后兼容）。测试数：655 → 665。
+
+### 变更
+
+- **`NPS.NIP` —— `AssuranceLevels.FromWireOrAnonymous("")` 修复**：空字符串 `""` 现在返回
+  `Anonymous`（与 `null` 一致）。新增 `FromWireOrAnonymous_UnknownNonEmpty_Throws` 测试，
+  验证 spec m6 前向兼容规则。
+
+- **全部 7 个包升至 `1.0.0-alpha.5`** —— 与 NPS 套件 alpha.5 同步。
+
+### 测试
+
+- 测试数：**629 → 665**（全部通过）。
+  - 新增 13 个 `GossipStateTests`（STH gossip 间隔、peer 存储、多 peer、`FromEnvironment` 解析、NipSigner 往返）。
+  - `AnchorTopologyTests` —— 501 断言从 404 更新；新增 `MissingCapability_Returns403`。
+  - `AssuranceLevelTests` —— `NullOrEmpty_ReturnsAnonymous` + `UnknownNonEmpty_Throws`（m6 修复）。
+  - `NdpRegistryTests` —— 10 个 DNS TXT 测试（正常路径、非法记录、host 提取、内存优先、可注入 mock resolver）。
+
+---
+
 ## [1.0.0-alpha.4] —— 2026-04-30
 
 .NET SDK 仍是 NPS 套件的**参考实现**。本次落地 NPS-RFC-0002（X.509 + ACME）

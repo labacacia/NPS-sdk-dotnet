@@ -33,4 +33,18 @@ public interface INdpRegistry
     /// Returns the live announcement for a specific NID, or <c>null</c> if not present / expired.
     /// </summary>
     AnnounceFrame? GetByNid(string nid);
+
+    /// <summary>
+    /// Resolves a <c>nwp://</c> target URL to a <see cref="NdpResolveResult"/>,
+    /// falling back to DNS TXT record lookup (NPS-4 §5) when no in-registry entry matches.
+    ///
+    /// <para>DNS fallback queries <c>_nps-node.{authority}</c> for TXT records in the format
+    /// <c>v=nps1 nid=... port=... type=... fp=...</c>.</para>
+    /// </summary>
+    /// <param name="target">Full <c>nwp://</c> URL, e.g. <c>nwp://api.example.com/products</c>.</param>
+    /// <param name="dnsLookup">
+    /// DNS TXT resolver to use.  When <c>null</c>, a <see cref="SystemDnsTxtLookup"/> is used.
+    /// Inject a fake implementation in unit tests to avoid real network calls.
+    /// </param>
+    NdpResolveResult? ResolveViaDns(string target, IDnsTxtLookup? dnsLookup = null);
 }

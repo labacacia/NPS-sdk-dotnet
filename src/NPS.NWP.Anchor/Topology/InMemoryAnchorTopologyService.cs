@@ -111,7 +111,7 @@ public sealed class InMemoryAnchorTopologyService : IAnchorTopologyService
     /// </summary>
     public ulong MemberJoinedAnnounce(
         string nid,
-        IReadOnlyList<string> nodeKind,
+        IReadOnlyList<string> nodeRoles,
         string activationMode,
         IReadOnlyList<string>? tags = null,
         bool childAnchor = false,
@@ -121,7 +121,7 @@ public sealed class InMemoryAnchorTopologyService : IAnchorTopologyService
         return MemberJoinedAnnounce(new MemberInfo
         {
             Nid            = nid,
-            NodeKind       = nodeKind,
+            NodeRoles      = nodeRoles,
             ActivationMode = activationMode,
             Tags           = tags,
             ChildAnchor    = childAnchor ? true : null,
@@ -340,14 +340,14 @@ public sealed class InMemoryAnchorTopologyService : IAnchorTopologyService
     {
         var changes = new MemberChanges
         {
-            NodeKind       = !ListEquals(before.NodeKind, after.NodeKind) ? after.NodeKind : null,
+            NodeRoles      = !ListEquals(before.NodeRoles, after.NodeRoles) ? after.NodeRoles : null,
             ActivationMode = before.ActivationMode != after.ActivationMode ? after.ActivationMode : null,
             Tags           = !ListEquals(before.Tags, after.Tags) ? after.Tags : null,
             MemberCount    = before.MemberCount != after.MemberCount ? after.MemberCount : null,
             LastSeen       = before.LastSeen != after.LastSeen ? after.LastSeen : null,
         };
         bool hasAny =
-            changes.NodeKind       is not null ||
+            changes.NodeRoles      is not null ||
             changes.ActivationMode is not null ||
             changes.Tags           is not null ||
             changes.MemberCount    is not null ||
@@ -357,7 +357,7 @@ public sealed class InMemoryAnchorTopologyService : IAnchorTopologyService
 
     private static MemberInfo MergeChanges(MemberInfo before, MemberInfo update) => before with
     {
-        NodeKind       = update.NodeKind,
+        NodeRoles      = update.NodeRoles,
         ActivationMode = update.ActivationMode,
         Tags           = update.Tags,
         MemberCount    = update.MemberCount,
@@ -369,7 +369,7 @@ public sealed class InMemoryAnchorTopologyService : IAnchorTopologyService
 
     private static MemberInfo ApplyChanges(MemberInfo before, MemberChanges c) => before with
     {
-        NodeKind       = c.NodeKind       ?? before.NodeKind,
+        NodeRoles      = c.NodeRoles      ?? before.NodeRoles,
         ActivationMode = c.ActivationMode ?? before.ActivationMode,
         Tags           = c.Tags           ?? before.Tags,
         MemberCount    = c.MemberCount    ?? before.MemberCount,
@@ -392,7 +392,7 @@ public sealed class InMemoryAnchorTopologyService : IAnchorTopologyService
     {
         // CR-0002 §3.5: unsupported filter keys MUST produce
         // NWP-TOPOLOGY-FILTER-UNSUPPORTED. Our reference accepts every
-        // documented key (tags_any / tags_all / node_kind), so this method
+        // documented key (tags_any / tags_all / node_roles), so this method
         // is a hook for future implementations to short-circuit unknown keys
         // before they reach the matcher.
         _ = f;
@@ -415,8 +415,8 @@ public sealed class InMemoryAnchorTopologyService : IAnchorTopologyService
 
     private static bool MatchesMember(MemberInfo m, TopologyFilter f)
     {
-        if (f.NodeKind is { Count: > 0 } nk &&
-            !nk.Any(k => m.NodeKind.Contains(k)))
+        if (f.NodeRoles is { Count: > 0 } nk &&
+            !nk.Any(k => m.NodeRoles.Contains(k)))
             return false;
 
         if (f.TagsAny is { Count: > 0 } any)

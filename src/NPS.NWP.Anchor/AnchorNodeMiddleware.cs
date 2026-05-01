@@ -152,6 +152,9 @@ public sealed class AnchorNodeMiddleware
 
     private async Task HandleQuery(HttpContext ctx)
     {
+        if (!CheckTopologyCapability(ctx))
+            return;
+
         JsonElement body;
         try
         {
@@ -167,13 +170,14 @@ public sealed class AnchorNodeMiddleware
         var type = body.TryGetProperty("type", out var t) ? t.GetString() : null;
         if (type != TopologyWire.TypeSnapshot)
         {
-            // The Anchor Node only exposes /query for reserved query types per §12.
-            // Default per-anchor query semantics belong to Memory Nodes, not Anchors.
-            await WriteError(ctx, 404, "NPS-CLIENT-NOT-FOUND",
-                NwpErrorCodes.ActionNotFound,
+            // NPS-2 §12: unknown reserved-type identifiers MUST return
+            // NWP-RESERVED-TYPE-UNSUPPORTED (NPS-SERVER-UNSUPPORTED / HTTP 501),
+            // not NWP-ACTION-NOT-FOUND — TC-N2-AnchorTopo-08.
+            await WriteError(ctx, 501, "NPS-SERVER-UNSUPPORTED",
+                NwpTopologyErrorCodes.ReservedTypeUnsupported,
                 type is null
                     ? "Anchor /query requires a reserved type per NPS-2 §12."
-                    : $"Unknown reserved query type '{type}'.");
+                    : $"Reserved query type '{type}' is not implemented by this Anchor Node.");
             return;
         }
 
@@ -234,6 +238,9 @@ public sealed class AnchorNodeMiddleware
 
     private async Task HandleSubscribe(HttpContext ctx)
     {
+        if (!CheckTopologyCapability(ctx))
+            return;
+
         JsonElement body;
         try
         {
@@ -249,11 +256,11 @@ public sealed class AnchorNodeMiddleware
         var type = body.TryGetProperty("type", out var t) ? t.GetString() : null;
         if (type != TopologyWire.TypeStream)
         {
-            await WriteError(ctx, 404, "NPS-CLIENT-NOT-FOUND",
-                NwpErrorCodes.SubscribeFilterUnsupported,
+            await WriteError(ctx, 501, "NPS-SERVER-UNSUPPORTED",
+                NwpTopologyErrorCodes.ReservedTypeUnsupported,
                 type is null
                     ? "Anchor /subscribe requires a reserved type per NPS-2 §12."
-                    : $"Unknown reserved subscribe type '{type}'.");
+                    : $"Reserved subscribe type '{type}' is not implemented by this Anchor Node.");
             return;
         }
 
@@ -440,7 +447,8 @@ public sealed class AnchorNodeMiddleware
             {
                 case "tags_any":
                 case "tags_all":
-                case "node_kind":
+                case "node_roles":
+                case "node_kind":   // backward-compat alias for node_roles (NPS-CR-0001 / M1; accepted through alpha.5)
                     continue;
                 default:
                     throw new TopologyProtocolException(NwpTopologyErrorCodes.FilterUnsupported,
@@ -455,55 +463,33 @@ public sealed class AnchorNodeMiddleware
         var ts = DateTimeOffset.UtcNow.ToString("O");
         return ev switch
         {
-            MemberJoined j => new TopologyEventEnvelope
-            {
-                StreamId  = streamId,
-                Seq       = j.Version,
-                EventType = TopologyWire.EventMemberJoined,
-                Timestamp = ts,
-                Payload   = JsonSerializer.SerializeToElement(j.Member, Json),
-            },
-            MemberLeft l => new TopologyEventEnvelope
-            {
-                StreamId  = streamId,
-                Seq       = l.Version,
-                EventType = TopologyWire.EventMemberLeft,
-                Timestamp = ts,
-                Payload   = JsonSerializer.SerializeToElement(new { nid = l.Nid }, Json),
-            },
-            MemberUpdated u => new TopologyEventEnvelope
-            {
-                StreamId  = streamId,
-                Seq       = u.Version,
-                EventType = TopologyWire.EventMemberUpdated,
-                Timestamp = ts,
-                Payload   = JsonSerializer.SerializeToElement(new
-                {
-                    nid     = u.Nid,
-                    changes = u.Changes,
-                }, Json),
-            },
-            AnchorState s => new TopologyEventEnvelope
-            {
-                StreamId  = streamId,
-                Seq       = s.Version,
-                EventType = TopologyWire.EventAnchorState,
-                Timestamp = ts,
-                Payload   = JsonSerializer.SerializeToElement(new
-                {
-                    field   = s.Field,
-                    details = s.Details,
-                }, Json),
-            },
-            ResyncRequired r => new TopologyEventEnvelope
-            {
-                StreamId  = streamId,
-                Seq       = null,
-                EventType = TopologyWire.EventResyncRequired,
-                Timestamp = ts,
-                Payload   = JsonSerializer.SerializeToElement(new { reason = r.Reason }, Json),
-            },
+            MemberJoined j  => Make(streamId, j.Version, TopologyWire.EventMemberJoined, ts,
+                                    JsonSerializer.SerializeToElement(j.Member, Json)),
+            MemberLeft l    => Make(streamId, l.Version, TopologyWire.EventMemberLeft, ts,
+                                    JsonSerializer.SerializeToElement(new { nid = l.Nid }, Json)),
+            MemberUpdated u => Make(streamId, u.Version, TopologyWire.EventMemberUpdated, ts,
+                                    JsonSerializer.SerializeToElement(new { nid = u.Nid, changes = u.Changes }, Json)),
+            AnchorState s   => Make(streamId, s.Version, TopologyWire.EventAnchorState, ts,
+                                    JsonSerializer.SerializeToElement(new { field = s.Field, details = s.Details }, Json)),
+            ResyncRequired r => Make(streamId, null, TopologyWire.EventResyncRequired, ts,
+                                    JsonSerializer.SerializeToElement(new { reason = r.Reason }, Json)),
             _ => throw new InvalidOperationException($"unknown TopologyEvent subtype: {ev.GetType().Name}"),
+        };
+    }
+
+    private static TopologyEventEnvelope Make(
+        string streamId, ulong? seq, string eventType, string ts, JsonElement payload)
+    {
+        // token-budget §7.2: SHOULD report NPT per event; use UTF-8/4 fallback.
+        var npt = (uint)Math.Max(1, System.Text.Encoding.UTF8.GetByteCount(payload.GetRawText()) / 4);
+        return new TopologyEventEnvelope
+        {
+            StreamId  = streamId,
+            Seq       = seq,
+            EventType = eventType,
+            Timestamp = ts,
+            Payload   = payload,
+            NptEst    = npt,
         };
     }
 
@@ -695,6 +681,30 @@ public sealed class AnchorNodeMiddleware
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns <c>true</c> if the request is allowed to access topology endpoints.
+    /// When <see cref="AnchorNodeOptions.RequireTopologyCapability"/> is set, the
+    /// caller MUST declare <c>"topology:read"</c> in <c>X-NWP-Capabilities</c>;
+    /// otherwise writes a 403 and returns <c>false</c>.
+    /// </summary>
+    private bool CheckTopologyCapability(HttpContext ctx)
+    {
+        if (!_options.RequireTopologyCapability)
+            return true;
+
+        var raw = ctx.Request.Headers.TryGetValue(NwpHttpHeaders.Capabilities, out var v)
+            ? v.ToString() : string.Empty;
+
+        if (raw.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+               .Contains("topology:read", StringComparer.OrdinalIgnoreCase))
+            return true;
+
+        _ = WriteError(ctx, 403, "NPS-AUTH-FORBIDDEN",
+            NwpTopologyErrorCodes.Unauthorized,
+            "Caller must declare 'topology:read' in X-NWP-Capabilities to access topology endpoints.");
+        return false;
+    }
 
     private uint ClampTimeout(uint requested, AnchorActionSpec spec)
     {
