@@ -23,6 +23,14 @@ public static class NwpHttpHeaders
     public const string Budget   = "X-NWP-Budget";
 
     /// <summary>
+    /// Comma-separated list of capability tokens the agent declares for this
+    /// request (e.g. <c>"topology:read,action:invoke"</c>). Nodes with
+    /// capability-gated operations check this header and reject callers that
+    /// don't declare the required token.
+    /// </summary>
+    public const string Capabilities = "X-NWP-Capabilities";
+
+    /// <summary>
     /// Node graph traversal depth (uint, default 1, max 5).
     /// </summary>
     public const string Depth    = "X-NWP-Depth";

@@ -46,6 +46,14 @@ public sealed class AnchorNodeOptions
     /// </summary>
     public IReadOnlyList<string>? RequiredCapabilities { get; set; }
 
+    /// <summary>
+    /// When <c>true</c>, topology endpoints (<c>/query</c>, <c>/subscribe</c>) require
+    /// the caller to declare <c>"topology:read"</c> in the <c>X-NWP-Capabilities</c>
+    /// request header. Missing capability → 403 <c>NWP-TOPOLOGY-UNAUTHORIZED</c>
+    /// (NPS-CR-0002 §12.4 authorization policy).
+    /// </summary>
+    public bool RequireTopologyCapability { get; set; } = false;
+
     // ── Timeouts ─────────────────────────────────────────────────────────────
 
     /// <summary>Default timeout when neither <see cref="AnchorActionSpec.TimeoutMsDefault"/>
