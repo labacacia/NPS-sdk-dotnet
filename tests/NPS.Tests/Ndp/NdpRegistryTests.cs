@@ -171,4 +171,129 @@ public sealed class NdpRegistryTests
         Task.WaitAll(tasks);
         Assert.True(reg.GetAll().Count <= 5);
     }
+
+    // ── ParseNpsTxtRecord ─────────────────────────────────────────────────────
+
+    [Fact]
+    public void ParseNpsTxtRecord_ValidRecord_ReturnsResult()
+    {
+        const string txt = "v=nps1 type=memory port=17434 nid=urn:nps:node:api.example.com:products";
+        var result = InMemoryNdpRegistry.ParseNpsTxtRecord(txt, "api.example.com");
+
+        Assert.NotNull(result);
+        Assert.Equal("api.example.com", result!.Host);
+        Assert.Equal(17434, result.Port);
+        Assert.Equal(300u, result.Ttl);
+        Assert.Null(result.CertFingerprint);
+    }
+
+    [Fact]
+    public void ParseNpsTxtRecord_MissingV_ReturnsNull()
+    {
+        const string txt = "type=memory port=17434 nid=urn:nps:node:api.example.com:products";
+        Assert.Null(InMemoryNdpRegistry.ParseNpsTxtRecord(txt, "api.example.com"));
+    }
+
+    [Fact]
+    public void ParseNpsTxtRecord_WrongV_ReturnsNull()
+    {
+        const string txt = "v=nps2 nid=urn:nps:node:api.example.com:products";
+        Assert.Null(InMemoryNdpRegistry.ParseNpsTxtRecord(txt, "api.example.com"));
+    }
+
+    [Fact]
+    public void ParseNpsTxtRecord_MissingNid_ReturnsNull()
+    {
+        const string txt = "v=nps1 type=memory port=17434";
+        Assert.Null(InMemoryNdpRegistry.ParseNpsTxtRecord(txt, "api.example.com"));
+    }
+
+    [Fact]
+    public void ParseNpsTxtRecord_DefaultPort()
+    {
+        const string txt = "v=nps1 nid=urn:nps:node:api.example.com:products";
+        var result = InMemoryNdpRegistry.ParseNpsTxtRecord(txt, "api.example.com");
+
+        Assert.NotNull(result);
+        Assert.Equal(17433, result!.Port);
+    }
+
+    [Fact]
+    public void ParseNpsTxtRecord_WithFingerprint()
+    {
+        const string txt = "v=nps1 nid=urn:nps:node:api.example.com:products fp=sha256:a3f9deadbeef";
+        var result = InMemoryNdpRegistry.ParseNpsTxtRecord(txt, "api.example.com");
+
+        Assert.NotNull(result);
+        Assert.Equal("sha256:a3f9deadbeef", result!.CertFingerprint);
+    }
+
+    // ── ResolveViaDns ─────────────────────────────────────────────────────────
+
+    private sealed class FakeDnsTxtLookup : IDnsTxtLookup
+    {
+        private readonly IReadOnlyList<string> _records;
+        public int CallCount { get; private set; }
+
+        public FakeDnsTxtLookup(params string[] records) =>
+            _records = records;
+
+        public IReadOnlyList<string> Lookup(string hostname)
+        {
+            CallCount++;
+            return _records;
+        }
+    }
+
+    [Fact]
+    public void ResolveViaDns_RegistryHit_NoDnsCall()
+    {
+        var reg = new InMemoryNdpRegistry();
+        reg.Announce(MakeAnnounce("urn:nps:node:api.test:products", host: "10.0.0.5", port: 17434));
+
+        var fake   = new FakeDnsTxtLookup("v=nps1 nid=urn:nps:node:api.test:products");
+        var result = reg.ResolveViaDns("nwp://api.test/products", fake);
+
+        Assert.NotNull(result);
+        Assert.Equal(0, fake.CallCount); // registry hit; DNS must not be called
+    }
+
+    [Fact]
+    public void ResolveViaDns_RegistryMiss_UsesDns()
+    {
+        var reg  = new InMemoryNdpRegistry(); // empty registry
+        const string txt = "v=nps1 nid=urn:nps:node:api.test:products port=17434";
+        var fake = new FakeDnsTxtLookup(txt);
+
+        var result = reg.ResolveViaDns("nwp://api.test/products", fake);
+
+        Assert.NotNull(result);
+        Assert.Equal(1, fake.CallCount);
+        Assert.Equal("api.test", result!.Host);
+        Assert.Equal(17434, result.Port);
+    }
+
+    [Fact]
+    public void ResolveViaDns_InvalidTxt_ReturnsNull()
+    {
+        var reg  = new InMemoryNdpRegistry();
+        // TXT record missing required "v" key
+        var fake = new FakeDnsTxtLookup("type=memory port=17434 nid=urn:nps:node:api.test:products");
+
+        var result = reg.ResolveViaDns("nwp://api.test/products", fake);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ResolveViaDns_EmptyDnsResponse_ReturnsNull()
+    {
+        var reg  = new InMemoryNdpRegistry();
+        var fake = new FakeDnsTxtLookup(); // returns no records
+
+        var result = reg.ResolveViaDns("nwp://api.test/products", fake);
+
+        Assert.Null(result);
+        Assert.Equal(1, fake.CallCount);
+    }
 }

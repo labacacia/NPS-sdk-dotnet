@@ -95,14 +95,27 @@ public static class AssuranceLevels
     }
 
     /// <summary>
-    /// Per NPS-3 §5.1.1: <c>null</c> on the wire means
-    /// <see cref="AssuranceLevel.Anonymous"/> (backward compatibility
-    /// with pre-RFC-0003 publishers). Use this instead of
-    /// <see cref="TryParse"/> when normalising an optional incoming
-    /// field.
+    /// Per NPS-3 §5.1.1: absent / <c>null</c> / empty wire value means
+    /// <see cref="AssuranceLevel.Anonymous"/> (backward compatibility with
+    /// pre-RFC-0003 publishers). A non-empty unknown string is a forward-
+    /// compatibility violation — the caller MUST surface
+    /// <c>NIP-ASSURANCE-UNKNOWN</c> on the wire rather than silently demoting
+    /// to <c>Anonymous</c> (spec m6 fix).
     /// </summary>
+    /// <exception cref="ArgumentException">
+    /// Thrown when <paramref name="wire"/> is a non-empty string not in the
+    /// enum. Callers SHOULD catch this and emit <c>NIP-ASSURANCE-UNKNOWN</c>.
+    /// </exception>
     public static AssuranceLevel FromWireOrAnonymous(string? wire)
-        => TryParse(wire, out var level) ? level : AssuranceLevel.Anonymous;
+    {
+        if (string.IsNullOrEmpty(wire))
+            return AssuranceLevel.Anonymous;
+        if (TryParse(wire, out var level))
+            return level;
+        throw new ArgumentException(
+            $"Unknown assurance_level value '{wire}'; caller MUST emit NIP-ASSURANCE-UNKNOWN.",
+            nameof(wire));
+    }
 }
 
 /// <summary>

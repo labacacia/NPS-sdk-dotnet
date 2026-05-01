@@ -72,15 +72,22 @@ public sealed class AssuranceLevelTests
     }
 
     [Fact]
-    public void FromWireOrAnonymous_TreatsNullAndUnknownAsAnonymous()
+    public void FromWireOrAnonymous_NullOrEmpty_ReturnsAnonymous()
     {
-        // Per NPS-3 §5.1.1: absent → anonymous (backward compat with
-        // pre-RFC-0003 publishers). Receivers MUST reject *known-bad*
-        // strings (NIP-ASSURANCE-UNKNOWN) but a missing field is fine.
+        // Per NPS-3 §5.1.1: absent/empty → anonymous (backward compat with
+        // pre-RFC-0003 publishers that omit the field entirely).
         Assert.Equal(AssuranceLevel.Anonymous, AssuranceLevels.FromWireOrAnonymous(null));
         Assert.Equal(AssuranceLevel.Anonymous, AssuranceLevels.FromWireOrAnonymous(""));
-        Assert.Equal(AssuranceLevel.Anonymous, AssuranceLevels.FromWireOrAnonymous("xyz"));
         Assert.Equal(AssuranceLevel.Verified,  AssuranceLevels.FromWireOrAnonymous("verified"));
+    }
+
+    [Fact]
+    public void FromWireOrAnonymous_UnknownNonEmpty_Throws()
+    {
+        // Spec m6: a non-empty unrecognised string is a forward-compat
+        // violation — caller MUST surface NIP-ASSURANCE-UNKNOWN.
+        Assert.Throws<ArgumentException>(
+            () => AssuranceLevels.FromWireOrAnonymous("xyz"));
     }
 
     [Fact]
