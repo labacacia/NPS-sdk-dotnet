@@ -569,8 +569,8 @@ public sealed class AnchorNodeMiddleware
             ? a.ToString() : null;
         var priority         = frame.Priority ?? "normal";
         var effectiveTimeout = ClampTimeout(frame.TimeoutMs, spec);
-        var budgetNpt        = ReadBudget(ctx);
-        var cgnCostHint      = spec.EstimatedNpt ?? 0;
+        var budgetCgn        = ReadBudget(ctx);
+        var cgnCostHint      = spec.EstimatedCgn ?? 0;
 
         // Rate limit check (per-consumer).
         var consumerKey = agentNid ?? "anonymous";
@@ -595,7 +595,7 @@ public sealed class AnchorNodeMiddleware
                 EffectiveTimeoutMs = effectiveTimeout,
                 Priority           = priority,
                 TraceContext       = BuildTraceContext(ctx),
-                BudgetNpt          = budgetNpt,
+                BudgetCgn          = budgetCgn,
             };
 
             TaskFrame task;
@@ -660,7 +660,7 @@ public sealed class AnchorNodeMiddleware
             if (result.FinalState == TaskState.Completed)
             {
                 await WriteCaps(ctx, result.AggregatedResult, spec.ResultAnchor,
-                    frame.RequestId, spec.EstimatedNpt);
+                    frame.RequestId, spec.EstimatedCgn);
             }
             else
             {
@@ -899,7 +899,7 @@ public sealed class AnchorNodeMiddleware
                 if (spec.Description       is not null) writer.WriteString("description",         spec.Description);
                 if (spec.ParamsAnchor      is not null) writer.WriteString("params_anchor",       spec.ParamsAnchor);
                 if (spec.ResultAnchor      is not null) writer.WriteString("result_anchor",       spec.ResultAnchor);
-                if (spec.EstimatedNpt      is { } en)    writer.WriteNumber("estimated_npt",       en);
+                if (spec.EstimatedCgn      is { } en)    writer.WriteNumber("estimated_npt",       en);
                 if (spec.TimeoutMsDefault  is { } td)    writer.WriteNumber("timeout_ms_default",  td);
                 if (spec.TimeoutMsMax      is { } tm)    writer.WriteNumber("timeout_ms_max",      tm);
                 if (spec.RequiredCapability is not null) writer.WriteString("required_capability", spec.RequiredCapability);

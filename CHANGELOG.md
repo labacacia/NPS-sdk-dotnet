@@ -45,6 +45,12 @@ and full NDP DNS TXT fallback resolution.
   `Anonymous` (consistent with `null`). `FromWireOrAnonymous` doc updated; `FromWireOrAnonymous_UnknownNonEmpty_Throws`
   test added to enforce spec m6 forward-compat rule.
 
+- **`NPS.NWP.Anchor` / `NPS.NOP` — CGN property rename**: C# properties `EstimatedNpt`,
+  `BudgetNpt`, `AvailableNpt`, and local variable `budgetNpt` renamed to `EstimatedCgn`,
+  `BudgetCgn`, `AvailableCgn`, `budgetCgn` respectively to align with the CGN terminology
+  used throughout the suite. Wire key `estimated_npt` (NPS-AaaS §2.3 / NPS-5 §4.3) is
+  unchanged.
+
 - **All 7 packages bumped to `1.0.0-alpha.5`** — synchronized with NPS suite alpha.5 release.
 
 ### Tests

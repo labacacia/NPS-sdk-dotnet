@@ -35,7 +35,7 @@ public sealed class AnchorRouteContext
     public TaskContext? TraceContext { get; init; }
 
     /// <summary>Token budget advertised by the consumer (<c>X-NWP-Budget</c>).</summary>
-    public uint BudgetNpt { get; init; }
+    public uint BudgetCgn { get; init; }
 }
 
 /// <summary>

@@ -15,7 +15,7 @@ public sealed record PreflightResult
     public required bool Available { get; init; }
 
     /// <summary>CGN budget the agent can commit. Null when unavailable.</summary>
-    public long? AvailableNpt { get; init; }
+    public long? AvailableCgn { get; init; }
 
     /// <summary>Estimated queue depth in milliseconds. Null when unavailable.</summary>
     public int? EstimatedQueueMs { get; init; }
