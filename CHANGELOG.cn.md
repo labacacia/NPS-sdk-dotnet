@@ -11,7 +11,7 @@
 ## [1.0.0-alpha.5] —— 2026-05-01
 
 .NET SDK 仍是 NPS 套件的**参考实现**。本次带来 alpha.5 规范（STH gossip 错误码、
-`NPS-SERVER-UNSUPPORTED`、topology 能力门控、`npt_est` 逐事件字段）、
+`NPS-SERVER-UNSUPPORTED`、topology 能力门控、`cgn_est` 逐事件字段）、
 `AssuranceLevel` 空字符串修复，以及完整的 NDP DNS TXT 回退解析。
 
 ### 新增
@@ -26,7 +26,7 @@
   `"topology:read"`（大小写不敏感、逗号分隔）；缺少时返回 HTTP 403 / `NPS-AUTH-FORBIDDEN` /
   `NWP-TOPOLOGY-UNAUTHORIZED`。新增常量 `NwpHttpHeaders.Capabilities = "X-NWP-Capabilities"`。
 
-- **`NPS.NWP.Anchor` —— `TopologyEventEnvelope.npt_est`**：新增可空字段 `npt_est: uint?`，
+- **`NPS.NWP.Anchor` —— `TopologyEventEnvelope.cgn_est`**：新增可空字段 `cgn_est: uint?`，
   每次推送事件时填充 `Math.Max(1, UTF8.GetByteCount(payload) / 4)`（符合 spec/token-budget.md §7.2 SHOULD）。
 
 - **`NPS.NDP` —— `ResolveViaDns` DNS TXT 回退解析**：新增

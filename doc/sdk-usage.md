@@ -626,7 +626,7 @@ Set per-connection token budget limits via the `X-NWP-Budget` HTTP header or via
 ```csharp
 builder.Services.AddNwp(opts =>
 {
-    opts.DefaultTokenBudget = 100_000; // NPT units; 0 = unlimited
+    opts.DefaultTokenBudget = 100_000; // CGN units; 0 = unlimited
 });
 ```
 

@@ -132,7 +132,7 @@ public sealed record AlignStreamFrame : IFrame
     public required ulong        Seq         { get; init; }
     public          string?      PayloadRef  { get; init; }   // CapsFrame anchor ref
     public          JsonElement? Data        { get; init; }
-    public          uint?        WindowSize  { get; init; }   // back-pressure in NPT tokens
+    public          uint?        WindowSize  { get; init; }   // back-pressure in CGN tokens
     public required bool         IsFinal     { get; init; }
     public required string       SenderNid   { get; init; }
     public          StreamError? Error       { get; init; }   // populated when IsFinal && failed

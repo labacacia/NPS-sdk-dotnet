@@ -20,13 +20,13 @@ public sealed class InMemoryAnchorRateLimiter : IAnchorRateLimiter
 
     public AnchorRateLimitResult TryAcquire(
         string             consumerKey,
-        uint               nptCost,
+        uint               cgnCost,
         AnchorRateLimits? limits)
     {
         if (limits is null ||
             (limits.RequestsPerMinute == 0 &&
              limits.MaxConcurrent     == 0 &&
-             limits.NptPerHour        == 0))
+             limits.CgnPerHour        == 0))
         {
             // Nothing to enforce — fast-path succeed. Concurrency counter still
             // updated so Release() is always safe to call.
@@ -61,23 +61,23 @@ public sealed class InMemoryAnchorRateLimiter : IAnchorRateLimiter
                     $"max_concurrent limit ({limits.MaxConcurrent}) exceeded.", 1);
             }
 
-            // 3. NPT/hour bucket
-            if (limits.NptPerHour > 0 && nptCost > 0)
+            // 3. CGN/hour bucket
+            if (limits.CgnPerHour > 0 && cgnCost > 0)
             {
                 state.TrimNpt(now);
                 var consumed = 0UL;
                 foreach (var (_, cost) in state.NptHistory) consumed += cost;
-                if (consumed + nptCost > limits.NptPerHour)
+                if (consumed + cgnCost > limits.CgnPerHour)
                 {
                     var oldest = state.NptHistory.Count > 0
                         ? state.NptHistory.Peek().At
                         : now;
                     var retry  = (int)Math.Ceiling((oldest.AddHours(1) - now).TotalSeconds);
                     return new AnchorRateLimitResult(false,
-                        $"npt_per_hour limit ({limits.NptPerHour}) exceeded (need {nptCost}, consumed {consumed}).",
+                        $"cgn_per_hour limit ({limits.CgnPerHour}) exceeded (need {cgnCost}, consumed {consumed}).",
                         retry < 1 ? 1 : retry);
                 }
-                state.NptHistory.Enqueue((now, nptCost));
+                state.NptHistory.Enqueue((now, cgnCost));
             }
 
             // Commit.

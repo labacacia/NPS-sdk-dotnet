@@ -38,7 +38,7 @@ NWP is the HTTP overlay for NPS. This package provides:
   - [`MemoryNodeOptions`](#memorynodeoptions)
   - [`MemoryNodeSchema` / `MemoryNodeField`](#memorynodeschema--memorynodefield)
   - [`MemoryNodeMiddleware`](#memorynodemiddleware)
-- [`NptMeter` — token budget accounting](#nptmeter)
+- [`CognMeter` — token budget accounting](#nptmeter)
 - [DI extensions](#di-extensions)
 
 ---
@@ -60,7 +60,7 @@ public sealed record QueryFrame : IFrame
     public          uint                    Limit     { get; init; } = 20;
     public          string?                 Cursor    { get; init; }
     public          VectorSearchOptions?    Vector    { get; init; }
-    public          long?                   Budget    { get; init; }          // NPT tokens
+    public          long?                   Budget    { get; init; }          // CGN tokens
 }
 ```
 
@@ -339,7 +339,7 @@ Per-request behaviour:
 2. Enforce `MemoryNodeOptions.RequireAuth` — reject with status `NWP-AUTH-REQUIRED` when the
    `X-NWP-Agent-NID` header is missing.
 3. Clamp `QueryFrame.Limit` to `MaxLimit`.
-4. Track NPT consumption via `NptMeter` — trim the result list if the caller-supplied `Budget`
+4. Track CGN consumption via `CognMeter` — trim the result list if the caller-supplied `Budget`
    would be exceeded and emit `X-NWP-Budget-Remaining` in the response.
 5. Encode the response back through the shared `NpsFrameCodec`.
 
@@ -348,12 +348,12 @@ constant is always copied into `X-NWP-Error-Code`.
 
 ---
 
-## `NptMeter`
+## `CognMeter`
 
 ```csharp
-public sealed class NptMeter
+public sealed class CognMeter
 {
-    public NptMeter(long? budget);
+    public CognMeter(long? budget);
 
     public long   Consumed        { get; }
     public long?  RemainingBudget { get; }
@@ -362,7 +362,7 @@ public sealed class NptMeter
 }
 ```
 
-Used internally by the middleware to decide whether the next row fits under the per-request NPT
+Used internally by the middleware to decide whether the next row fits under the per-request CGN
 budget. Row costs follow the tokeniser-resolution chain specified by `spec/token-budget.md`.
 
 ---

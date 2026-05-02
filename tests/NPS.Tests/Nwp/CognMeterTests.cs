@@ -5,7 +5,7 @@ using NPS.NWP.MemoryNode;
 
 namespace NPS.Tests.Nwp;
 
-public sealed class NptMeterTests
+public sealed class CognMeterTests
 {
     // ── Measure(ReadOnlySpan<byte>) ───────────────────────────────────────────
 
@@ -20,35 +20,35 @@ public sealed class NptMeterTests
     public void MeasureBytes_CeilDiv4(int byteCount, uint expected)
     {
         var bytes = new byte[byteCount];
-        Assert.Equal(expected, NptMeter.Measure(bytes.AsSpan()));
+        Assert.Equal(expected, CognMeter.Measure(bytes.AsSpan()));
     }
 
     // ── Measure(string?) ─────────────────────────────────────────────────────
 
     [Fact]
     public void MeasureNull_ReturnsZero() =>
-        Assert.Equal(0u, NptMeter.Measure((string?)null));
+        Assert.Equal(0u, CognMeter.Measure((string?)null));
 
     [Fact]
     public void MeasureEmptyString_ReturnsZero() =>
-        Assert.Equal(0u, NptMeter.Measure(string.Empty));
+        Assert.Equal(0u, CognMeter.Measure(string.Empty));
 
     [Fact]
     public void MeasureAscii_CeilDiv4()
     {
         // "test" = 4 UTF-8 bytes → ceil(4/4) = 1
-        Assert.Equal(1u, NptMeter.Measure("test"));
+        Assert.Equal(1u, CognMeter.Measure("test"));
         // "hello" = 5 UTF-8 bytes → ceil(5/4) = 2
-        Assert.Equal(2u, NptMeter.Measure("hello"));
+        Assert.Equal(2u, CognMeter.Measure("hello"));
     }
 
     [Fact]
     public void MeasureMultiByte_UsesUtf8ByteCount()
     {
         // "中" = 3 UTF-8 bytes → ceil(3/4) = 1
-        Assert.Equal(1u, NptMeter.Measure("中"));
+        Assert.Equal(1u, CognMeter.Measure("中"));
         // "中文" = 6 UTF-8 bytes → ceil(6/4) = 2
-        Assert.Equal(2u, NptMeter.Measure("中文"));
+        Assert.Equal(2u, CognMeter.Measure("中文"));
     }
 
     // ── MeasureJson<T> ────────────────────────────────────────────────────────
@@ -57,8 +57,8 @@ public sealed class NptMeterTests
     public void MeasureJson_UsesSerializedByteLength()
     {
         var obj = new { name = "test" };
-        var expected = NptMeter.Measure(System.Text.Json.JsonSerializer.Serialize(obj));
-        Assert.Equal(expected, NptMeter.MeasureJson(obj));
+        var expected = CognMeter.Measure(System.Text.Json.JsonSerializer.Serialize(obj));
+        Assert.Equal(expected, CognMeter.MeasureJson(obj));
     }
 
     // ── MeasureRows ───────────────────────────────────────────────────────────
@@ -71,11 +71,11 @@ public sealed class NptMeterTests
             new Dictionary<string, object?> { ["id"] = 1L, ["name"] = "alpha" },
             new Dictionary<string, object?> { ["id"] = 2L, ["name"] = "beta"  },
         };
-        var total = NptMeter.MeasureRows(rows);
+        var total = CognMeter.MeasureRows(rows);
         Assert.True(total > 0);
 
         uint manual = 0;
-        foreach (var r in rows) manual += NptMeter.MeasureJson(r);
+        foreach (var r in rows) manual += CognMeter.MeasureJson(r);
         Assert.Equal(manual, total);
     }
 
@@ -83,6 +83,6 @@ public sealed class NptMeterTests
     public void MeasureRows_EmptyList_ReturnsZero()
     {
         var rows = new List<IReadOnlyDictionary<string, object?>>();
-        Assert.Equal(0u, NptMeter.MeasureRows(rows));
+        Assert.Equal(0u, CognMeter.MeasureRows(rows));
     }
 }

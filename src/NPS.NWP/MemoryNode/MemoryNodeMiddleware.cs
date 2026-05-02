@@ -169,7 +169,7 @@ public sealed class MemoryNodeMiddleware
             .Select(row => JsonSerializer.SerializeToElement(row, s_json))
             .ToList();
 
-        var tokenEst = NptMeter.MeasureRows(result.Rows, s_json);
+        var tokenEst = CognMeter.MeasureRows(result.Rows, s_json);
 
         // Budget enforcement — trim rows if needed
         if (budget > 0 && tokenEst > budget)
@@ -293,7 +293,7 @@ public sealed class MemoryNodeMiddleware
         foreach (var row in rows)
         {
             var el  = JsonSerializer.SerializeToElement(row, s_json);
-            var tok = NptMeter.MeasureJson(row, s_json);
+            var tok = CognMeter.MeasureJson(row, s_json);
             if (acc + tok > budget) break;
             result.Add(el);
             acc += tok;

@@ -30,7 +30,7 @@ public sealed class AnchorActionSpec
     /// </summary>
     public required bool Async { get; init; }
 
-    /// <summary>Hint of NPT cost, advertised via the NWM.</summary>
+    /// <summary>Hint of CGN cost, advertised via the NWM.</summary>
     [JsonPropertyName("estimated_npt")]
     public uint? EstimatedNpt { get; init; }
 

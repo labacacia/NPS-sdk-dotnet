@@ -19,7 +19,7 @@ public sealed class AnchorRateLimits
     [JsonPropertyName("max_concurrent")]
     public uint MaxConcurrent { get; init; }
 
-    /// <summary>NPT ceiling per consumer NID per rolling hour. 0 = unlimited.</summary>
-    [JsonPropertyName("npt_per_hour")]
-    public uint NptPerHour { get; init; }
+    /// <summary>CGN ceiling per consumer NID per rolling hour. 0 = unlimited.</summary>
+    [JsonPropertyName("cgn_per_hour")]
+    public uint CgnPerHour { get; init; }
 }

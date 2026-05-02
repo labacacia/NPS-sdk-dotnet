@@ -348,7 +348,7 @@ public sealed class AnchorTopologyTests : IAsyncLifetime
                         {
                             RequestsPerMinute = 600,
                             MaxConcurrent     = 100,
-                            NptPerHour        = 1_000_000,
+                            CgnPerHour        = 1_000_000,
                         };
                         configure?.Invoke(opts);
                     });

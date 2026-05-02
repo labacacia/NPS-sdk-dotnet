@@ -14,7 +14,7 @@ public sealed record PreflightResult
     /// <summary>True when the agent can accept the delegated workload.</summary>
     public required bool Available { get; init; }
 
-    /// <summary>NPT budget the agent can commit. Null when unavailable.</summary>
+    /// <summary>CGN budget the agent can commit. Null when unavailable.</summary>
     public long? AvailableNpt { get; init; }
 
     /// <summary>Estimated queue depth in milliseconds. Null when unavailable.</summary>

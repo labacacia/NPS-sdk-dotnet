@@ -28,7 +28,7 @@ public interface INopWorkerClient
     /// </summary>
     /// <param name="agentNid">Target Worker Agent NID.</param>
     /// <param name="action">The action URL the agent will be asked to perform.</param>
-    /// <param name="estimatedNpt">Estimated NPT budget for the operation.</param>
+    /// <param name="estimatedNpt">Estimated CGN budget for the operation.</param>
     /// <param name="requiredCapabilities">Capability identifiers the agent must support.</param>
     /// <param name="ct">Cancellation token.</param>
     Task<PreflightResult> PreflightAsync(

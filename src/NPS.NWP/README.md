@@ -59,7 +59,7 @@ The middleware answers:
 | `NeuralWebManifest`, `NodeCapabilities`, `NodeEndpoints`, `NodeGraph` | `.nwm.json` model |
 | `NwpHttpHeaders` | `X-NWP-Depth`, `X-NWP-Agent-NID`, `X-NWP-Trace-ID`, `X-NWP-Budget`, … |
 | `IMemoryNodeProvider`, `MemoryNodeMiddleware`, `MemoryNodeOptions` | Memory Node host |
-| `NptMeter` | NPS Token budget accounting |
+| `CognMeter` | Cognon budget accounting |
 | `NwpErrorCodes` | `NWP-*` error code constants |
 
 ## Documentation

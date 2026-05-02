@@ -61,7 +61,7 @@ public sealed record NeuralWebManifest
     public required NodeEndpoints Endpoints { get; init; }
 
     /// <summary>
-    /// Tokenizer identifiers this node supports for NPT conversion
+    /// Tokenizer identifiers this node supports for CGN conversion
     /// (e.g. <c>["cl100k_base", "claude"]</c>). See token-budget.md.
     /// </summary>
     [JsonPropertyName("tokenizer_support")]

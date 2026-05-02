@@ -35,7 +35,7 @@ public enum IncidentType
     /// <summary>Behavior matched scraping-pattern heuristics.</summary>
     ScrapingPattern,
 
-    /// <summary>NPT or fiat default on a committed transaction.</summary>
+    /// <summary>CGN or fiat default on a committed transaction.</summary>
     PaymentDefault,
 
     /// <summary>Unresolved contractual breach on an asynchronous NOP task.</summary>

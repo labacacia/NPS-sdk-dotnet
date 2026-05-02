@@ -203,7 +203,7 @@ public sealed record AlignStreamFrame : IFrame
     [JsonPropertyName("data")]
     public JsonElement? Data { get; init; }
 
-    /// <summary>Back-pressure window size in NPT tokens (NPS-5 §3.4.1).</summary>
+    /// <summary>Back-pressure window size in CGN tokens (NPS-5 §3.4.1).</summary>
     [JsonPropertyName("window_size")]
     public uint? WindowSize { get; init; }
 

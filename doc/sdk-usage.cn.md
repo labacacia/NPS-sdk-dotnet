@@ -626,7 +626,7 @@ builder.Services.AddNpsCore(opts =>
 ```csharp
 builder.Services.AddNwp(opts =>
 {
-    opts.DefaultTokenBudget = 100_000; // NPT 单位；0 = 不限制
+    opts.DefaultTokenBudget = 100_000; // CGN 单位；0 = 不限制
 });
 ```
 

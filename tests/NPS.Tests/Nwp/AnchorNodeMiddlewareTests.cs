@@ -355,7 +355,7 @@ public sealed class AnchorNodeMiddlewareTests : IAsyncLifetime
         {
             RequestsPerMinute = 60,
             MaxConcurrent     = 10,
-            NptPerHour        = 100_000,
+            CgnPerHour        = 100_000,
         };
 
         var host = new HostBuilder()

@@ -259,12 +259,12 @@ internal sealed record TopologyEventEnvelope
     public required JsonElement Payload { get; init; }
 
     /// <summary>
-    /// Estimated NPT cost of this event's payload (UTF-8/4 fallback per
+    /// Estimated CGN cost of this event's payload (UTF-8/4 fallback per
     /// token-budget §3, §7.2). Consumers MAY use this to track running
     /// budget consumption across a <c>topology.stream</c> session.
     /// </summary>
-    [JsonPropertyName("npt_est")]
-    public uint? NptEst { get; init; }
+    [JsonPropertyName("cgn_est")]
+    public uint? CgnEst { get; init; }
 }
 
 /// <summary>

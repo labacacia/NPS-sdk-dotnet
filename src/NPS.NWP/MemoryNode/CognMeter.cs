@@ -7,20 +7,20 @@ using System.Text.Json;
 namespace NPS.NWP.MemoryNode;
 
 /// <summary>
-/// Measures NPS Token (NPT) cost of a serialized payload.
+/// Measures Cognon (CGN) cost of a serialized payload.
 /// Default unit: ceil(UTF-8_bytes / 4) — the UTF-8/4 fallback defined in token-budget.md.
 /// </summary>
-public static class NptMeter
+public static class CognMeter
 {
     /// <summary>
-    /// Returns the NPT cost for a raw UTF-8 byte sequence.
+    /// Returns the CGN cost for a raw UTF-8 byte sequence.
     /// Formula: ceil(byteCount / 4).
     /// </summary>
     public static uint Measure(ReadOnlySpan<byte> utf8Bytes) =>
         (uint)((utf8Bytes.Length + 3) / 4);
 
     /// <summary>
-    /// Returns the NPT cost for a string (encodes to UTF-8 first).
+    /// Returns the CGN cost for a string (encodes to UTF-8 first).
     /// Formula: ceil(UTF-8_bytes / 4).
     /// </summary>
     public static uint Measure(string? text)
@@ -31,7 +31,7 @@ public static class NptMeter
     }
 
     /// <summary>
-    /// Serializes <paramref name="value"/> to JSON and measures the NPT cost.
+    /// Serializes <paramref name="value"/> to JSON and measures the CGN cost.
     /// </summary>
     public static uint MeasureJson<T>(T value, JsonSerializerOptions? options = null)
     {
@@ -40,7 +40,7 @@ public static class NptMeter
     }
 
     /// <summary>
-    /// Measures the NPT cost of a collection of row dictionaries (rows serialized as JSON).
+    /// Measures the CGN cost of a collection of row dictionaries (rows serialized as JSON).
     /// </summary>
     public static uint MeasureRows(IReadOnlyList<IReadOnlyDictionary<string, object?>> rows,
         JsonSerializerOptions? options = null)
