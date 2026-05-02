@@ -9,7 +9,7 @@
     <RootNamespace>NPS.NWP</RootNamespace>
     <PackageId>LabAcacia.NPS.NWP</PackageId>
     <AssemblyName>NPS.NWP</AssemblyName>
-    <Version>1.0.0-alpha.5</Version>
+    <Version>1.0.0-alpha.5.1</Version>
     <Description>NPS — Neural Web Protocol frame types, NWM manifest model, and ASP.NET Core integration.</Description>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Authors>LabAcacia / INNO LOTUS PTY LTD</Authors>

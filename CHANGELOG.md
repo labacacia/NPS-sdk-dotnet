@@ -10,8 +10,8 @@ Until NPS reaches v1.0 stable, every repository in the suite is synchronized to 
 
 ## [1.0.0-alpha.5.1] — 2026-05-02
 
-Hotfix release for `LabAcacia.NPS.NIP`, `LabAcacia.NPS.NWP.Anchor`, and `LabAcacia.NPS.NOP`.
-The `1.0.0-alpha.5` packages on NuGet.org were cut before three post-release commits landed
+Hotfix release for `LabAcacia.NPS.NIP`, `LabAcacia.NPS.NWP`, `LabAcacia.NPS.NWP.Anchor`, and `LabAcacia.NPS.NOP`.
+The `1.0.0-alpha.5` packages on NuGet.org were cut before four post-release commits landed
 in the publish repo; this patch brings the published packages back in sync with the source.
 
 ### Changed
@@ -20,6 +20,10 @@ in the publish repo; this patch brings the published packages back in sync with 
   constant-time check against `X-Operator-Key`), `AcmeEnabled` (default `false`), and
   `AcmePathPrefix` (default `"/acme"`). New `UseNipAcme(WebApplication)` extension mounts
   the ACME middleware when `AcmeEnabled` is `true`. Required by `NPS.NipCaServer` Program.cs.
+
+- **`NPS.NWP` — `NptMeter` → `CognMeter` rename**: Static utility class `NptMeter` renamed
+  to `CognMeter`; all internal callers (`MemoryNodeMiddleware`, `NeuralWebManifest`) updated.
+  XML doc comments updated from "NPT" to "CGN/Cognon" throughout the package.
 
 - **`NPS.NWP.Anchor` / `NPS.NOP` — CGN property rename**: C# properties `EstimatedNpt`,
   `BudgetNpt`, `AvailableNpt`, and local variable `budgetNpt` renamed to `EstimatedCgn`,
