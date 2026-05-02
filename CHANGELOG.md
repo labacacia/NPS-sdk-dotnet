@@ -8,6 +8,26 @@ Until NPS reaches v1.0 stable, every repository in the suite is synchronized to 
 
 ---
 
+## [1.0.0-alpha.5.1] — 2026-05-02
+
+Hotfix release for `LabAcacia.NPS.NIP`, `LabAcacia.NPS.NWP.Anchor`, and `LabAcacia.NPS.NOP`.
+The `1.0.0-alpha.5` packages on NuGet.org were cut before three post-release commits landed
+in the publish repo; this patch brings the published packages back in sync with the source.
+
+### Changed
+
+- **`NPS.NIP` — operator auth + ACME APIs**: `NipCaOptions` gains `OperatorApiKey` (HMAC-SHA256
+  constant-time check against `X-Operator-Key`), `AcmeEnabled` (default `false`), and
+  `AcmePathPrefix` (default `"/acme"`). New `UseNipAcme(WebApplication)` extension mounts
+  the ACME middleware when `AcmeEnabled` is `true`. Required by `NPS.NipCaServer` Program.cs.
+
+- **`NPS.NWP.Anchor` / `NPS.NOP` — CGN property rename**: C# properties `EstimatedNpt`,
+  `BudgetNpt`, `AvailableNpt`, and local variable `budgetNpt` renamed to `EstimatedCgn`,
+  `BudgetCgn`, `AvailableCgn`, `budgetCgn` to align with CGN terminology used throughout
+  the suite. Wire key `estimated_npt` (NPS-AaaS §2.3 / NPS-5 §4.3) is unchanged.
+
+---
+
 ## [1.0.0-alpha.5] — 2026-05-01
 
 The .NET SDK remains the **reference implementation** for the NPS suite. This
