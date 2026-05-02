@@ -8,6 +8,18 @@ Until NPS reaches v1.0 stable, every repository in the suite is synchronized to 
 
 ---
 
+## [Unreleased]
+
+### Changed (Breaking)
+
+- **wire field rename**: `AnchorActionSpec.estimated_npt` → `cgn_est`. Aligns with the
+  post-alpha.5 CGN naming convention and matches `TopologyEventEnvelope.cgn_est`.
+  **Wire breaking change** — clients pinning to the old key will see the field as null
+  after upgrade. No alias retained.
+  Closes [labacacia/NPS-Dev#17](https://github.com/labacacia/NPS-Dev/issues/17).
+
+---
+
 ## [1.0.0-alpha.5.1] — 2026-05-02
 
 Hotfix release for `LabAcacia.NPS.NIP`, `LabAcacia.NPS.NWP`, `LabAcacia.NPS.NWP.Anchor`, and `LabAcacia.NPS.NOP`.

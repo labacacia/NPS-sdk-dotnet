@@ -899,7 +899,7 @@ public sealed class AnchorNodeMiddleware
                 if (spec.Description       is not null) writer.WriteString("description",         spec.Description);
                 if (spec.ParamsAnchor      is not null) writer.WriteString("params_anchor",       spec.ParamsAnchor);
                 if (spec.ResultAnchor      is not null) writer.WriteString("result_anchor",       spec.ResultAnchor);
-                if (spec.EstimatedCgn      is { } en)    writer.WriteNumber("estimated_npt",       en);
+                if (spec.EstimatedCgn      is { } en)    writer.WriteNumber("cgn_est",             en);
                 if (spec.TimeoutMsDefault  is { } td)    writer.WriteNumber("timeout_ms_default",  td);
                 if (spec.TimeoutMsMax      is { } tm)    writer.WriteNumber("timeout_ms_max",      tm);
                 if (spec.RequiredCapability is not null) writer.WriteString("required_capability", spec.RequiredCapability);
