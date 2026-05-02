@@ -3,7 +3,7 @@
 > **Neural Identity Protocol** CA Server library and Agent verifier for the **NPS — Neural Protocol Suite**.
 >
 > [![NuGet](https://img.shields.io/nuget/v/LabAcacia.NPS.NIP.svg)](https://www.nuget.org/packages/LabAcacia.NPS.NIP/)
-> Target: `net10.0` · License: Apache-2.0 · Spec: [NPS-3 NIP v0.3](https://github.com/labacacia/nps/blob/main/spec/NPS-3-NIP.md)
+> Target: `net10.0` · License: Apache-2.0 · Spec: [NPS-3 NIP v0.6](https://github.com/labacacia/NPS-Release/blob/main/spec/NPS-3-NIP.md)
 
 NIP is the TLS/PKI of NPS. This package ships everything you need to run a CA
 Server that issues / renews / revokes NID certificates (Ed25519) and to verify
@@ -20,37 +20,47 @@ dotnet add package LabAcacia.NPS.NIP
 
 ```csharp
 using NPS.NIP.Extensions;
-using Microsoft.Extensions.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services
-    .AddNpsCore()
-    .AddNip()          // frame registry: IdentFrame / TrustFrame / RevokeFrame
-    .AddNipCa(o =>
-    {
-        o.CaAuthority      = "api.example.com";
-        o.CaName           = "root";
-        o.CertValidityDays = 365;
-        o.OcspValiditySec  = 3600;
-    });
+builder.Services.AddNipCa(o =>
+{
+    o.CaNid            = "urn:nps:org:ca.example.com";
+    o.DisplayName      = "My CA";
+    o.KeyFilePath      = "/data/ca.key.enc";
+    o.KeyPassphrase    = Environment.GetEnvironmentVariable("CA_PASSPHRASE")!;
+    o.BaseUrl          = "https://ca.example.com";
+    o.ConnectionString = Environment.GetEnvironmentVariable("POSTGRES_CONN")!;
+    // optional
+    o.AgentCertValidityDays = 30;   // default
+    o.NodeCertValidityDays  = 90;   // default
+    o.OperatorApiKey        = Environment.GetEnvironmentVariable("OPERATOR_API_KEY");
+}, generateKeyIfMissing: true);
 
 var app = builder.Build();
-app.MapNipCa();        // /.well-known/nps-ca + /ca/register|renew|revoke|ocsp|crl
+app.MapNipCa();   // all NIP CA routes: /v1/agents/*, /v1/nodes/*, /v1/ca/*, /.well-known/nps-ca
 app.Run();
 ```
 
 ## Quick start — verifying a peer
 
 ```csharp
-using NPS.NIP.Verifier;
+using NPS.NIP.Extensions;
+using NPS.NIP.Verification;
 
-services.AddNipVerifier();                 // registers NipIdentVerifier
+// registration
+services.AddNipVerifier(o =>
+{
+    o.TrustedIssuers["urn:nps:org:ca.example.com"] = "ed25519:<base64url-pubkey>";
+    o.OcspUrl = "https://ca.example.com/v1/agents/{nid}/verify";
+});
+
+// usage
 var verifier = sp.GetRequiredService<NipIdentVerifier>();
 
-NipVerifyResult result = await verifier.VerifyAsync(peerIdentFrame, new NipVerifyContext
+NipIdentVerifyResult result = await verifier.VerifyAsync(peerIdentFrame, new NipVerifyContext
 {
-    RequiredScope        = "products:read",
     RequiredCapabilities = ["nwp:query"],
+    TargetNodePath       = "nwp://api.myapp.com/products",
 });
 
 if (!result.IsValid)
@@ -68,15 +78,15 @@ capabilities → scope.
 | `NipKeyManager`, `NipSigner` | Ed25519 key generation, signing, canonical-JSON signatures |
 | `IdentFrame`, `TrustFrame`, `RevokeFrame` | NIP frame set |
 | `NipCaService`, `NipCaOptions`, `INipCaStore`, `PostgreSqlNipCaStore` | CA service + storage |
-| `NipCaRouter` | `MapNipCa()` HTTP surface (OCSP, CRL, register, renew, revoke) |
-| `NipIdentVerifier`, `NipVerifyContext`, `NipVerifyResult` | Agent-side verification |
+| `NipCaRouter` | `MapNipCa()` HTTP surface — all `/v1/agents/*`, `/v1/nodes/*`, `/v1/ca/cert`, `/v1/crl`, `/.well-known/nps-ca` routes |
+| `NipIdentVerifier`, `NipVerifyContext`, `NipIdentVerifyResult` | Node-side peer verification |
 | `NipErrorCodes` | `NIP-*` error code constants |
 
 ## Documentation
 
 - **Full API reference:** [`doc/NPS.NIP.md`](https://github.com/labacacia/NPS-sdk-dotnet/blob/main/doc/NPS.NIP.md)
 - **SDK overview:** [`doc/overview.md`](https://github.com/labacacia/NPS-sdk-dotnet/blob/main/doc/overview.md)
-- **Spec:** [NPS-3 NIP](https://github.com/labacacia/nps/blob/main/spec/NPS-3-NIP.md)
+- **Spec:** [NPS-3 NIP](https://github.com/labacacia/NPS-Release/blob/main/spec/NPS-3-NIP.md)
 
 ## NPS Repositories
 
