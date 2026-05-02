@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Token-savings benchmark: REST-style HTTP+JSON traffic vs NWP traffic for three
-// representative Agent-Node interactions. NPT is counted per NPS-0 §token-budget
+// representative Agent-Node interactions. CGN is counted per NPS-0 §token-budget
 // using the ceil(UTF-8 bytes / 4) fallback — both protocols are measured with the
 // same counter so the ratio is an apples-to-apples comparison.
 //

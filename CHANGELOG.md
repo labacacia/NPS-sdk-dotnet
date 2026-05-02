@@ -12,7 +12,7 @@ Until NPS reaches v1.0 stable, every repository in the suite is synchronized to 
 
 The .NET SDK remains the **reference implementation** for the NPS suite. This
 release adds the alpha.5 spec suite (STH gossip error codes, `NPS-SERVER-UNSUPPORTED`,
-topology capability gate, `npt_est` per-event), the `AssuranceLevel` empty-string fix,
+topology capability gate, `cgn_est` per-event), the `AssuranceLevel` empty-string fix,
 and full NDP DNS TXT fallback resolution.
 
 ### Added
@@ -28,7 +28,7 @@ and full NDP DNS TXT fallback resolution.
   returns HTTP 403 / `NPS-AUTH-FORBIDDEN` / `NWP-TOPOLOGY-UNAUTHORIZED`. New
   `NwpHttpHeaders.Capabilities = "X-NWP-Capabilities"` constant added.
 
-- **`NPS.NWP.Anchor` — `npt_est` on `TopologyEventEnvelope`**: New nullable `npt_est: uint?`
+- **`NPS.NWP.Anchor` — `cgn_est` on `TopologyEventEnvelope`**: New nullable `cgn_est: uint?`
   field populated with `Math.Max(1, UTF8.GetByteCount(payload) / 4)` on every pushed event
   (per spec/token-budget.md §7.2 SHOULD).
 

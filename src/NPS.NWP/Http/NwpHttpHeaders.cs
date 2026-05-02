@@ -17,7 +17,7 @@ public static class NwpHttpHeaders
     public const string Agent    = "X-NWP-Agent";
 
     /// <summary>
-    /// Token budget upper limit in NPT (uint32). Node SHOULD trim the response
+    /// Token budget upper limit in CGN (uint32). Node SHOULD trim the response
     /// to stay within budget, or return <c>NWP-BUDGET-EXCEEDED</c> if impossible.
     /// </summary>
     public const string Budget   = "X-NWP-Budget";
@@ -43,7 +43,7 @@ public static class NwpHttpHeaders
 
     /// <summary>
     /// Agent's tokenizer identifier (e.g. <c>"cl100k_base"</c>, <c>"claude"</c>).
-    /// Used for NPT → native token conversion (NPS-2 §8).
+    /// Used for CGN → native token conversion (NPS-2 §8).
     /// </summary>
     public const string Tokenizer = "X-NWP-Tokenizer";
 
@@ -52,7 +52,7 @@ public static class NwpHttpHeaders
     /// <summary>The <c>anchor_id</c> of the schema used in the response payload.</summary>
     public const string Schema   = "X-NWP-Schema";
 
-    /// <summary>Actual NPT consumption for the response payload.</summary>
+    /// <summary>Actual CGN consumption for the response payload.</summary>
     public const string Tokens   = "X-NWP-Tokens";
 
     /// <summary>Native token consumption (when the Agent's tokenizer is known).</summary>

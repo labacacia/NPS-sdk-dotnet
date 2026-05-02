@@ -38,14 +38,14 @@ public interface IAnchorRateLimiter
     /// <summary>
     /// Attempt to acquire a request slot for the given consumer. Returns
     /// <c>AnchorRateLimitResult(Allowed=true)</c> when the request fits all
-    /// limits (requests/min, concurrent, NPT/hour).
+    /// limits (requests/min, concurrent, CGN/hour).
     /// </summary>
     /// <param name="consumerKey">Consumer identifier — typically the Agent NID.</param>
-    /// <param name="nptCost">Estimated NPT cost to deduct from the hourly bucket.</param>
+    /// <param name="cgnCost">Estimated CGN cost to deduct from the hourly bucket.</param>
     /// <param name="limits">Rate limit values from the node options; may be <c>null</c>.</param>
     AnchorRateLimitResult TryAcquire(
         string             consumerKey,
-        uint               nptCost,
+        uint               cgnCost,
         AnchorRateLimits? limits);
 
     /// <summary>

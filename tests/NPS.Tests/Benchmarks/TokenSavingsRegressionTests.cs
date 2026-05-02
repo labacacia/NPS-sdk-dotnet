@@ -6,7 +6,7 @@ using NPS.Benchmarks.TokenSavings;
 namespace NPS.Tests.Benchmarks;
 
 /// <summary>
-/// Regression guard for the NPT token-savings benchmark. Phase 1 exit criterion is
+/// Regression guard for the CGN token-savings benchmark. Phase 1 exit criterion is
 /// ≥30% savings across representative Agent↔Node scenarios. If scenario fixtures
 /// drift or the counter changes, we want CI to catch it immediately rather than
 /// discovering it when the report is re-emitted.
@@ -24,7 +24,7 @@ public class TokenSavingsRegressionTests
         double overall = 1.0 - (double)totalNwp / totalRest;
 
         Assert.True(overall >= Phase1Target,
-            $"Aggregate NPT savings dropped below Phase 1 target: {overall:p1} < {Phase1Target:p1}");
+            $"Aggregate CGN savings dropped below Phase 1 target: {overall:p1} < {Phase1Target:p1}");
     }
 
     [Theory]

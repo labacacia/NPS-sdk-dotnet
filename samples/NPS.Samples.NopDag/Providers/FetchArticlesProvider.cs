@@ -28,8 +28,8 @@ public sealed class FetchArticlesProvider : IActionNodeProvider
             {
                 new { id = "a-01", title = "Why Agents need a Schema-first Protocol",
                       body  = "NWP treats schema as a first-class resource anchored once per session." },
-                new { id = "a-02", title = "NPS Token Budget: a tokenizer-agnostic cost model",
-                      body  = "Counting in NPT lets us compare traffic across models without committing to one tokenizer." },
+                new { id = "a-02", title = "Cognon Budget: a tokenizer-agnostic cost model",
+                      body  = "Counting in CGN lets us compare traffic across models without committing to one tokenizer." },
                 new { id = "a-03", title = "Three Node Types, one Port",
                       body  = "Memory/Action/Complex nodes multiplex on 17433 — the frame type code carries the routing." },
             },

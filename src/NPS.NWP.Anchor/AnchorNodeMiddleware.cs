@@ -480,7 +480,7 @@ public sealed class AnchorNodeMiddleware
     private static TopologyEventEnvelope Make(
         string streamId, ulong? seq, string eventType, string ts, JsonElement payload)
     {
-        // token-budget §7.2: SHOULD report NPT per event; use UTF-8/4 fallback.
+        // token-budget §7.2: SHOULD report CGN per event; use UTF-8/4 fallback.
         var npt = (uint)Math.Max(1, System.Text.Encoding.UTF8.GetByteCount(payload.GetRawText()) / 4);
         return new TopologyEventEnvelope
         {
@@ -489,7 +489,7 @@ public sealed class AnchorNodeMiddleware
             EventType = eventType,
             Timestamp = ts,
             Payload   = payload,
-            NptEst    = npt,
+            CgnEst    = npt,
         };
     }
 
@@ -570,11 +570,11 @@ public sealed class AnchorNodeMiddleware
         var priority         = frame.Priority ?? "normal";
         var effectiveTimeout = ClampTimeout(frame.TimeoutMs, spec);
         var budgetNpt        = ReadBudget(ctx);
-        var nptCostHint      = spec.EstimatedNpt ?? 0;
+        var cgnCostHint      = spec.EstimatedNpt ?? 0;
 
         // Rate limit check (per-consumer).
         var consumerKey = agentNid ?? "anonymous";
-        var rate = _limiter.TryAcquire(consumerKey, nptCostHint, _options.RateLimits);
+        var rate = _limiter.TryAcquire(consumerKey, cgnCostHint, _options.RateLimits);
         if (!rate.Allowed)
         {
             if (rate.RetryAfterSeconds is { } retry)

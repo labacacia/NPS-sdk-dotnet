@@ -39,7 +39,7 @@ NWP 是 NPS 的 HTTP 覆盖层。本包提供：
   - [`MemoryNodeOptions`](#memorynodeoptions)
   - [`MemoryNodeSchema` / `MemoryNodeField`](#memorynodeschema--memorynodefield)
   - [`MemoryNodeMiddleware`](#memorynodemiddleware)
-- [`NptMeter` — token budget 记账](#nptmeter)
+- [`CognMeter` — token budget 记账](#nptmeter)
 - [DI 扩展](#di-扩展)
 
 ---
@@ -61,7 +61,7 @@ public sealed record QueryFrame : IFrame
     public          uint                    Limit     { get; init; } = 20;
     public          string?                 Cursor    { get; init; }
     public          VectorSearchOptions?    Vector    { get; init; }
-    public          long?                   Budget    { get; init; }          // NPT tokens
+    public          long?                   Budget    { get; init; }          // CGN tokens
 }
 ```
 
@@ -340,7 +340,7 @@ Middleware 相对 `MemoryNodeOptions.PathPrefix` 处理四个子路径：
 2. 强制 `MemoryNodeOptions.RequireAuth` —— `X-NWP-Agent-NID` 头缺失时以
    `NWP-AUTH-REQUIRED` 状态拒绝。
 3. 将 `QueryFrame.Limit` 钳制到 `MaxLimit`。
-4. 经 `NptMeter` 追踪 NPT 消耗 —— 若将超过调用者提供的 `Budget` 则修剪
+4. 经 `CognMeter` 追踪 CGN 消耗 —— 若将超过调用者提供的 `Budget` 则修剪
    结果列表,并在响应中发出 `X-NWP-Budget-Remaining`。
 5. 通过共享的 `NpsFrameCodec` 编码响应。
 
@@ -349,12 +349,12 @@ Middleware 相对 `MemoryNodeOptions.PathPrefix` 处理四个子路径：
 
 ---
 
-## `NptMeter`
+## `CognMeter`
 
 ```csharp
-public sealed class NptMeter
+public sealed class CognMeter
 {
-    public NptMeter(long? budget);
+    public CognMeter(long? budget);
 
     public long   Consumed        { get; }
     public long?  RemainingBudget { get; }
@@ -363,7 +363,7 @@ public sealed class NptMeter
 }
 ```
 
-middleware 内部使用,用于判断下一行是否仍在每请求 NPT 预算内。
+middleware 内部使用,用于判断下一行是否仍在每请求 CGN 预算内。
 行成本遵循 `spec/token-budget.md` 指定的 tokenizer 解析链。
 
 ---

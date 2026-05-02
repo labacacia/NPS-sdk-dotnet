@@ -7,7 +7,7 @@ using System.Text;
 namespace NPS.Benchmarks.TokenSavings;
 
 /// <summary>
-/// Runs every scenario in <see cref="Scenarios.All"/> through <see cref="NptCounter"/>,
+/// Runs every scenario in <see cref="Scenarios.All"/> through <see cref="CognCounter"/>,
 /// then formats the results as a Markdown report. Deliberately free of measurement
 /// noise — every byte is deterministic, so re-runs produce byte-identical output.
 /// </summary>
@@ -23,11 +23,11 @@ public static class Benchmark
     /// <summary>Measure a single scenario and return its aggregated result row.</summary>
     public static Result Measure(Scenario s)
     {
-        uint restNpt = NptCounter.CountAll(
+        uint restNpt = CognCounter.CountAll(
             s.Rest.SelectMany(pair => new[] { pair.Request, pair.Response }));
 
-        uint nwpOneShotNpt = NptCounter.CountAll(s.NwpOneShot);
-        uint nwpSteadyNpt  = NptCounter.CountAll(
+        uint nwpOneShotNpt = CognCounter.CountAll(s.NwpOneShot);
+        uint nwpSteadyNpt  = CognCounter.CountAll(
             s.Nwp.SelectMany(pair => new[] { pair.Request, pair.Response }));
         uint nwpTotalNpt   = nwpOneShotNpt + nwpSteadyNpt;
 
@@ -45,9 +45,9 @@ public static class Benchmark
     private static string Format(IReadOnlyList<Result> rows)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("# NPS Token Savings Benchmark");
+        sb.AppendLine("# Cognon Savings Benchmark");
         sb.AppendLine();
-        sb.AppendLine("Measures NPS Token (NPT) consumption for representative Agent↔Node");
+        sb.AppendLine("Measures Cognon (CGN) consumption for representative Agent↔Node");
         sb.AppendLine("interactions, comparing an idiomatic REST implementation against the");
         sb.AppendLine("equivalent NWP traffic.");
         sb.AppendLine();
@@ -55,11 +55,11 @@ public static class Benchmark
         sb.AppendLine("the tokenizer-agnostic baseline. Both protocols are measured with the");
         sb.AppendLine("same ruler, so the ratio is an apples-to-apples comparison.");
         sb.AppendLine();
-        sb.AppendLine("**Target** (Phase 1 exit criterion): ≥ 30% NPT savings across scenarios.");
+        sb.AppendLine("**Target** (Phase 1 exit criterion): ≥ 30% CGN savings across scenarios.");
         sb.AppendLine();
         sb.AppendLine("## Results");
         sb.AppendLine();
-        sb.AppendLine("| Scenario | Calls | REST NPT | NWP Anchor (once) | NWP steady-state | NWP total | Savings |");
+        sb.AppendLine("| Scenario | Calls | REST CGN | NWP Anchor (once) | NWP steady-state | NWP total | Savings |");
         sb.AppendLine("| --- | ---:| ---:| ---:| ---:| ---:| ---:|");
 
         uint totalRest = 0, totalNwp = 0;
@@ -90,9 +90,9 @@ public static class Benchmark
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
                 "- Calls: {0}", r.Scenario.Calls));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
-                "- REST NPT: {0:n0}", r.RestNpt));
+                "- REST CGN: {0:n0}", r.RestNpt));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
-                "- NWP NPT (one-shot {0} + steady {1}): {2:n0}",
+                "- NWP CGN (one-shot {0} + steady {1}): {2:n0}",
                 r.NwpOneShot, r.NwpSteady, r.NwpTotal));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
                 "- Savings: **{0:p1}**", r.SavingsRatio));

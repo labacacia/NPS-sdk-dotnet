@@ -184,7 +184,7 @@ public sealed class MemoryNodeMiddlewareTests : IAsyncLifetime
     [Fact]
     public async Task Query_BudgetHeader_TrimsRows()
     {
-        // Provider returns 3 rows; set budget to 1 NPT so only 0–1 rows fit
+        // Provider returns 3 rows; set budget to 1 CGN so only 0–1 rows fit
         _provider.RowsToReturn = 3;
 
         var frame   = new QueryFrame { Limit = 3 };
@@ -200,7 +200,7 @@ public sealed class MemoryNodeMiddlewareTests : IAsyncLifetime
 
         var body = await resp.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(body);
-        // With budget=1 NPT, at most 0 or 1 row fits; certainly fewer than 3
+        // With budget=1 CGN, at most 0 or 1 row fits; certainly fewer than 3
         Assert.True(doc.RootElement.GetProperty("count").GetInt32() < 3);
     }
 
