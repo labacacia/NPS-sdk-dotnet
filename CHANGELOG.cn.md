@@ -8,6 +8,26 @@
 
 ---
 
+## [1.0.0-alpha.5.1] —— 2026-05-02
+
+`LabAcacia.NPS.NIP`、`LabAcacia.NPS.NWP.Anchor`、`LabAcacia.NPS.NOP` 的热修复版本。
+NuGet.org 上的 `1.0.0-alpha.5` 包在三个后续提交落地前就已打包；此 patch 让发布包
+与源码重新对齐。
+
+### 变更
+
+- **`NPS.NIP` —— 运营商鉴权 + ACME API**：`NipCaOptions` 新增 `OperatorApiKey`（对
+  `X-Operator-Key` 做 HMAC-SHA256 恒时比较）、`AcmeEnabled`（默认 `false`）、
+  `AcmePathPrefix`（默认 `"/acme"`）。新增扩展方法 `UseNipAcme(WebApplication)`，
+  在 `AcmeEnabled` 为 `true` 时挂载 ACME 中间件。`NPS.NipCaServer` 的 Program.cs 依赖这些 API。
+
+- **`NPS.NWP.Anchor` / `NPS.NOP` —— CGN 属性重命名**：C# 属性 `EstimatedNpt`、`BudgetNpt`、
+  `AvailableNpt` 及局部变量 `budgetNpt` 重命名为 `EstimatedCgn`、`BudgetCgn`、`AvailableCgn`、
+  `budgetCgn`，与套件全局 CGN 术语保持一致。Wire 键 `estimated_npt`（NPS-AaaS §2.3 /
+  NPS-5 §4.3）保持不变。
+
+---
+
 ## [1.0.0-alpha.5] —— 2026-05-01
 
 .NET SDK 仍是 NPS 套件的**参考实现**。本次带来 alpha.5 规范（STH gossip 错误码、
