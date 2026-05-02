@@ -90,4 +90,16 @@ public sealed class NipCaOptions
     /// Requests with unlisted capabilities are rejected with 403.
     /// </summary>
     public IReadOnlySet<string>? AllowedCapabilities { get; set; }
+
+    // ── ACME ──────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Enables the ACME server (RFC 8555 + NPS-RFC-0002 <c>agent-01</c> challenge).
+    /// Set via env NIPCA__ACMEENABLED=true.
+    /// When false (default), no ACME middleware is mounted.
+    /// </summary>
+    public bool AcmeEnabled { get; set; } = false;
+
+    /// <summary>HTTP path prefix for ACME endpoints. Default <c>"/acme"</c>.</summary>
+    public string AcmePathPrefix { get; set; } = "/acme";
 }

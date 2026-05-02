@@ -19,12 +19,32 @@ public sealed class NipCaService
     private readonly NipCaOptions  _opts;
     private readonly INipCaStore   _store;
     private readonly NipKeyManager _keys;
+    private readonly Lazy<X509Certificate2> _rootCert;
 
     public NipCaService(NipCaOptions opts, INipCaStore store, NipKeyManager keys)
     {
-        _opts  = opts;
-        _store = store;
-        _keys  = keys;
+        _opts     = opts;
+        _store    = store;
+        _keys     = keys;
+        _rootCert = new Lazy<X509Certificate2>(CreateRootCert);
+    }
+
+    /// <summary>
+    /// Self-signed root certificate for this CA, generated once from the
+    /// persistent CA key. Stable across calls within a process lifetime;
+    /// regenerated (same key, new validity window) on restart.
+    /// Used by the ACME server and the X.509 registration endpoint.
+    /// </summary>
+    public X509Certificate2 CaRootCert => _rootCert.Value;
+
+    private X509Certificate2 CreateRootCert()
+    {
+        var serial = new byte[16];
+        RandomNumberGenerator.Fill(serial);
+        serial[0] &= 0x7F;
+        if (serial[0] == 0) serial[0] = 0x01;
+        var now = DateTimeOffset.UtcNow;
+        return NipX509Builder.IssueRoot(_opts.CaNid, _keys.PrivateKey, now, now.AddYears(10), serial);
     }
 
     // ── Register (Agent / Node) ───────────────────────────────────────────────
@@ -106,15 +126,26 @@ public sealed class NipCaService
         string                 pubKey,
         IReadOnlyList<string>  capabilities,
         string                 scopeJson,
-        X509Certificate2       rootCert,
+        X509Certificate2?      rootCert       = null,
         AssuranceLevel         assuranceLevel = AssuranceLevel.Anonymous,
         string?                metadataJson   = null,
         CancellationToken      ct             = default)
     {
+        rootCert ??= CaRootCert;
+
         var nid      = BuildNid(entityType, identifier);
         var existing = await _store.GetByNidAsync(nid, ct);
         if (existing is not null)
             throw new NipCaException($"NID already exists: {nid}", NipErrorCodes.NidAlreadyExists);
+
+        if (_opts.AllowedCapabilities is not null)
+        {
+            var disallowed = capabilities.Where(c => !_opts.AllowedCapabilities.Contains(c)).ToList();
+            if (disallowed.Count > 0)
+                throw new NipCaException(
+                    $"Capabilities not permitted by this CA: {string.Join(", ", disallowed)}",
+                    NipErrorCodes.CertCapMissing);
+        }
 
         var validDays = entityType == "node" ? _opts.NodeCertValidityDays : _opts.AgentCertValidityDays;
         var now       = DateTime.UtcNow;

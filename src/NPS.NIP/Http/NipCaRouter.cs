@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
 using NPS.NIP.Ca;
+using NPS.NIP;
 
 namespace NPS.NIP.Http;
 
@@ -226,6 +227,66 @@ public static class NipCaRouter
             }
         });
 
+        // ── Agent register-x509 (NPS-RFC-0002) ───────────────────────────────
+
+        app.MapPost($"{pfx}/v1/agents/register-x509", async (HttpContext ctx, ILogger<NipCaService> log, CancellationToken ct) =>
+        {
+            if (!IsAuthorized(ctx, opts)) return Unauthorized();
+
+            var req = await ReadJson<RegisterX509Request>(ctx, log, ct);
+            if (req is null) return BadRequest("Invalid JSON body.");
+
+            if (!ValidateRegisterRequest(new RegisterRequest { Identifier = req.Identifier, PubKey = req.PubKey }, out var err))
+                return BadRequest(err!);
+
+            try
+            {
+                var frame = await ca.RegisterX509Async(
+                    "agent", req.Identifier!, req.PubKey!,
+                    req.Capabilities   ?? [],
+                    req.ScopeJson      ?? "{}",
+                    assuranceLevel:    ParseAssuranceLevel(req.AssuranceLevel),
+                    metadataJson:      req.MetadataJson,
+                    ct:                ct);
+                return Results.Json(frame, s_json, statusCode: 201);
+            }
+            catch (NipCaException ex)
+            {
+                log.LogWarning("Register agent X.509 failed: {Msg}", ex.Message);
+                return ErrorResult(ex);
+            }
+        });
+
+        // ── Node register-x509 (NPS-RFC-0002) ────────────────────────────────
+
+        app.MapPost($"{pfx}/v1/nodes/register-x509", async (HttpContext ctx, ILogger<NipCaService> log, CancellationToken ct) =>
+        {
+            if (!IsAuthorized(ctx, opts)) return Unauthorized();
+
+            var req = await ReadJson<RegisterX509Request>(ctx, log, ct);
+            if (req is null) return BadRequest("Invalid JSON body.");
+
+            if (!ValidateRegisterRequest(new RegisterRequest { Identifier = req.Identifier, PubKey = req.PubKey }, out var err))
+                return BadRequest(err!);
+
+            try
+            {
+                var frame = await ca.RegisterX509Async(
+                    "node", req.Identifier!, req.PubKey!,
+                    req.Capabilities   ?? ["nwp:query", "nwp:stream"],
+                    req.ScopeJson      ?? "{}",
+                    assuranceLevel:    ParseAssuranceLevel(req.AssuranceLevel),
+                    metadataJson:      req.MetadataJson,
+                    ct:                ct);
+                return Results.Json(frame, s_json, statusCode: 201);
+            }
+            catch (NipCaException ex)
+            {
+                log.LogWarning("Register node X.509 failed: {Msg}", ex.Message);
+                return ErrorResult(ex);
+            }
+        });
+
         // ── Agent verify (OCSP) ───────────────────────────────────────────────
 
         app.MapGet($"{pfx}/v1/agents/{{nid}}/verify", async (string nid, CancellationToken ct) =>
@@ -344,6 +405,13 @@ public static class NipCaRouter
         }
     }
 
+    private static AssuranceLevel ParseAssuranceLevel(string? raw) => raw?.ToLowerInvariant() switch
+    {
+        "attested" => AssuranceLevel.Attested,
+        "verified" => AssuranceLevel.Verified,
+        _          => AssuranceLevel.Anonymous,
+    };
+
     // ── Request DTOs ─────────────────────────────────────────────────────────
 
     private sealed class RegisterRequest
@@ -358,6 +426,16 @@ public static class NipCaRouter
     private sealed class RevokeRequest
     {
         public string? Reason { get; set; }
+    }
+
+    private sealed class RegisterX509Request
+    {
+        public string?                Identifier     { get; set; }
+        public string?                PubKey         { get; set; }
+        public IReadOnlyList<string>? Capabilities   { get; set; }
+        public string?                ScopeJson      { get; set; }
+        public string?                MetadataJson   { get; set; }
+        public string?                AssuranceLevel { get; set; }
     }
 }
 

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using NPS.NIP.Acme;
 using NPS.NIP.Ca;
 using NPS.NIP.Crypto;
 using NPS.NIP.Http;
@@ -88,6 +89,23 @@ public static class NipServiceExtensions
             sp.GetRequiredService<INipCaStore>(),
             sp.GetRequiredService<NipKeyManager>()));
 
+        // ACME server — only registered when enabled
+        if (opts.AcmeEnabled)
+        {
+            services.AddSingleton<AcmeServer>(sp =>
+            {
+                var ca   = sp.GetRequiredService<NipCaService>();
+                var keys = sp.GetRequiredService<NipKeyManager>();
+                var acmeOpts = new AcmeServerOptions
+                {
+                    PathPrefix       = opts.AcmePathPrefix,
+                    CaNid            = opts.CaNid,
+                    CertValidityDays = opts.AgentCertValidityDays,
+                };
+                return new AcmeServer(acmeOpts, ca, keys, ca.CaRootCert);
+            });
+        }
+
         return services;
     }
 
@@ -129,6 +147,20 @@ public static class NipServiceExtensions
     public static WebApplication MapNipCa(this WebApplication app)
     {
         ((IEndpointRouteBuilder)app).MapNipCa();
+        return app;
+    }
+
+    /// <summary>
+    /// Mounts the ACME middleware when <see cref="NipCaOptions.AcmeEnabled"/> is true.
+    /// Call after <c>app.MapNipCa()</c>.
+    /// </summary>
+    public static WebApplication UseNipAcme(this WebApplication app)
+    {
+        var opts = app.Services.GetRequiredService<NipCaOptions>();
+        if (!opts.AcmeEnabled) return app;
+
+        var acme = app.Services.GetRequiredService<AcmeServer>();
+        acme.MapEndpoints(app);
         return app;
     }
 }
