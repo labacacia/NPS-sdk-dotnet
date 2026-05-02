@@ -32,7 +32,7 @@ public sealed class AnchorActionSpec
 
     /// <summary>Hint of CGN cost, advertised via the NWM.</summary>
     [JsonPropertyName("estimated_npt")]
-    public uint? EstimatedNpt { get; init; }
+    public uint? EstimatedCgn { get; init; }
 
     /// <summary>Default timeout applied when <c>ActionFrame.TimeoutMs</c> is absent.</summary>
     [JsonPropertyName("timeout_ms_default")]

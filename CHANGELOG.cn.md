@@ -41,6 +41,11 @@
   `Anonymous`（与 `null` 一致）。新增 `FromWireOrAnonymous_UnknownNonEmpty_Throws` 测试，
   验证 spec m6 前向兼容规则。
 
+- **`NPS.NWP.Anchor` / `NPS.NOP` —— CGN 属性重命名**：C# 属性 `EstimatedNpt`、
+  `BudgetNpt`、`AvailableNpt` 及局部变量 `budgetNpt` 分别重命名为 `EstimatedCgn`、
+  `BudgetCgn`、`AvailableCgn`、`budgetCgn`，与套件统一的 CGN 术语对齐。
+  Wire key `estimated_npt`（NPS-AaaS §2.3 / NPS-5 §4.3）保持不变。
+
 - **全部 7 个包升至 `1.0.0-alpha.5`** —— 与 NPS 套件 alpha.5 同步。
 
 ### 测试
