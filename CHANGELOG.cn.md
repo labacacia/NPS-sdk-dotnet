@@ -8,6 +8,17 @@
 
 ---
 
+## [Unreleased]
+
+### 变更（破坏性）
+
+- **wire 字段重命名**：`AnchorActionSpec.estimated_npt` → `cgn_est`。与 alpha.5 后
+  CGN 命名规范对齐，同时与 `TopologyEventEnvelope.cgn_est` 保持一致。
+  **Wire 破坏性变更** —— 固定旧字段名的客户端升级后将看到该字段为 null。不保留别名。
+  关联 [labacacia/NPS-Dev#17](https://github.com/labacacia/NPS-Dev/issues/17)。
+
+---
+
 ## [1.0.0-alpha.5.1] —— 2026-05-02
 
 `LabAcacia.NPS.NIP`、`LabAcacia.NPS.NWP.Anchor`、`LabAcacia.NPS.NOP` 的热修复版本。

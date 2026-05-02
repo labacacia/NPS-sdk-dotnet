@@ -31,7 +31,7 @@ public sealed class AnchorActionSpec
     public required bool Async { get; init; }
 
     /// <summary>Hint of CGN cost, advertised via the NWM.</summary>
-    [JsonPropertyName("estimated_npt")]
+    [JsonPropertyName("cgn_est")]
     public uint? EstimatedCgn { get; init; }
 
     /// <summary>Default timeout applied when <c>ActionFrame.TimeoutMs</c> is absent.</summary>
