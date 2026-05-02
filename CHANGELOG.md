@@ -40,7 +40,7 @@ in the publish repo; this patch brings the published packages back in sync with 
 - **`NPS.NWP.Anchor` / `NPS.NOP` — CGN property rename**: C# properties `EstimatedNpt`,
   `BudgetNpt`, `AvailableNpt`, and local variable `budgetNpt` renamed to `EstimatedCgn`,
   `BudgetCgn`, `AvailableCgn`, `budgetCgn` to align with CGN terminology used throughout
-  the suite. Wire key `estimated_npt` (NPS-AaaS §2.3 / NPS-5 §4.3) is unchanged.
+  the suite. Wire key subsequently renamed to `cgn_est` (see [Unreleased]).
 
 ---
 
