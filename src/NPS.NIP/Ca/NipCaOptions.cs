@@ -75,4 +75,19 @@ public sealed class NipCaOptions
 
     /// <summary>Supported algorithms advertised in the well-known response. Default ["ed25519"].</summary>
     public IReadOnlyList<string> Algorithms { get; set; } = ["ed25519"];
+
+    // ── Auth ──────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Bearer token required on operator endpoints (register, revoke, renew).
+    /// Set via env NIPCA__OPERATORAPIKEY.
+    /// When null, operator auth is skipped (development only — not for production).
+    /// </summary>
+    public string? OperatorApiKey { get; set; }
+
+    /// <summary>
+    /// When non-null, only capabilities in this set may be requested at registration.
+    /// Requests with unlisted capabilities are rejected with 403.
+    /// </summary>
+    public IReadOnlySet<string>? AllowedCapabilities { get; set; }
 }

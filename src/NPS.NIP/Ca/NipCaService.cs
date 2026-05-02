@@ -52,6 +52,15 @@ public sealed class NipCaService
         if (existing is not null)
             throw new NipCaException($"NID already exists: {nid}", NipErrorCodes.NidAlreadyExists);
 
+        if (_opts.AllowedCapabilities is not null)
+        {
+            var disallowed = capabilities.Where(c => !_opts.AllowedCapabilities.Contains(c)).ToList();
+            if (disallowed.Count > 0)
+                throw new NipCaException(
+                    $"Capabilities not permitted by this CA: {string.Join(", ", disallowed)}",
+                    NipErrorCodes.CertCapMissing);
+        }
+
         var validDays = entityType == "node" ? _opts.NodeCertValidityDays : _opts.AgentCertValidityDays;
         var now       = DateTime.UtcNow;
         var expiresAt = now.AddDays(validDays);
