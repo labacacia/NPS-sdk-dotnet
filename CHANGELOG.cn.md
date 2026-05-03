@@ -8,7 +8,9 @@
 
 ---
 
-## [Unreleased]
+## [1.0.0-alpha.5.2] —— 2026-05-03
+
+`LabAcacia.NPS.NWP.Anchor` 补丁版本 —— wire 字段重命名。
 
 ### 变更（破坏性）
 

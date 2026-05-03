@@ -8,7 +8,9 @@ Until NPS reaches v1.0 stable, every repository in the suite is synchronized to 
 
 ---
 
-## [Unreleased]
+## [1.0.0-alpha.5.2] — 2026-05-03
+
+Patch release for `LabAcacia.NPS.NWP.Anchor` — wire field rename.
 
 ### Changed (Breaking)
 
