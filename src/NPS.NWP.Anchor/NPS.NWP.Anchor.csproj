@@ -9,7 +9,7 @@
     <RootNamespace>NPS.NWP.Anchor</RootNamespace>
     <PackageId>LabAcacia.NPS.NWP.Anchor</PackageId>
     <AssemblyName>NPS.NWP.Anchor</AssemblyName>
-    <Version>1.0.0-alpha.5.1</Version>
+    <Version>1.0.0-alpha.5.2</Version>
     <Description>NPS — NWP Anchor Node: stateless AaaS entry point that translates inbound ActionFrames into NOP TaskFrames (NPS-AaaS §2).</Description>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Authors>LabAcacia / INNO LOTUS PTY LTD</Authors>
