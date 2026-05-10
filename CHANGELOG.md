@@ -8,44 +8,6 @@ Until NPS reaches v1.0 stable, every repository in the suite is synchronized to 
 
 ---
 
-## [1.0.0-alpha.5.2] — 2026-05-03
-
-Patch release for `LabAcacia.NPS.NWP.Anchor` — wire field rename.
-
-### Changed (Breaking)
-
-- **wire field rename**: `AnchorActionSpec.estimated_npt` → `cgn_est`. Aligns with the
-  post-alpha.5 CGN naming convention and matches `TopologyEventEnvelope.cgn_est`.
-  **Wire breaking change** — clients pinning to the old key will see the field as null
-  after upgrade. No alias retained.
-  Closes [labacacia/NPS-Dev#17](https://github.com/labacacia/NPS-Dev/issues/17).
-
----
-
-## [1.0.0-alpha.5.1] — 2026-05-02
-
-Hotfix release for `LabAcacia.NPS.NIP`, `LabAcacia.NPS.NWP`, `LabAcacia.NPS.NWP.Anchor`, and `LabAcacia.NPS.NOP`.
-The `1.0.0-alpha.5` packages on NuGet.org were cut before four post-release commits landed
-in the publish repo; this patch brings the published packages back in sync with the source.
-
-### Changed
-
-- **`NPS.NIP` — operator auth + ACME APIs**: `NipCaOptions` gains `OperatorApiKey` (HMAC-SHA256
-  constant-time check against `X-Operator-Key`), `AcmeEnabled` (default `false`), and
-  `AcmePathPrefix` (default `"/acme"`). New `UseNipAcme(WebApplication)` extension mounts
-  the ACME middleware when `AcmeEnabled` is `true`. Required by `NPS.NipCaServer` Program.cs.
-
-- **`NPS.NWP` — `NptMeter` → `CognMeter` rename**: Static utility class `NptMeter` renamed
-  to `CognMeter`; all internal callers (`MemoryNodeMiddleware`, `NeuralWebManifest`) updated.
-  XML doc comments updated from "NPT" to "CGN/Cognon" throughout the package.
-
-- **`NPS.NWP.Anchor` / `NPS.NOP` — CGN property rename**: C# properties `EstimatedNpt`,
-  `BudgetNpt`, `AvailableNpt`, and local variable `budgetNpt` renamed to `EstimatedCgn`,
-  `BudgetCgn`, `AvailableCgn`, `budgetCgn` to align with CGN terminology used throughout
-  the suite. Wire key subsequently renamed to `cgn_est` (see [Unreleased]).
-
----
-
 ## [1.0.0-alpha.5] — 2026-05-01
 
 The .NET SDK remains the **reference implementation** for the NPS suite. This
@@ -83,11 +45,23 @@ and full NDP DNS TXT fallback resolution.
   `Anonymous` (consistent with `null`). `FromWireOrAnonymous` doc updated; `FromWireOrAnonymous_UnknownNonEmpty_Throws`
   test added to enforce spec m6 forward-compat rule.
 
-- **`NPS.NWP.Anchor` / `NPS.NOP` — CGN property rename**: C# properties `EstimatedNpt`,
-  `BudgetNpt`, `AvailableNpt`, and local variable `budgetNpt` renamed to `EstimatedCgn`,
-  `BudgetCgn`, `AvailableCgn`, `budgetCgn` respectively to align with the CGN terminology
-  used throughout the suite. Wire key `estimated_npt` (NPS-AaaS §2.3 / NPS-5 §4.3) is
-  unchanged.
+- **`NPS.NWP.Anchor` / `NPS.NOP` — CGN property + wire rename (Breaking)**: C# properties
+  `EstimatedNpt`, `BudgetNpt`, `AvailableNpt`, and local variable `budgetNpt` renamed to
+  `EstimatedCgn`, `BudgetCgn`, `AvailableCgn`, `budgetCgn`. Wire field
+  `AnchorActionSpec.estimated_npt` renamed to `cgn_est` to match
+  `TopologyEventEnvelope.cgn_est`. **Wire breaking change** — clients pinning the old key
+  will see `null` after upgrade; no alias retained. Closes
+  [labacacia/NPS-Dev#17](https://github.com/labacacia/NPS-Dev/issues/17).
+
+- **`NPS.NWP` — `NptMeter` → `CognMeter` rename**: Static utility class `NptMeter` renamed
+  to `CognMeter`; all internal callers (`MemoryNodeMiddleware`, `NeuralWebManifest`) updated.
+  XML doc comments updated from "NPT" to "CGN/Cognon" throughout the package.
+
+- **`NPS.NIP` — operator auth + ACME APIs**: `NipCaOptions` gains `OperatorApiKey`
+  (HMAC-SHA256 constant-time check against `X-Operator-Key`), `AcmeEnabled` (default
+  `false`), and `AcmePathPrefix` (default `"/acme"`). New `UseNipAcme(WebApplication)`
+  extension mounts the ACME middleware when `AcmeEnabled` is `true`. Required by
+  `NPS.NipCaServer` Program.cs.
 
 - **All 7 packages bumped to `1.0.0-alpha.5`** — synchronized with NPS suite alpha.5 release.
 

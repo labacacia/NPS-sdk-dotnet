@@ -8,42 +8,6 @@
 
 ---
 
-## [1.0.0-alpha.5.2] —— 2026-05-03
-
-`LabAcacia.NPS.NWP.Anchor` 补丁版本 —— wire 字段重命名。
-
-### 变更（破坏性）
-
-- **wire 字段重命名**：`AnchorActionSpec.estimated_npt` → `cgn_est`。与 alpha.5 后
-  CGN 命名规范对齐，同时与 `TopologyEventEnvelope.cgn_est` 保持一致。
-  **Wire 破坏性变更** —— 固定旧字段名的客户端升级后将看到该字段为 null。不保留别名。
-  关联 [labacacia/NPS-Dev#17](https://github.com/labacacia/NPS-Dev/issues/17)。
-
----
-
-## [1.0.0-alpha.5.1] —— 2026-05-02
-
-`LabAcacia.NPS.NIP`、`LabAcacia.NPS.NWP.Anchor`、`LabAcacia.NPS.NOP` 的热修复版本。
-NuGet.org 上的 `1.0.0-alpha.5` 包在三个后续提交落地前就已打包；此 patch 让发布包
-与源码重新对齐。
-
-### 变更
-
-- **`NPS.NIP` —— 运营商鉴权 + ACME API**：`NipCaOptions` 新增 `OperatorApiKey`（对
-  `X-Operator-Key` 做 HMAC-SHA256 恒时比较）、`AcmeEnabled`（默认 `false`）、
-  `AcmePathPrefix`（默认 `"/acme"`）。新增扩展方法 `UseNipAcme(WebApplication)`，
-  在 `AcmeEnabled` 为 `true` 时挂载 ACME 中间件。`NPS.NipCaServer` 的 Program.cs 依赖这些 API。
-
-- **`NPS.NWP` —— `NptMeter` → `CognMeter` 重命名**：静态工具类 `NptMeter` 重命名为
-  `CognMeter`；所有内部调用方（`MemoryNodeMiddleware`、`NeuralWebManifest`）同步更新。
-  包内所有 XML 文档注释由 "NPT" 改为 "CGN/Cognon"。
-
-- **`NPS.NWP.Anchor` / `NPS.NOP` —— CGN 属性重命名**：C# 属性 `EstimatedNpt`、`BudgetNpt`、
-  `AvailableNpt` 及局部变量 `budgetNpt` 重命名为 `EstimatedCgn`、`BudgetCgn`、`AvailableCgn`、
-  `budgetCgn`，与套件全局 CGN 术语保持一致。Wire 键后续重命名为 `cgn_est`（见 [Unreleased]）。
-
----
-
 ## [1.0.0-alpha.5] —— 2026-05-01
 
 .NET SDK 仍是 NPS 套件的**参考实现**。本次带来 alpha.5 规范（STH gossip 错误码、
@@ -77,10 +41,22 @@ NuGet.org 上的 `1.0.0-alpha.5` 包在三个后续提交落地前就已打包�
   `Anonymous`（与 `null` 一致）。新增 `FromWireOrAnonymous_UnknownNonEmpty_Throws` 测试，
   验证 spec m6 前向兼容规则。
 
-- **`NPS.NWP.Anchor` / `NPS.NOP` —— CGN 属性重命名**：C# 属性 `EstimatedNpt`、
-  `BudgetNpt`、`AvailableNpt` 及局部变量 `budgetNpt` 分别重命名为 `EstimatedCgn`、
-  `BudgetCgn`、`AvailableCgn`、`budgetCgn`，与套件统一的 CGN 术语对齐。
-  Wire key `estimated_npt`（NPS-AaaS §2.3 / NPS-5 §4.3）保持不变。
+- **`NPS.NWP.Anchor` / `NPS.NOP` —— CGN 属性 + wire 重命名（破坏性）**：C# 属性
+  `EstimatedNpt`、`BudgetNpt`、`AvailableNpt` 及局部变量 `budgetNpt` 重命名为
+  `EstimatedCgn`、`BudgetCgn`、`AvailableCgn`、`budgetCgn`。Wire 字段
+  `AnchorActionSpec.estimated_npt` 重命名为 `cgn_est`，与
+  `TopologyEventEnvelope.cgn_est` 保持一致。**Wire 破坏性变更** —— 固定旧字段名的
+  客户端升级后将看到该字段为 null，不保留别名。关联
+  [labacacia/NPS-Dev#17](https://github.com/labacacia/NPS-Dev/issues/17)。
+
+- **`NPS.NWP` —— `NptMeter` → `CognMeter` 重命名**：静态工具类 `NptMeter` 重命名为
+  `CognMeter`；所有内部调用方（`MemoryNodeMiddleware`、`NeuralWebManifest`）同步更新。
+  包内所有 XML 文档注释由 "NPT" 改为 "CGN/Cognon"。
+
+- **`NPS.NIP` —— 运营商鉴权 + ACME API**：`NipCaOptions` 新增 `OperatorApiKey`（对
+  `X-Operator-Key` 做 HMAC-SHA256 恒时比较）、`AcmeEnabled`（默认 `false`）、
+  `AcmePathPrefix`（默认 `"/acme"`）。新增扩展方法 `UseNipAcme(WebApplication)`，
+  在 `AcmeEnabled` 为 `true` 时挂载 ACME 中间件。`NPS.NipCaServer` 的 Program.cs 依赖这些 API。
 
 - **全部 7 个包升至 `1.0.0-alpha.5`** —— 与 NPS 套件 alpha.5 同步。
 
