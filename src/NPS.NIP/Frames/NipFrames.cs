@@ -106,6 +106,18 @@ public sealed record IdentFrame : IFrame
     /// </summary>
     [JsonPropertyName("cert_chain")]
     public IReadOnlyList<string>? CertChain { get; init; }
+
+    /// <summary>
+    /// Signed lineage metadata (NPS-CR-0003 §5.1.3). Present when this
+    /// IdentFrame represents an orchestrator group NID
+    /// (<c>lineage.role = "group"</c>) or a short-lived session NID
+    /// (<c>lineage.role = "session"</c>); absent on ordinary single-NID
+    /// agents. Unlike <see cref="Metadata"/>, this field IS part of the
+    /// signed canonical JSON — modifying any sub-field invalidates the
+    /// CA signature.
+    /// </summary>
+    [JsonPropertyName("lineage")]
+    public IdentLineage? Lineage { get; init; }
 }
 
 /// <summary>String constants for <see cref="IdentFrame.CertFormat"/>
@@ -134,6 +146,57 @@ public sealed record IdentMetadata
 
     /// <summary>Runtime identifier, e.g. <c>"langchain/0.2"</c>.</summary>
     public string? Runtime { get; init; }
+}
+
+/// <summary>
+/// Signed lineage object (NPS-CR-0003 §5.1.3). Carries the parent / group
+/// chain that links a short-lived session NID back to its orchestrator
+/// group and records who owns / authorised the group.
+/// <para>
+/// All sub-fields are part of the IdentFrame's signed canonical JSON.
+/// Absent fields are simply omitted from the canonical form (sorted
+/// alphabetically per NPS-3 §5.1).
+/// </para>
+/// </summary>
+public sealed record IdentLineage
+{
+    /// <summary>Lineage role: <c>"group"</c> or <c>"session"</c>.</summary>
+    [JsonPropertyName("role")]
+    public required string Role { get; init; }
+
+    /// <summary>Immediate parent NID (session only).</summary>
+    [JsonPropertyName("parent_nid")]
+    public string? ParentNid { get; init; }
+
+    /// <summary>Group NID at the root of the chain (session only).</summary>
+    [JsonPropertyName("group_nid")]
+    public string? GroupNid { get; init; }
+
+    /// <summary>Stable session id (session only); matches the URN's <c>session-...</c> segment.</summary>
+    [JsonPropertyName("session_id")]
+    public string? SessionId { get; init; }
+
+    /// <summary>Free-form human-readable label (≤256 UTF-8 bytes).</summary>
+    [JsonPropertyName("purpose")]
+    public string? Purpose { get; init; }
+
+    /// <summary>Stable identifier of the human owner this group acts on behalf of.</summary>
+    [JsonPropertyName("owner_user_id")]
+    public string? OwnerUserId { get; init; }
+
+    /// <summary>kid hint identifying the owner-key that authorised group creation.</summary>
+    [JsonPropertyName("owner_key_id")]
+    public string? OwnerKeyId { get; init; }
+}
+
+/// <summary>String constants for <see cref="IdentLineage.Role"/> (NPS-CR-0003).</summary>
+public static class IdentLineageRole
+{
+    /// <summary>Orchestrator group NID — trust anchor for sessions.</summary>
+    public const string Group   = "group";
+
+    /// <summary>Short-lived session NID, chained to a group via <see cref="IdentLineage.ParentNid"/>.</summary>
+    public const string Session = "session";
 }
 
 // ── TrustFrame (0x21) ────────────────────────────────────────────────────────
@@ -206,7 +269,9 @@ public sealed record RevokeFrame : IFrame
 
     /// <summary>
     /// Revocation reason. One of: <c>key_compromise</c>, <c>ca_compromise</c>,
-    /// <c>affiliation_changed</c>, <c>superseded</c>, <c>cessation_of_operation</c>.
+    /// <c>affiliation_changed</c>, <c>superseded</c>, <c>cessation_of_operation</c>,
+    /// or <c>parent_revoked</c> (NPS-CR-0003 §5.3 — set by the CA on session
+    /// RevokeFrames emitted as part of cascade revocation).
     /// </summary>
     public required string Reason { get; init; }
 

@@ -5,16 +5,15 @@ namespace NPS.NIP.X509;
 
 /// <summary>
 /// OID constants for NPS-RFC-0002 X.509 NID certificates. EKU OIDs and the
-/// custom <c>nid-assurance-level</c> extension live under a LabAcacia IANA
-/// Private Enterprise Number (PEN) arc once assigned. Until then the
-/// prototype uses the documented <b>provisional</b> arc
-/// <c>1.3.6.1.4.1.99999</c> reserved for testing purposes — see
-/// NPS-RFC-0002 §10 OQ-2.
+/// custom <c>nid-assurance-level</c> / <c>id-nps-node-roles</c> extensions
+/// live under the LabAcacia IANA Private Enterprise Number (PEN) arc
+/// <c>1.3.6.1.4.1.65715</c> (assigned 2026-05-08; see NPS-CR-0004 and
+/// NPS-RFC-0002 §10 OQ-2).
 /// </summary>
 public static class NpsX509Oids
 {
-    /// <summary>Provisional LabAcacia PEN arc — <b>MUST</b> be replaced once IANA assigns the real PEN.</summary>
-    public const string LabAcaciaPenArc = "1.3.6.1.4.1.99999";
+    /// <summary>LabAcacia IANA-assigned PEN arc (NPS-CR-0004, 2026-05-08).</summary>
+    public const string LabAcaciaPenArc = "1.3.6.1.4.1.65715";
 
     /// <summary>EKU sub-arc (<c>{PEN}.1.x</c>): NPS Extended Key Usages.</summary>
     public const string EkuArc = LabAcaciaPenArc + ".1";
@@ -39,6 +38,12 @@ public static class NpsX509Oids
     /// (NPS-RFC-0002 §4.1).
     /// </summary>
     public const string NidAssuranceLevel        = ExtensionArc + ".1";
+
+    /// <summary>
+    /// Custom non-critical extension OID — encodes the NPS node role set
+    /// (NPS-CR-0004 reservation; no consumer wired in yet).
+    /// </summary>
+    public const string IdNpsNodeRoles           = ExtensionArc + ".2";
 
     /// <summary>RFC 8410 — Ed25519 in X.509 (algorithm identifier OID).</summary>
     public const string Ed25519                  = "1.3.101.112";

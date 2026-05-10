@@ -45,6 +45,40 @@ public sealed class NipCaOptions
     /// <summary>Renewal window in days before expiry. Default 7 (NPS-3 §6).</summary>
     public int RenewalWindowDays { get; set; } = 7;
 
+    /// <summary>
+    /// Orchestrator group NID validity in days. Default 365.
+    /// Group NIDs are longer-lived than agent NIDs because they are the
+    /// trust anchor for many short-lived sessions (NPS-CR-0003 §5.1.3).
+    /// </summary>
+    public int GroupCertValidityDays { get; set; } = 365;
+
+    /// <summary>
+    /// Default validity for session NIDs when the issue request does not
+    /// specify <c>validity_seconds</c>. Default 1 hour (NPS-CR-0003 §5.1.3).
+    /// </summary>
+    public TimeSpan SessionDefaultValidity { get; set; } = TimeSpan.FromHours(1);
+
+    /// <summary>
+    /// Maximum permitted session validity. Requests above this are rejected
+    /// with <c>NIP-CA-SESSION-VALIDITY-INVALID</c>. Default 24 hours
+    /// (NPS-CR-0003 §5.1.3).
+    /// </summary>
+    public TimeSpan SessionMaxValidity { get; set; } = TimeSpan.FromHours(24);
+
+    /// <summary>
+    /// Minimum permitted session validity. Default 60 seconds. Below this is
+    /// rejected with <c>NIP-CA-SESSION-VALIDITY-INVALID</c> — too short to be
+    /// usable in practice.
+    /// </summary>
+    public TimeSpan SessionMinValidity { get; set; } = TimeSpan.FromMinutes(1);
+
+    /// <summary>
+    /// Allowed clock-skew window for the group-JWS <c>iat</c> on a
+    /// session-issue request. Default ±5 minutes. Outside this window the
+    /// CA returns <c>NIP-CA-JWS-EXPIRED</c> (NPS-CR-0003 §5.1.3 / §3.5).
+    /// </summary>
+    public TimeSpan SessionJwsClockSkew { get; set; } = TimeSpan.FromMinutes(5);
+
     // ── Exposure ──────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -61,8 +95,13 @@ public sealed class NipCaOptions
 
     // ── Database ──────────────────────────────────────────────────────────────
 
-    /// <summary>PostgreSQL connection string for certificate storage.</summary>
-    public required string ConnectionString { get; set; }
+    /// <summary>
+    /// Connection string for certificate storage.
+    /// Required when using the default PostgreSQL backend via <c>AddNipCa()</c>.
+    /// Not needed when supplying a custom <c>INipCaStore</c> via
+    /// <c>AddNipCa(..., INipCaStore)</c> or <c>AddNipCaWithSqlite()</c>.
+    /// </summary>
+    public string? ConnectionString { get; set; }
 
     // ── Security ──────────────────────────────────────────────────────────────
 

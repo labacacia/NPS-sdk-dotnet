@@ -28,10 +28,12 @@ public sealed class PostgreSqlNipCaStore : INipCaStore
         const string sql = """
             INSERT INTO nip_certificates
                 (nid, entity_type, serial, pub_key, capabilities, scope_json,
-                 issued_by, issued_at, expires_at, metadata_json)
+                 issued_by, issued_at, expires_at, metadata_json,
+                 nid_role, parent_nid, lineage_json)
             VALUES
                 (@Nid, @EntityType, @Serial, @PubKey, @Capabilities, @ScopeJson::jsonb,
-                 @IssuedBy, @IssuedAt, @ExpiresAt, @MetadataJson::jsonb)
+                 @IssuedBy, @IssuedAt, @ExpiresAt, @MetadataJson::jsonb,
+                 @NidRole, @ParentNid, @LineageJson::jsonb)
             """;
 
         await using var conn = new NpgsqlConnection(_connectionString);
@@ -48,6 +50,9 @@ public sealed class PostgreSqlNipCaStore : INipCaStore
             record.IssuedAt,
             record.ExpiresAt,
             MetadataJson = record.MetadataJson ?? "null",
+            record.NidRole,
+            record.ParentNid,
+            LineageJson  = record.LineageJson  ?? "null",
         }, cancellationToken: ct));
     }
 
@@ -115,6 +120,19 @@ public sealed class PostgreSqlNipCaStore : INipCaStore
         return rows.Select(MapRow).ToList();
     }
 
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<NipCertRecord>> GetByParentNidAsync(
+        string parentNid, CancellationToken ct = default)
+    {
+        const string sql =
+            "SELECT * FROM nip_certificates WHERE parent_nid = @ParentNid ORDER BY issued_at DESC";
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        var rows = await conn.QueryAsync<CertRow>(
+            new CommandDefinition(sql, new { ParentNid = parentNid }, cancellationToken: ct));
+        return rows.Select(MapRow).ToList();
+    }
+
     // ── Private ───────────────────────────────────────────────────────────────
 
     // Dapper row model (snake_case column names)
@@ -132,6 +150,9 @@ public sealed class PostgreSqlNipCaStore : INipCaStore
         public DateTime? Revoked_at   { get; set; }
         public string?  Revoke_reason { get; set; }
         public string?  Metadata_json { get; set; }
+        public string?  Nid_role      { get; set; }
+        public string?  Parent_nid    { get; set; }
+        public string?  Lineage_json  { get; set; }
     }
 
     private static NipCertRecord MapRow(CertRow r) => new()
@@ -150,5 +171,8 @@ public sealed class PostgreSqlNipCaStore : INipCaStore
             : null,
         RevokeReason = r.Revoke_reason,
         MetadataJson = r.Metadata_json,
+        NidRole      = r.Nid_role,
+        ParentNid    = r.Parent_nid,
+        LineageJson  = r.Lineage_json,
     };
 }

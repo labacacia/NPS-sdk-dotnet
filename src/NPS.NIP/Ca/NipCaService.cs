@@ -206,6 +206,235 @@ public sealed class NipCaService
         };
     }
 
+    // ── Register Group (NPS-CR-0003) ──────────────────────────────────────────
+
+    /// <summary>
+    /// Registers a new orchestrator group NID and issues an
+    /// <see cref="IdentFrame"/> with <c>lineage.role = "group"</c>
+    /// (NPS-CR-0003 §5.1.3). Group NIDs are longer-lived than agent NIDs
+    /// (default <see cref="NipCaOptions.GroupCertValidityDays"/> = 365)
+    /// and act as the trust anchor for short-lived session NIDs issued
+    /// via <see cref="IssueSessionAsync"/>.
+    /// </summary>
+    /// <param name="identifier">
+    /// Identifier portion of the group NID. Either supply an explicit
+    /// value (MUST start with the reserved prefix <c>group-</c>) or pass
+    /// <c>null</c> / empty to have the CA mint
+    /// <c>group-{uuid}</c> automatically.
+    /// </param>
+    /// <param name="ownerUserId">Stable identifier of the human owner.</param>
+    /// <param name="ownerKeyId">Owner-key kid hint (Operator key, OIDC sub, hardware-token id).</param>
+    public async Task<IdentFrame> RegisterGroupAsync(
+        string?               identifier,
+        string                pubKey,
+        IReadOnlyList<string> capabilities,
+        string                scopeJson,
+        string?               ownerUserId  = null,
+        string?               ownerKeyId   = null,
+        string?               metadataJson = null,
+        CancellationToken     ct           = default)
+    {
+        if (string.IsNullOrEmpty(identifier))
+            identifier = "group-" + Guid.NewGuid().ToString("N");
+        else if (!identifier.StartsWith("group-", StringComparison.Ordinal))
+            throw new NipCaException(
+                $"Group identifier MUST start with reserved prefix 'group-' (got '{identifier}'). NPS-3 §3.1.",
+                NipErrorCodes.NidAlreadyExists);
+
+        var nid      = BuildNid("agent", identifier);
+        var existing = await _store.GetByNidAsync(nid, ct);
+        if (existing is not null)
+            throw new NipCaException($"NID already exists: {nid}", NipErrorCodes.NidAlreadyExists);
+
+        if (_opts.AllowedCapabilities is not null)
+        {
+            var disallowed = capabilities.Where(c => !_opts.AllowedCapabilities.Contains(c)).ToList();
+            if (disallowed.Count > 0)
+                throw new NipCaException(
+                    $"Capabilities not permitted by this CA: {string.Join(", ", disallowed)}",
+                    NipErrorCodes.CertCapMissing);
+        }
+
+        var now       = DateTime.UtcNow;
+        var expiresAt = now.AddDays(_opts.GroupCertValidityDays);
+        var serial    = await _store.NextSerialAsync(ct);
+
+        var lineage = new IdentLineage
+        {
+            Role        = IdentLineageRole.Group,
+            OwnerUserId = ownerUserId,
+            OwnerKeyId  = ownerKeyId,
+        };
+        var lineageJson = JsonSerializer.Serialize(lineage, s_jsonOpts);
+
+        var frame = IssueFrame(nid, pubKey, capabilities, scopeJson,
+            now, expiresAt, serial, metadataJson, lineage: lineage);
+
+        var record = new NipCertRecord
+        {
+            Nid          = nid,
+            EntityType   = "agent",
+            Serial       = serial,
+            PubKey       = pubKey,
+            Capabilities = capabilities.ToArray(),
+            ScopeJson    = scopeJson,
+            IssuedBy     = _opts.CaNid,
+            IssuedAt     = now,
+            ExpiresAt    = expiresAt,
+            MetadataJson = metadataJson,
+            NidRole      = IdentLineageRole.Group,
+            ParentNid    = null,
+            LineageJson  = lineageJson,
+        };
+        await _store.SaveAsync(record, ct);
+
+        return frame;
+    }
+
+    // ── Issue Session (NPS-CR-0003) ───────────────────────────────────────────
+
+    /// <summary>
+    /// Issues a short-lived session NID under <paramref name="groupNid"/>
+    /// (NPS-CR-0003 §5.1.3). The caller MUST already have proven authority
+    /// — this method assumes the group-JWS verification or Operator-API-key
+    /// check has been done at the HTTP layer; the group existence /
+    /// not-revoked check happens here.
+    /// </summary>
+    /// <param name="groupNid">Group NID under which to mint the session.</param>
+    /// <param name="sessionPubKey">Session keypair public half (<c>ed25519:&lt;b64url&gt;</c>).</param>
+    /// <param name="validity">
+    /// Requested session lifetime. Clamped to
+    /// <see cref="NipCaOptions.SessionMinValidity"/> /
+    /// <see cref="NipCaOptions.SessionMaxValidity"/>; out-of-range
+    /// requests throw <c>NIP-CA-SESSION-VALIDITY-INVALID</c>. Defaults to
+    /// <see cref="NipCaOptions.SessionDefaultValidity"/> when null.
+    /// </param>
+    /// <param name="purpose">Optional human-readable label (≤256 UTF-8 bytes).</param>
+    /// <param name="capabilities">
+    /// Capabilities for the session. Defaults to the group's capabilities
+    /// (subset enforcement: session capabilities MUST NOT exceed group's).
+    /// </param>
+    /// <param name="scopeJson">
+    /// Scope JSON for the session. Defaults to the group's scope (no
+    /// scope expansion per NIP §10.3).
+    /// </param>
+    public async Task<IdentFrame> IssueSessionAsync(
+        string                 groupNid,
+        string                 sessionPubKey,
+        TimeSpan?              validity     = null,
+        string?                purpose      = null,
+        IReadOnlyList<string>? capabilities = null,
+        string?                scopeJson    = null,
+        string?                metadataJson = null,
+        CancellationToken      ct           = default)
+    {
+        // 1. Resolve + validate group
+        var group = await _store.GetByNidAsync(groupNid, ct)
+            ?? throw new NipCaException(
+                $"Group NID not found: {groupNid}.", NipErrorCodes.ParentNotFound);
+
+        if (group.NidRole != IdentLineageRole.Group)
+            throw new NipCaException(
+                $"NID '{groupNid}' is not registered as a group (role='{group.NidRole ?? "<null>"}').",
+                NipErrorCodes.ParentNotGroup);
+
+        if (group.RevokedAt.HasValue)
+            throw new NipCaException(
+                $"Group {groupNid} was revoked at {group.RevokedAt:O}; cannot issue new sessions.",
+                NipErrorCodes.GroupRevoked);
+
+        if (DateTime.UtcNow > group.ExpiresAt)
+            throw new NipCaException(
+                $"Group {groupNid} expired at {group.ExpiresAt:O}; cannot issue new sessions.",
+                NipErrorCodes.CertExpired);
+
+        // 2. Validate validity window
+        var v = validity ?? _opts.SessionDefaultValidity;
+        if (v < _opts.SessionMinValidity || v > _opts.SessionMaxValidity)
+            throw new NipCaException(
+                $"Session validity must be in [{_opts.SessionMinValidity}, {_opts.SessionMaxValidity}]; got {v}.",
+                NipErrorCodes.SessionValidityInvalid);
+
+        // 3. Subset checks (no scope expansion past the group)
+        var sessionCaps = capabilities ?? group.Capabilities;
+        if (capabilities is not null)
+        {
+            var groupCapSet = new HashSet<string>(group.Capabilities, StringComparer.Ordinal);
+            var expansion   = sessionCaps.Where(c => !groupCapSet.Contains(c)).ToList();
+            if (expansion.Count > 0)
+                throw new NipCaException(
+                    $"Session capabilities not in parent group: {string.Join(", ", expansion)}.",
+                    NipErrorCodes.ScopeExpansion);
+        }
+        var sessionScopeJson = scopeJson ?? group.ScopeJson;
+
+        // 4. Build session NID
+        var unixSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var randHex     = RandomHex(8);
+        var sessionId   = $"session-{unixSeconds}-{randHex}";
+        var sessionNid  = BuildNid("agent", sessionId);
+
+        var now       = DateTime.UtcNow;
+        var expiresAt = now.Add(v);
+        var serial    = await _store.NextSerialAsync(ct);
+
+        // 5. Lineage
+        var lineage = new IdentLineage
+        {
+            Role        = IdentLineageRole.Session,
+            ParentNid   = groupNid,
+            GroupNid    = groupNid,
+            SessionId   = sessionId,
+            Purpose     = purpose,
+            OwnerUserId = ExtractOwnerUserId(group.LineageJson),
+            OwnerKeyId  = ExtractOwnerKeyId(group.LineageJson),
+        };
+        var lineageJson = JsonSerializer.Serialize(lineage, s_jsonOpts);
+
+        // 6. Issue + persist
+        var frame = IssueFrame(sessionNid, sessionPubKey, sessionCaps, sessionScopeJson,
+            now, expiresAt, serial, metadataJson, lineage: lineage);
+
+        var record = new NipCertRecord
+        {
+            Nid          = sessionNid,
+            EntityType   = "agent",
+            Serial       = serial,
+            PubKey       = sessionPubKey,
+            Capabilities = sessionCaps.ToArray(),
+            ScopeJson    = sessionScopeJson,
+            IssuedBy     = _opts.CaNid,
+            IssuedAt     = now,
+            ExpiresAt    = expiresAt,
+            MetadataJson = metadataJson,
+            NidRole      = IdentLineageRole.Session,
+            ParentNid    = groupNid,
+            LineageJson  = lineageJson,
+        };
+        await _store.SaveAsync(record, ct);
+
+        return frame;
+    }
+
+    /// <summary>
+    /// Lists every session NID issued under <paramref name="groupNid"/>
+    /// (NPS-CR-0003 §8 audit endpoint). Includes both live and revoked
+    /// records — callers filter on <see cref="NipCertRecord.RevokedAt"/>
+    /// as needed.
+    /// </summary>
+    public Task<IReadOnlyList<NipCertRecord>> ListSessionsAsync(
+        string groupNid, CancellationToken ct = default) =>
+        _store.GetByParentNidAsync(groupNid, ct);
+
+    /// <summary>
+    /// Returns the persisted certificate record for <paramref name="nid"/>,
+    /// or <c>null</c> if not found. Exposed so HTTP handlers can perform
+    /// pre-flight checks (group existence / role / revocation) before
+    /// invoking <see cref="IssueSessionAsync"/>.
+    /// </summary>
+    public Task<NipCertRecord?> GetCertAsync(string nid, CancellationToken ct = default) =>
+        _store.GetByNidAsync(nid, ct);
+
     // ── Renew ─────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -260,6 +489,17 @@ public sealed class NipCaService
 
     /// <summary>
     /// Revokes a certificate immediately and returns the signed RevokeFrame.
+    /// <para>
+    /// When the target NID is an orchestrator group (NPS-CR-0003 §5.1.3),
+    /// every live session NID under that group is also revoked, with
+    /// reason <c>parent_revoked</c> (NPS-3 §5.3). The cascade is recorded
+    /// in the store so the standard CRL endpoint surfaces them; per-session
+    /// RevokeFrames are not returned to the caller (the response is the
+    /// group's RevokeFrame). Cascading is best-effort — a failure to
+    /// persist a child revocation is logged but does not abort the parent
+    /// revocation, since defense-in-depth is provided by the verify-time
+    /// chain check (NPS-3 §7 step 3a).
+    /// </para>
     /// </summary>
     public async Task<RevokeFrame> RevokeAsync(string nid, string reason, CancellationToken ct = default)
     {
@@ -270,6 +510,17 @@ public sealed class NipCaService
         var revoked  = await _store.RevokeAsync(nid, reason, now, ct);
         if (!revoked)
             throw new NipCaException($"Failed to revoke {nid}.", NipErrorCodes.NidNotFound);
+
+        // Cascade revoke live sessions if this is a group
+        if (record.NidRole == IdentLineageRole.Group)
+        {
+            var children = await _store.GetByParentNidAsync(nid, ct);
+            foreach (var child in children)
+            {
+                if (child.RevokedAt.HasValue) continue;
+                await _store.RevokeAsync(child.Nid, "parent_revoked", now, ct);
+            }
+        }
 
         // Build RevokeFrame for signing (signature excluded from canonical form)
         var payload = new
@@ -295,8 +546,11 @@ public sealed class NipCaService
     // ── Verify (OCSP) ─────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Verifies a NID: checks existence, expiry, revocation status, and signature.
-    /// Returns a <see cref="NipVerifyResult"/> describing the outcome.
+    /// Verifies a NID: checks existence, expiry, revocation status, and
+    /// — when the record is a session (NPS-CR-0003 §5.1.3) — chains up to
+    /// the group and rejects if the parent is revoked or expired
+    /// (NPS-3 §7 step 3a). Returns a <see cref="NipVerifyResult"/>
+    /// describing the outcome.
     /// </summary>
     public async Task<NipVerifyResult> VerifyAsync(string nid, CancellationToken ct = default)
     {
@@ -311,6 +565,21 @@ public sealed class NipCaService
         if (DateTime.UtcNow > record.ExpiresAt)
             return NipVerifyResult.Fail(NipErrorCodes.CertExpired,
                 $"Expired at {record.ExpiresAt:O}.");
+
+        // Chain check — NPS-3 §7 step 3a (NPS-CR-0003).
+        if (!string.IsNullOrEmpty(record.ParentNid))
+        {
+            var parent = await _store.GetByNidAsync(record.ParentNid, ct);
+            if (parent is null)
+                return NipVerifyResult.Fail(NipErrorCodes.ParentRevoked,
+                    $"Parent NID {record.ParentNid} not found.");
+            if (parent.RevokedAt.HasValue)
+                return NipVerifyResult.Fail(NipErrorCodes.ParentRevoked,
+                    $"Parent {record.ParentNid} revoked at {parent.RevokedAt:O}: {parent.RevokeReason}");
+            if (DateTime.UtcNow > parent.ExpiresAt)
+                return NipVerifyResult.Fail(NipErrorCodes.ParentRevoked,
+                    $"Parent {record.ParentNid} expired at {parent.ExpiresAt:O}.");
+        }
 
         return NipVerifyResult.Ok(record);
     }
@@ -348,42 +617,21 @@ public sealed class NipCaService
         DateTime issuedAt, DateTime expiresAt,
         string serial,
         string? metadataJson,
-        AssuranceLevel? assuranceLevel = null)
+        AssuranceLevel? assuranceLevel = null,
+        IdentLineage? lineage = null)
     {
         var scope   = JsonDocument.Parse(scopeJson).RootElement;
         var issuedAtStr  = issuedAt.ToString("O");
         var expiresAtStr = expiresAt.ToString("O");
 
         // Canonical payload for signing — alphabetical order is enforced by
-        // NipSigner.CanonicalJson. We include assurance_level in the signed
-        // payload only when set, matching the wire convention that an absent
-        // field defaults to "anonymous" for backward compatibility.
-        object payload = assuranceLevel is null
-            ? new
-              {
-                  capabilities,
-                  expires_at = expiresAtStr,
-                  frame      = "0x20",
-                  issued_at  = issuedAtStr,
-                  issued_by  = _opts.CaNid,
-                  nid,
-                  pub_key    = pubKey,
-                  scope,
-                  serial,
-              }
-            : new
-              {
-                  assurance_level = assuranceLevel.Value,
-                  capabilities,
-                  expires_at = expiresAtStr,
-                  frame      = "0x20",
-                  issued_at  = issuedAtStr,
-                  issued_by  = _opts.CaNid,
-                  nid,
-                  pub_key    = pubKey,
-                  scope,
-                  serial,
-              };
+        // NipSigner.CanonicalJson. assurance_level and lineage are included
+        // in the signed payload only when set; absent fields are omitted so
+        // frames issued without these features remain bit-compatible with
+        // pre-RFC-0003 / pre-CR-0003 verifiers (NPS-3 §5.1, §5.1.3).
+        object payload = BuildSignedPayload(
+            nid, pubKey, capabilities, scope, issuedAtStr, expiresAtStr,
+            serial, assuranceLevel, lineage);
         var signature = NipSigner.Sign(_keys.PrivateKey, payload);
 
         IdentMetadata? metadata = null;
@@ -403,7 +651,38 @@ public sealed class NipCaService
             Signature      = signature,
             Metadata       = metadata,
             AssuranceLevel = assuranceLevel,
+            Lineage        = lineage,
         };
+    }
+
+    private object BuildSignedPayload(
+        string nid, string pubKey,
+        IReadOnlyList<string> capabilities,
+        JsonElement scope,
+        string issuedAtStr, string expiresAtStr,
+        string serial,
+        AssuranceLevel? assuranceLevel,
+        IdentLineage? lineage)
+    {
+        // Build a Dictionary so we can add fields conditionally. NipSigner
+        // re-orders alphabetically anyway; this keeps the call sites simple.
+        var payload = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["capabilities"] = capabilities,
+            ["expires_at"]   = expiresAtStr,
+            ["frame"]        = "0x20",
+            ["issued_at"]    = issuedAtStr,
+            ["issued_by"]    = _opts.CaNid,
+            ["nid"]          = nid,
+            ["pub_key"]      = pubKey,
+            ["scope"]        = scope,
+            ["serial"]       = serial,
+        };
+        if (assuranceLevel is not null)
+            payload["assurance_level"] = assuranceLevel.Value;
+        if (lineage is not null)
+            payload["lineage"] = lineage;
+        return payload;
     }
 
     private static readonly JsonSerializerOptions s_jsonOpts = new()
@@ -449,6 +728,34 @@ public sealed class NipCaService
 
     private static string Base64Url(byte[] data) =>
         Convert.ToBase64String(data).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+    // ── Lineage helpers (NPS-CR-0003) ─────────────────────────────────────────
+
+    private static string RandomHex(int byteLength)
+    {
+        var buf = new byte[byteLength];
+        RandomNumberGenerator.Fill(buf);
+        return Convert.ToHexString(buf).ToLowerInvariant();
+    }
+
+    private static string? ExtractOwnerUserId(string? lineageJson) =>
+        ExtractLineageString(lineageJson, "owner_user_id");
+
+    private static string? ExtractOwnerKeyId(string? lineageJson) =>
+        ExtractLineageString(lineageJson, "owner_key_id");
+
+    private static string? ExtractLineageString(string? lineageJson, string field)
+    {
+        if (string.IsNullOrEmpty(lineageJson)) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(lineageJson);
+            return doc.RootElement.TryGetProperty(field, out var v) && v.ValueKind == JsonValueKind.String
+                ? v.GetString()
+                : null;
+        }
+        catch { return null; }
+    }
 }
 
 // ── Result types ──────────────────────────────────────────────────────────────
@@ -547,4 +854,48 @@ public static class NipErrorCodes
     /// (NPS-RFC-0004). → NPS-DOWNSTREAM-UNAVAILABLE.
     /// </summary>
     public const string ReputationLogUnreachable = "NIP-REPUTATION-LOG-UNREACHABLE";
+
+    /// <summary>
+    /// Cannot issue a session under a group NID that has been revoked.
+    /// NPS-3 §5.1.3 (NPS-CR-0003). → NPS-AUTH-FORBIDDEN.
+    /// </summary>
+    public const string GroupRevoked = "NIP-CA-GROUP-REVOKED";
+
+    /// <summary>
+    /// The parent_nid / group NID referenced by a session-issue request
+    /// does not exist. NPS-3 §5.1.3 (NPS-CR-0003). → NPS-CLIENT-NOT-FOUND.
+    /// </summary>
+    public const string ParentNotFound = "NIP-CA-PARENT-NOT-FOUND";
+
+    /// <summary>
+    /// The referenced parent NID exists but is not a group
+    /// (lineage.role ≠ "group"). NPS-3 §5.1.3 (NPS-CR-0003).
+    /// → NPS-CLIENT-BAD-PARAM.
+    /// </summary>
+    public const string ParentNotGroup = "NIP-CA-PARENT-NOT-GROUP";
+
+    /// <summary>
+    /// Requested session validity below 60s or above the configured
+    /// maximum. NPS-3 §5.1.3 (NPS-CR-0003). → NPS-CLIENT-BAD-PARAM.
+    /// </summary>
+    public const string SessionValidityInvalid = "NIP-CA-SESSION-VALIDITY-INVALID";
+
+    /// <summary>
+    /// Group-JWS authorisation on a session-issue request fails
+    /// signature, header, or shape validation. NPS-3 §5.1.3
+    /// (NPS-CR-0003). → NPS-AUTH-UNAUTHENTICATED.
+    /// </summary>
+    public const string JwsInvalid = "NIP-CA-JWS-INVALID";
+
+    /// <summary>
+    /// Group-JWS iat outside the CA's clock-skew window (default ±5
+    /// minutes). NPS-3 §5.1.3 (NPS-CR-0003). → NPS-AUTH-UNAUTHENTICATED.
+    /// </summary>
+    public const string JwsExpired = "NIP-CA-JWS-EXPIRED";
+
+    /// <summary>
+    /// Session NID's parent / group NID is revoked or expired (chain
+    /// check, NPS-3 §7 step 3a). NPS-CR-0003. → NPS-AUTH-UNAUTHENTICATED.
+    /// </summary>
+    public const string ParentRevoked = "NIP-CERT-PARENT-REVOKED";
 }
