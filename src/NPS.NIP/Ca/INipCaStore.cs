@@ -21,6 +21,26 @@ public sealed class NipCertRecord
     public          DateTime? RevokedAt   { get; init; }
     public          string?  RevokeReason { get; init; }
     public          string?  MetadataJson { get; init; }  // JSON blob, nullable
+
+    /// <summary>
+    /// Lineage role (NPS-CR-0003 §5.1.3). One of <c>"group"</c>,
+    /// <c>"session"</c>, or <c>null</c> for ordinary single-NID agents.
+    /// </summary>
+    public string?  NidRole      { get; init; }
+
+    /// <summary>
+    /// Immediate parent NID (NPS-CR-0003 §5.1.3). Set on session records
+    /// pointing to the group NID; null on group and ordinary agent records.
+    /// Indexed for cascade revocation (`O(group fan-out)` lookup).
+    /// </summary>
+    public string?  ParentNid    { get; init; }
+
+    /// <summary>
+    /// Full signed lineage object as canonical JSON (NPS-CR-0003 §5.1.3).
+    /// Persisted verbatim so reissues / audit can reproduce the exact
+    /// canonical form that was signed.
+    /// </summary>
+    public string?  LineageJson  { get; init; }
 }
 
 /// <summary>
@@ -57,4 +77,14 @@ public interface INipCaStore
     /// Returns all revoked certificates (for CRL generation).
     /// </summary>
     Task<IReadOnlyList<NipCertRecord>> GetRevokedAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns every record whose <see cref="NipCertRecord.ParentNid"/>
+    /// equals <paramref name="parentNid"/>. Used by
+    /// <c>NipCaService.RevokeAsync</c> to enumerate live sessions whose
+    /// group has been revoked, and by the audit
+    /// <c>GET /v1/orchestrators/groups/{nid}/sessions</c> endpoint
+    /// (NPS-CR-0003 §5.1.3 / §8).
+    /// </summary>
+    Task<IReadOnlyList<NipCertRecord>> GetByParentNidAsync(string parentNid, CancellationToken ct = default);
 }

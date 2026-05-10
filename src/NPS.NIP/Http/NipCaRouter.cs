@@ -11,6 +11,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
 using NPS.NIP.Ca;
+using NPS.NIP.Crypto;
+using NPS.NIP.Frames;
 using NPS.NIP;
 
 namespace NPS.NIP.Http;
@@ -36,6 +38,7 @@ public static class NipCaRouter
     {
         "key_compromise", "ca_compromise", "affiliation_changed",
         "superseded", "cessation_of_operation",
+        "parent_revoked", // NPS-CR-0003 §5.3
     };
 
     /// <summary>
@@ -64,7 +67,7 @@ public static class NipCaRouter
                     ocsp     = $"{opts.BaseUrl}{pfx}/ocsp",
                     crl      = $"{opts.BaseUrl}{pfx}/v1/crl",
                 },
-                capabilities          = new[] { "agent", "node" },
+                capabilities          = new[] { "agent", "node", "orchestrator-group" },
                 max_cert_validity_days = opts.AgentCertValidityDays,
             };
             return Results.Json(body, s_json);
@@ -296,6 +299,221 @@ public static class NipCaRouter
 
         app.MapGet($"{pfx}/v1/nodes/{{nid}}/verify", async (string nid, CancellationToken ct) =>
             OcspResult(await VerifyWithTiming(ca, opts, nid, ct)));
+
+        // ── Orchestrator group: register (NPS-CR-0003) ────────────────────────
+
+        app.MapPost($"{pfx}/v1/orchestrators/groups/register", async (HttpContext ctx, ILogger<NipCaService> log, CancellationToken ct) =>
+        {
+            if (!IsAuthorized(ctx, opts)) return Unauthorized();
+
+            var req = await ReadJson<RegisterGroupRequest>(ctx, log, ct);
+            if (req is null) return BadRequest("Invalid JSON body.");
+
+            if (!string.IsNullOrEmpty(req.Identifier) && !s_identifierRe.IsMatch(req.Identifier))
+                return BadRequest("identifier contains invalid characters. Allowed: a-z A-Z 0-9 . _ : @ / -");
+            if (string.IsNullOrEmpty(req.PubKey) ||
+                !req.PubKey.StartsWith("ed25519:", StringComparison.Ordinal) || req.PubKey.Length <= 8)
+                return BadRequest("pub_key must be 'ed25519:<base64url>'.");
+
+            try
+            {
+                var frame = await ca.RegisterGroupAsync(
+                    identifier:   req.Identifier,
+                    pubKey:       req.PubKey,
+                    capabilities: req.Capabilities ?? [],
+                    scopeJson:    req.ScopeJson    ?? "{}",
+                    ownerUserId:  req.OwnerUserId,
+                    ownerKeyId:   req.OwnerKeyId,
+                    metadataJson: req.MetadataJson,
+                    ct:           ct);
+                return Results.Json(frame, s_json, statusCode: 201);
+            }
+            catch (NipCaException ex)
+            {
+                log.LogWarning("Register group failed: {Msg}", ex.Message);
+                return ErrorResult(ex);
+            }
+        });
+
+        // ── Orchestrator group: issue session (NPS-CR-0003) ───────────────────
+
+        app.MapPost($"{pfx}/v1/orchestrators/groups/{{group_nid}}/sessions/issue", async (
+            string group_nid, HttpContext ctx, ILogger<NipCaService> log, CancellationToken ct) =>
+        {
+            var groupNid = Uri.UnescapeDataString(group_nid);
+
+            // Two auth modes: Operator API key (Bearer) OR group-JWS body.
+            // We pick the mode by Content-Type so the operator path stays
+            // a plain JSON body, matching the rest of the surface.
+            var ctype     = ctx.Request.ContentType ?? "";
+            var isJwsBody = ctype.Contains("jose+json", StringComparison.OrdinalIgnoreCase);
+
+            IssueSessionRequest? req;
+            string?              errorCode = null;
+
+            if (isJwsBody)
+            {
+                // Group-JWS path
+                var jws = await ReadJson<NipGroupJws.FlattenedJws>(ctx, log, ct);
+                if (jws is null) return BadRequest("Invalid JWS body.");
+
+                var groupRecord = await ca.GetCertAsync(groupNid, ct);
+                if (groupRecord is null)
+                    return ErrorResult(new NipCaException(
+                        $"Group {groupNid} not found.", NipErrorCodes.ParentNotFound));
+                if (groupRecord.NidRole != IdentLineageRole.Group)
+                    return ErrorResult(new NipCaException(
+                        $"NID {groupNid} is not a group.", NipErrorCodes.ParentNotGroup));
+                if (groupRecord.RevokedAt.HasValue)
+                    return ErrorResult(new NipCaException(
+                        $"Group {groupNid} revoked.", NipErrorCodes.GroupRevoked));
+
+                var pubKey = NipSigner.DecodePublicKey(groupRecord.PubKey);
+                if (pubKey is null)
+                    return Results.Json(new
+                    {
+                        error_code = NipErrorCodes.JwsInvalid,
+                        message    = "Group public key could not be decoded.",
+                    }, s_json, statusCode: 401);
+
+                if (!NipGroupJws.TryVerify(jws, pubKey, out var payloadJson, out var kid, out errorCode))
+                    return Results.Json(new
+                    {
+                        error_code = errorCode,
+                        message    = "Group-JWS verification failed.",
+                    }, s_json, statusCode: 401);
+
+                if (!string.Equals(kid, groupNid, StringComparison.Ordinal))
+                    return Results.Json(new
+                    {
+                        error_code = NipErrorCodes.JwsInvalid,
+                        message    = $"JWS kid '{kid}' does not match URL group_nid '{groupNid}'.",
+                    }, s_json, statusCode: 401);
+
+                IssueSessionPayload? payload;
+                try
+                {
+                    payload = JsonSerializer.Deserialize<IssueSessionPayload>(payloadJson!, s_json);
+                }
+                catch
+                {
+                    return Results.Json(new
+                    {
+                        error_code = NipErrorCodes.JwsInvalid,
+                        message    = "JWS payload is not valid JSON.",
+                    }, s_json, statusCode: 401);
+                }
+                if (payload is null)
+                    return Results.Json(new
+                    {
+                        error_code = NipErrorCodes.JwsInvalid,
+                        message    = "JWS payload missing.",
+                    }, s_json, statusCode: 401);
+
+                var skewSec  = (long)opts.SessionJwsClockSkew.TotalSeconds;
+                var nowEpoch = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                if (payload.Iat == 0 || Math.Abs(nowEpoch - payload.Iat) > skewSec)
+                    return Results.Json(new
+                    {
+                        error_code = NipErrorCodes.JwsExpired,
+                        message    = $"JWS iat outside ±{skewSec}s window.",
+                    }, s_json, statusCode: 401);
+
+                req = new IssueSessionRequest
+                {
+                    SessionPubKey   = payload.SessionPubKey,
+                    Purpose         = payload.Purpose,
+                    ValiditySeconds = payload.ValiditySeconds,
+                    Capabilities    = payload.Capabilities,
+                    ScopeJson       = payload.ScopeJson,
+                    MetadataJson    = payload.MetadataJson,
+                };
+            }
+            else
+            {
+                // Operator API key path
+                if (!IsAuthorized(ctx, opts)) return Unauthorized();
+                req = await ReadJson<IssueSessionRequest>(ctx, log, ct);
+                if (req is null) return BadRequest("Invalid JSON body.");
+            }
+
+            if (string.IsNullOrEmpty(req.SessionPubKey) ||
+                !req.SessionPubKey.StartsWith("ed25519:", StringComparison.Ordinal) ||
+                req.SessionPubKey.Length <= 8)
+                return BadRequest("session_pub_key must be 'ed25519:<base64url>'.");
+
+            TimeSpan? validity = req.ValiditySeconds is > 0
+                ? TimeSpan.FromSeconds(req.ValiditySeconds.Value)
+                : null;
+
+            try
+            {
+                var frame = await ca.IssueSessionAsync(
+                    groupNid:      groupNid,
+                    sessionPubKey: req.SessionPubKey,
+                    validity:      validity,
+                    purpose:       req.Purpose,
+                    capabilities:  req.Capabilities,
+                    scopeJson:     req.ScopeJson,
+                    metadataJson:  req.MetadataJson,
+                    ct:            ct);
+                return Results.Json(frame, s_json, statusCode: 201);
+            }
+            catch (NipCaException ex)
+            {
+                log.LogWarning("Issue session failed: {Msg}", ex.Message);
+                return ErrorResult(ex);
+            }
+        });
+
+        // ── Orchestrator group: revoke (NPS-CR-0003) ─────────────────────────
+
+        app.MapPost($"{pfx}/v1/orchestrators/groups/{{group_nid}}/revoke", async (
+            string group_nid, HttpContext ctx, ILogger<NipCaService> log, CancellationToken ct) =>
+        {
+            if (!IsAuthorized(ctx, opts)) return Unauthorized();
+
+            var req    = await ReadJson<RevokeRequest>(ctx, log, ct);
+            var reason = req?.Reason ?? "cessation_of_operation";
+
+            if (!s_validRevocationReasons.Contains(reason))
+                return BadRequest($"Invalid revocation reason '{reason}'. Allowed: {string.Join(", ", s_validRevocationReasons)}.");
+
+            try
+            {
+                var frame = await ca.RevokeAsync(Uri.UnescapeDataString(group_nid), reason, ct);
+                return Results.Json(frame, s_json);
+            }
+            catch (NipCaException ex)
+            {
+                log.LogWarning("Revoke group failed: {Msg}", ex.Message);
+                return ErrorResult(ex);
+            }
+        });
+
+        // ── Orchestrator group: list sessions (NPS-CR-0003 audit) ────────────
+
+        app.MapGet($"{pfx}/v1/orchestrators/groups/{{group_nid}}/sessions", async (
+            string group_nid, HttpContext ctx, CancellationToken ct) =>
+        {
+            if (!IsAuthorized(ctx, opts)) return Unauthorized();
+            var groupNid = Uri.UnescapeDataString(group_nid);
+            var sessions = await ca.ListSessionsAsync(groupNid, ct);
+            return Results.Json(new
+            {
+                group_nid = groupNid,
+                count     = sessions.Count,
+                sessions  = sessions.Select(s => new
+                {
+                    nid         = s.Nid,
+                    serial      = s.Serial,
+                    issued_at   = s.IssuedAt.ToString("O"),
+                    expires_at  = s.ExpiresAt.ToString("O"),
+                    revoked_at  = s.RevokedAt?.ToString("O"),
+                    revoke_reason = s.RevokeReason,
+                }),
+            }, s_json);
+        });
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
@@ -371,13 +589,22 @@ public static class NipCaRouter
     {
         var status = ex.ErrorCode switch
         {
-            NipErrorCodes.NidNotFound      => 404,
-            NipErrorCodes.NidAlreadyExists => 409,
-            NipErrorCodes.SerialDuplicate  => 409,
-            NipErrorCodes.RenewalTooEarly  => 400,
-            NipErrorCodes.ScopeExpansion   => 403,
-            NipErrorCodes.CertCapMissing   => 403,
-            _                              => 400,
+            NipErrorCodes.NidNotFound            => 404,
+            NipErrorCodes.ParentNotFound         => 404,
+            NipErrorCodes.NidAlreadyExists       => 409,
+            NipErrorCodes.SerialDuplicate        => 409,
+            NipErrorCodes.RenewalTooEarly        => 400,
+            NipErrorCodes.SessionValidityInvalid => 400,
+            NipErrorCodes.ParentNotGroup         => 400,
+            NipErrorCodes.ScopeExpansion         => 403,
+            NipErrorCodes.CertCapMissing         => 403,
+            NipErrorCodes.GroupRevoked           => 403,
+            NipErrorCodes.JwsInvalid             => 401,
+            NipErrorCodes.JwsExpired             => 401,
+            NipErrorCodes.CertExpired            => 401,
+            NipErrorCodes.CertRevoked            => 401,
+            NipErrorCodes.ParentRevoked          => 401,
+            _                                    => 400,
         };
         return Results.Json(new { error_code = ex.ErrorCode, message = ex.Message }, s_json, statusCode: status);
     }
@@ -436,6 +663,51 @@ public static class NipCaRouter
         public string?                ScopeJson      { get; set; }
         public string?                MetadataJson   { get; set; }
         public string?                AssuranceLevel { get; set; }
+    }
+
+    /// <summary>
+    /// Body for <c>POST /v1/orchestrators/groups/register</c> (NPS-CR-0003).
+    /// Operator-authed — Operator-API-key Bearer required.
+    /// </summary>
+    private sealed class RegisterGroupRequest
+    {
+        public string?                Identifier   { get; set; }
+        public string?                PubKey       { get; set; }
+        public IReadOnlyList<string>? Capabilities { get; set; }
+        public string?                ScopeJson    { get; set; }
+        public string?                MetadataJson { get; set; }
+        public string?                OwnerUserId  { get; set; }
+        public string?                OwnerKeyId   { get; set; }
+    }
+
+    /// <summary>
+    /// Body for <c>POST /v1/orchestrators/groups/{group_nid}/sessions/issue</c>
+    /// when authorising via Operator API key (NPS-CR-0003 §8). Plain JSON.
+    /// </summary>
+    private sealed class IssueSessionRequest
+    {
+        public string?                SessionPubKey   { get; set; }
+        public string?                Purpose         { get; set; }
+        public int?                   ValiditySeconds { get; set; }
+        public IReadOnlyList<string>? Capabilities    { get; set; }
+        public string?                ScopeJson       { get; set; }
+        public string?                MetadataJson    { get; set; }
+    }
+
+    /// <summary>
+    /// Decoded JWS payload for the same endpoint when authorising via
+    /// group-JWS (NPS-CR-0003 §3.5). The wire JSON keys are snake_case so
+    /// the operator and JWS payloads are interchangeable.
+    /// </summary>
+    private sealed class IssueSessionPayload
+    {
+        public string?                SessionPubKey   { get; set; }
+        public string?                Purpose         { get; set; }
+        public int?                   ValiditySeconds { get; set; }
+        public IReadOnlyList<string>? Capabilities    { get; set; }
+        public string?                ScopeJson       { get; set; }
+        public string?                MetadataJson    { get; set; }
+        public long                   Iat             { get; set; }
     }
 }
 
