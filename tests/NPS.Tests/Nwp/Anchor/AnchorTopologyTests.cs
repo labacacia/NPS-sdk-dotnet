@@ -154,7 +154,7 @@ public sealed class AnchorTopologyTests : IAsyncLifetime
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         var subscriptionTask = ReadFirstEventAsync(filter: null, sinceVersion: null, cts.Token);
 
-        await Task.Delay(50, cts.Token);
+        await WaitUntilSubscribedAsync(cts.Token);
         _topology.MemberLeftAnnounce("urn:nps:node:test:m1");
 
         var ev = await subscriptionTask;
@@ -253,6 +253,24 @@ public sealed class AnchorTopologyTests : IAsyncLifetime
             new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json"));
         Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
         Assert.Contains(NwpTopologyErrorCodes.FilterUnsupported, await resp.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task TopologyStream_NodeKindAlias_Returns400()
+    {
+        var payload = new
+        {
+            type      = "topology.stream",
+            action    = "subscribe",
+            stream_id = Guid.NewGuid().ToString("N"),
+            topology  = new { scope = "cluster", filter = new { node_kind = new[] { "memory" } } },
+        };
+        var resp = await _http.PostAsync("/anchor/subscribe",
+            new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json"));
+        var body = await resp.Content.ReadAsStringAsync();
+        Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
+        Assert.Contains(NwpTopologyErrorCodes.FilterUnsupported, body);
+        Assert.Contains("node_roles", body);
     }
 
     [Fact]

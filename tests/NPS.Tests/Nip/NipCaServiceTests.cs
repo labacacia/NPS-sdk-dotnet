@@ -24,11 +24,10 @@ public sealed class NipCaServiceTests : IDisposable
 
         _opts = new NipCaOptions
         {
-            CaNid            = "urn:nps:org:ca.test.example",
-            KeyFilePath      = Path.Combine(_tempDir, "ca.key.enc"),
-            KeyPassphrase    = "testpass",
-            BaseUrl          = "https://ca.test.example",
-            ConnectionString = "unused-in-tests",
+            CaNid         = "urn:nps:org:ca.test.example",
+            KeyFilePath   = Path.Combine(_tempDir, "ca.key.enc"),
+            KeyPassphrase = "testpass",
+            BaseUrl       = "https://ca.test.example",
             AgentCertValidityDays = 30,
             NodeCertValidityDays  = 90,
             RenewalWindowDays     = 7,
@@ -228,6 +227,8 @@ file sealed class InMemoryNipCaStore : INipCaStore
             IssuedBy     = r.IssuedBy,     IssuedAt     = r.IssuedAt,
             ExpiresAt    = r.ExpiresAt,    RevokedAt    = revokedAt,
             RevokeReason = reason,         MetadataJson = r.MetadataJson,
+            NidRole      = r.NidRole,      ParentNid    = r.ParentNid,
+            LineageJson  = r.LineageJson,
         };
         return Task.FromResult(true);
     }
@@ -238,4 +239,8 @@ file sealed class InMemoryNipCaStore : INipCaStore
     public Task<IReadOnlyList<NipCertRecord>> GetRevokedAsync(CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<NipCertRecord>>(
             _records.Where(r => r.RevokedAt.HasValue).ToList());
+
+    public Task<IReadOnlyList<NipCertRecord>> GetByParentNidAsync(string parentNid, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<NipCertRecord>>(
+            _records.Where(r => r.ParentNid == parentNid).ToList());
 }

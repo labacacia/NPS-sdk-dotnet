@@ -275,25 +275,15 @@ public sealed class AnchorNodeMiddleware
 
         TopologyStreamRequest req;
         string streamId;
-        bool deprecatedNodeKind;
         try
         {
-            (req, streamId, deprecatedNodeKind) = ParseStreamRequest(body);
+            (req, streamId) = ParseStreamRequest(body);
         }
         catch (TopologyProtocolException ex)
         {
             await WriteError(ctx, ex.NpsStatus == "NPS-AUTH-FORBIDDEN" ? 403 : 400,
                 ex.NpsStatus, ex.NwpErrorCode, ex.Message);
             return;
-        }
-
-        if (deprecatedNodeKind)
-        {
-            var agentNid = ctx.Request.Headers[NwpHttpHeaders.Agent].FirstOrDefault() ?? "(unknown)";
-            _log.LogWarning(
-                "DEPRECATED: topology.filter.node_kind used by {AgentNid} — " +
-                "rename to node_roles (NPS-CR-0001); alias removed in alpha.6.",
-                agentNid);
         }
 
         ctx.Response.StatusCode  = 200;
@@ -369,7 +359,7 @@ public sealed class AnchorNodeMiddleware
         };
     }
 
-    private static (TopologyStreamRequest req, string streamId, bool deprecatedNodeKind) ParseStreamRequest(JsonElement body)
+    private static (TopologyStreamRequest req, string streamId) ParseStreamRequest(JsonElement body)
     {
         if (!body.TryGetProperty("topology", out var topo) || topo.ValueKind != JsonValueKind.Object)
             throw new TopologyProtocolException(NwpTopologyErrorCodes.UnsupportedScope,
@@ -379,11 +369,10 @@ public sealed class AnchorNodeMiddleware
         var scope = ParseScope(topo);
 
         TopologyFilter? filter = null;
-        bool usedDeprecatedNodeKind = false;
         if (topo.TryGetProperty("filter", out var f) && f.ValueKind == JsonValueKind.Object)
         {
+            ValidateFilterKeys(f);
             filter = JsonSerializer.Deserialize<TopologyFilter>(f.GetRawText(), Json);
-            usedDeprecatedNodeKind = ValidateFilterKeys(f);
         }
 
         ulong? since = null;
@@ -405,7 +394,7 @@ public sealed class AnchorNodeMiddleware
             Scope        = scope,
             Filter       = filter,
             SinceVersion = since,
-        }, streamId, usedDeprecatedNodeKind);
+        }, streamId);
     }
 
     private static TopologyScope ParseScope(JsonElement topo)
@@ -449,10 +438,8 @@ public sealed class AnchorNodeMiddleware
         return 1;
     }
 
-    // Returns true if the deprecated node_kind alias was present in the filter.
-    private static bool ValidateFilterKeys(JsonElement filter)
+    private static void ValidateFilterKeys(JsonElement filter)
     {
-        bool hasDeprecatedNodeKind = false;
         // Documented keys per §12.2 — anything else is a wire-format error.
         foreach (var prop in filter.EnumerateObject())
         {
@@ -462,16 +449,16 @@ public sealed class AnchorNodeMiddleware
                 case "tags_all":
                 case "node_roles":
                     continue;
-                case "node_kind":   // backward-compat alias for node_roles (NPS-CR-0001 / M1; removed in alpha.6)
-                    hasDeprecatedNodeKind = true;
-                    continue;
+                case "node_kind":
+                    throw new TopologyProtocolException(NwpTopologyErrorCodes.FilterUnsupported,
+                        "NPS-CLIENT-BAD-PARAM",
+                        "topology.filter.node_kind expired after alpha.5; use topology.filter.node_roles.");
                 default:
                     throw new TopologyProtocolException(NwpTopologyErrorCodes.FilterUnsupported,
                         "NPS-CLIENT-BAD-PARAM",
                         $"topology.filter key '{prop.Name}' is not recognized.");
             }
         }
-        return hasDeprecatedNodeKind;
     }
 
     private static TopologyEventEnvelope ToEnvelope(string streamId, TopologyEvent ev)

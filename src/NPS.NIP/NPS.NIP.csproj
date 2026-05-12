@@ -9,7 +9,7 @@
     <RootNamespace>NPS.NIP</RootNamespace>
     <PackageId>LabAcacia.NPS.NIP</PackageId>
     <AssemblyName>NPS.NIP</AssemblyName>
-    <Version>1.0.0-alpha.5</Version>
+    <Version>1.0.0-alpha.6</Version>
     <Description>NPS — Neural Identity Protocol CA Server library. Issues, renews, revokes, and verifies NID certificates (Ed25519). Embeddable in any ASP.NET Core app or deployed standalone via Docker.</Description>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Authors>LabAcacia / INNO LOTUS PTY LTD</Authors>
@@ -29,6 +29,7 @@
     <PackageReference Include="NSec.Cryptography" Version="25.4.0" />
     <PackageReference Include="Dapper" Version="2.1.66" />
     <PackageReference Include="Npgsql" Version="8.0.7" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.*" />
   </ItemGroup>
 
   <ItemGroup>
