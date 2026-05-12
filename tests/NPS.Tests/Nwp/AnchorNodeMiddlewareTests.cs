@@ -42,7 +42,7 @@ public sealed class AnchorNodeMiddlewareTests : IAsyncLifetime
             {
                 Description       = "Run a multi-step data analysis pipeline",
                 Async             = true,
-                EstimatedNpt      = 2000,
+                EstimatedCgn      = 2000,
                 TimeoutMsDefault  = 60_000,
                 TimeoutMsMax      = 120_000,
                 RequiredCapability = "agent:invoke",

@@ -5,7 +5,19 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <HasNpsDaemonSources Condition="Exists('..\..\..\..\tools\daemons\npsd\Npsd.csproj')">true</HasNpsDaemonSources>
+    <HasNpsDaemonSources Condition="'$(HasNpsDaemonSources)' == ''">false</HasNpsDaemonSources>
   </PropertyGroup>
+
+  <ItemGroup Condition="'$(HasNpsDaemonSources)' != 'true'">
+    <Compile Remove="Daemons\**\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- npsd is an ASP.NET Core Web app; tests need WebApplication / IServiceCollection
+         from Microsoft.AspNetCore.App to host it via TestServer. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
@@ -29,6 +41,9 @@
     <ProjectReference Include="..\..\benchmarks\NPS.Benchmarks.TokenSavings\NPS.Benchmarks.TokenSavings.csproj" />
     <ProjectReference Include="..\..\benchmarks\NPS.Benchmarks.WireSize\NPS.Benchmarks.WireSize.csproj" />
     <ProjectReference Include="..\..\samples\NPS.Samples.NopDag\NPS.Samples.NopDag.csproj" />
+    <ProjectReference Include="..\..\..\..\tools\daemons\npsd\Npsd.csproj" Condition="'$(HasNpsDaemonSources)' == 'true'" />
+    <ProjectReference Include="..\..\..\..\tools\daemons\nps-registry\NpsRegistry.csproj" Condition="'$(HasNpsDaemonSources)' == 'true'" />
+    <ProjectReference Include="..\..\..\..\tools\daemons\nps-ledger\NpsLedger.csproj" Condition="'$(HasNpsDaemonSources)' == 'true'" />
   </ItemGroup>
 
 </Project>
