@@ -32,11 +32,14 @@ public static class ObservabilityServiceExtensions
     /// <summary>
     /// Maps <c>/healthz</c>, <c>/readyz</c>, and <c>/metrics</c> in one call.
     /// </summary>
-    public static IEndpointRouteBuilder MapNpsObservability(this IEndpointRouteBuilder app)
+    public static IEndpointRouteBuilder MapNpsObservability(
+        this IEndpointRouteBuilder app,
+        string? metricsBearerToken = null,
+        bool requireMetricsBearerToken = false)
     {
         app.MapHealthz();
         app.MapReadyz();
-        app.MapMetrics();
+        app.MapMetrics(metricsBearerToken, requireMetricsBearerToken);
         return app;
     }
 
