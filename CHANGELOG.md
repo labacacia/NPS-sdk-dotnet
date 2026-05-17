@@ -8,6 +8,22 @@ Until NPS reaches v1.0 stable, every repository in the suite is synchronized to 
 
 ---
 
+## [1.0.0-alpha.7] — 2026-05-17
+
+### Added
+
+- **`NPS.NIP.Reputation` — `ReputationLogClient` (NPS-RFC-0004 Phase 2)**: Full HTTP client for the reputation-log operator API. `SubmitAsync`, `QueryAsync`, `GetSthAsync`, `GetProofAsync`, `GetGossipSthAsync`. Static `VerifyInclusion` performs RFC 9162 §2.1.3.2 Merkle audit-path verification locally. `SignedTreeHead`, `InclusionProof` wire types added. `ReputationLogException` carries `NipErrorCode` + `NpsStatus`. 15 regression tests.
+
+- **NPS-CR-0005 three-tier RA enrollment model** (`EnrollmentTier`): `AllowList` (operator pre-approved NIDs only), `BootstrapToken` (`nps-bootstrap-*` one-time token), `ApprovalQueue` (async approval workflow). `IBootstrapTokenStore` / `IInMemoryBootstrapTokenStore` / `IPendingStore` interfaces with in-memory implementations. Token management endpoints (`POST /v1/ra/bootstrap-tokens`, `GET /v1/ra/pending`, `POST /v1/ra/pending/{id}/approve`, `POST /v1/ra/pending/{id}/reject`). `NipCaOptions.EnrollmentTier`, `BootstrapTokenMaxTtl`, `AllowedNids` added.
+
+- **Telemetry** (`NPS.NWP`, `NPS.NOP`): `ActivitySource` (`LabAcacia.NPS.NWP`, `LabAcacia.NPS.NOP`) and `Meter` instrumentation. `NpsActivitySource.StartQuery`, `StartStream`, `StartOrchestration` spans; `nps.nwp.requests.total`, `nps.nop.tasks.total` counters. Zero overhead when no listener is attached.
+
+### Tracking the suite
+
+This release tracks NPS suite `v1.0.0-alpha.7` and depends on `LabAcacia.NPS.NIP` ≥ `1.0.0-alpha.7`.
+
+---
+
 ## [1.0.0-alpha.6] — 2026-05-14
 
 ### Changed
@@ -232,5 +248,6 @@ The .NET SDK is the **reference implementation** for the NPS `v1.0.0-alpha.3` su
 
 First public alpha as part of the NPS suite `v1.0.0-alpha.1` release.
 
+[1.0.0-alpha.7]: https://github.com/labacacia/NPS-sdk-dotnet/releases/tag/v1.0.0-alpha.7
 [1.0.0-alpha.2]: https://github.com/LabAcacia/nps/releases/tag/v1.0.0-alpha.2
 [1.0.0-alpha.1]: https://github.com/LabAcacia/nps/releases/tag/v1.0.0-alpha.1

@@ -8,6 +8,22 @@
 
 ---
 
+## [1.0.0-alpha.7] —— 2026-05-17
+
+### 新增
+
+- **`NPS.NIP.Reputation` — `ReputationLogClient`（NPS-RFC-0004 Phase 2）**：完整的声誉日志 operator HTTP 客户端。`SubmitAsync`、`QueryAsync`、`GetSthAsync`、`GetProofAsync`、`GetGossipSthAsync`。静态方法 `VerifyInclusion` 在本地执行 RFC 9162 §2.1.3.2 Merkle audit-path 验证。新增 `SignedTreeHead`、`InclusionProof` wire 类型。`ReputationLogException` 携带 `NipErrorCode` + `NpsStatus`。15 条回归测试。
+
+- **NPS-CR-0005 三级 RA 注册授权模型**（`EnrollmentTier`）：`AllowList`（仅 operator 预审 NID）、`BootstrapToken`（`nps-bootstrap-*` 一次性令牌）、`ApprovalQueue`（异步审批工作流）。`IBootstrapTokenStore` / `InMemoryBootstrapTokenStore` / `IPendingStore` 接口及内存实现。令牌管理端点（`POST /v1/ra/bootstrap-tokens`、`GET /v1/ra/pending`、`POST /v1/ra/pending/{id}/approve`、`POST /v1/ra/pending/{id}/reject`）。`NipCaOptions` 新增 `EnrollmentTier`、`BootstrapTokenMaxTtl`、`AllowedNids`。
+
+- **遥测**（`NPS.NWP`、`NPS.NOP`）：`ActivitySource`（`LabAcacia.NPS.NWP`、`LabAcacia.NPS.NOP`）和 `Meter` 埋点。`NpsActivitySource.StartQuery`、`StartStream`、`StartOrchestration` span；`nps.nwp.requests.total`、`nps.nop.tasks.total` 计数器。无监听者时零开销。
+
+### 跟随套件
+
+本次跟随 NPS 套件 `v1.0.0-alpha.7`，依赖 `LabAcacia.NPS.NIP` ≥ `1.0.0-alpha.7`。
+
+---
+
 ## [1.0.0-alpha.6] —— 2026-05-14
 
 ### 变更
@@ -219,5 +235,6 @@ Phase A/B、NPS-RFC-0001 Phase 2（NCP preamble 运行时对齐）、
 
 作为 NPS 套件 `v1.0.0-alpha.1` 的一部分首次公开 alpha。
 
+[1.0.0-alpha.7]: https://gitee.com/labacacia/NPS-sdk-dotnet/releases/tag/v1.0.0-alpha.7
 [1.0.0-alpha.2]: https://github.com/LabAcacia/nps/releases/tag/v1.0.0-alpha.2
 [1.0.0-alpha.1]: https://github.com/LabAcacia/nps/releases/tag/v1.0.0-alpha.1
