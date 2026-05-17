@@ -1,6 +1,7 @@
 // Copyright 2026 INNO LOTUS PTY LTD
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -156,6 +157,8 @@ public sealed class ActionNodeMiddleware
 
     private async Task HandleInvoke(HttpContext ctx)
     {
+        var parentContext = ExtractTraceContext(ctx);
+
         ActionFrame frame;
         try
         {
@@ -163,12 +166,13 @@ public sealed class ActionNodeMiddleware
         }
         catch (Exception ex)
         {
+            NwpTelemetry.FrameErrors.Add(1, new TagList { { "frame_type", "action" }, { "error_code", NwpErrorCodes.ActionParamsInvalid } });
             await WriteError(ctx, 400, "NPS-CLIENT-BAD-REQUEST",
                 NwpErrorCodes.ActionParamsInvalid, ex.Message);
             return;
         }
 
-        // Reserved actions are handled by the middleware itself.
+        // Reserved actions are handled by the middleware itself (no span needed).
         if (frame.ActionId == SystemTaskStatus)
         {
             await HandleSystemTaskStatus(ctx, frame);
@@ -180,9 +184,20 @@ public sealed class ActionNodeMiddleware
             return;
         }
 
+        using var activity = NwpTelemetry.Source.StartActivity(
+            "nps.nwp.action.invoke", ActivityKind.Server, parentContext);
+        activity?.SetTag("nps.frame.type",   "action");
+        activity?.SetTag("nps.action.id",    frame.ActionId);
+        activity?.SetTag("nps.agent.nid",    ctx.Request.Headers[NwpHttpHeaders.Agent].ToString());
+        activity?.SetTag("nps.action.async", frame.Async);
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
         // Look up action spec
         if (!_options.Actions.TryGetValue(frame.ActionId, out var spec))
         {
+            NwpTelemetry.FrameErrors.Add(1, new TagList { { "frame_type", "action" }, { "error_code", NwpErrorCodes.ActionNotFound } });
+            activity?.SetStatus(ActivityStatusCode.Error, $"Unknown action_id '{frame.ActionId}'.");
             await WriteError(ctx, 404, "NPS-CLIENT-NOT-FOUND",
                 NwpErrorCodes.ActionNotFound,
                 $"Unknown action_id '{frame.ActionId}'.");
@@ -286,6 +301,12 @@ public sealed class ActionNodeMiddleware
             // Fire-and-forget; lifetime tied to the task (not the request).
             _ = Task.Run(() => RunAsyncTask(frame, runCtx, effectiveTimeout));
 
+            sw.Stop();
+            activity?.SetTag("nps.task.id", taskId);
+            activity?.SetStatus(ActivityStatusCode.Ok);
+            NwpTelemetry.FramesProcessed.Add(1, new TagList { { "frame_type", "action" }, { "result", "async_accepted" } });
+            NwpTelemetry.FrameDurationMs.Record(sw.Elapsed.TotalMilliseconds, new TagList { { "frame_type", "action" } });
+
             await WriteAsyncResponse(ctx, taskId, "pending", frame.RequestId,
                 estimatedMs: spec.TimeoutMsDefault);
             return;
@@ -312,6 +333,8 @@ public sealed class ActionNodeMiddleware
         }
         catch (OperationCanceledException)
         {
+            NwpTelemetry.FrameErrors.Add(1, new TagList { { "frame_type", "action" }, { "error_code", "NWP-NODE-UNAVAILABLE" } });
+            activity?.SetStatus(ActivityStatusCode.Error, "action execution timed out");
             await WriteError(ctx, 504, "NPS-SERVER-TIMEOUT", "NWP-NODE-UNAVAILABLE",
                 "action execution timed out.");
             return;
@@ -319,6 +342,8 @@ public sealed class ActionNodeMiddleware
         catch (Exception ex)
         {
             _logger.LogError(ex, "Action {ActionId} failed", frame.ActionId);
+            NwpTelemetry.FrameErrors.Add(1, new TagList { { "frame_type", "action" }, { "error_code", "NWP-NODE-UNAVAILABLE" } });
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             await WriteError(ctx, 500, "NPS-SERVER-INTERNAL", "NWP-NODE-UNAVAILABLE",
                 "action execution failed.");
             return;
@@ -335,6 +360,13 @@ public sealed class ActionNodeMiddleware
                 ExpiresAt  = Clock().Add(_options.IdempotencyTtl),
             });
         }
+
+        sw.Stop();
+        activity?.SetStatus(ActivityStatusCode.Ok);
+        NwpTelemetry.FramesProcessed.Add(1, new TagList { { "frame_type", "action" }, { "result", "success" } });
+        NwpTelemetry.FrameDurationMs.Record(sw.Elapsed.TotalMilliseconds, new TagList { { "frame_type", "action" } });
+        if (result.TokenEst > 0)
+            NwpTelemetry.CgnConsumed.Add(result.TokenEst, new TagList { { "frame_type", "action" } });
 
         await WriteCaps(ctx, result.Result, result.AnchorRef ?? spec.ResultAnchor,
             frame.RequestId, result.TokenEst);
@@ -436,6 +468,15 @@ public sealed class ActionNodeMiddleware
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
+
+    private static ActivityContext ExtractTraceContext(HttpContext ctx)
+    {
+        var traceparent = ctx.Request.Headers["traceparent"].ToString();
+        if (string.IsNullOrEmpty(traceparent)) return default;
+        var tracestate  = ctx.Request.Headers["tracestate"].ToString();
+        ActivityContext.TryParse(traceparent, tracestate, isRemote: true, out var context);
+        return context;
+    }
 
     private uint ClampTimeout(uint requested, ActionSpec spec)
     {
