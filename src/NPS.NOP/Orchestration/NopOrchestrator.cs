@@ -1,6 +1,7 @@
 // Copyright 2026 INNO LOTUS PTY LTD
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using NPS.NOP.Frames;
@@ -45,11 +46,22 @@ public sealed class NopOrchestrator : INopOrchestrator
     /// <inheritdoc/>
     public async Task<NopTaskResult> ExecuteAsync(TaskFrame task, CancellationToken ct = default)
     {
+        using var activity = NopTelemetry.Source.StartActivity(
+            "nps.nop.task.execute", ActivityKind.Server, ExtractTaskContext(task.Context));
+        activity?.SetTag("nps.task.id",         task.TaskId);
+        activity?.SetTag("nps.dag.node_count",  task.Dag.Nodes.Count);
+        activity?.SetTag("nps.task.priority",   task.Priority);
+        activity?.SetTag("nps.task.preflight",  task.Preflight);
+
+        var sw = Stopwatch.StartNew();
+
         // 1a. Validate delegation chain depth
         if (task.DelegateDepth >= NopConstants.MaxDelegateChainDepth)
         {
             _log.LogWarning("Task {TaskId} rejected: delegation chain depth {Depth} ≥ max {Max}",
                 task.TaskId, task.DelegateDepth, NopConstants.MaxDelegateChainDepth);
+            activity?.SetStatus(ActivityStatusCode.Error, NopErrorCodes.DelegateChainTooDeep);
+            NopTelemetry.TasksFailed.Add(1);
             return NopTaskResult.Failure(task.TaskId, NopErrorCodes.DelegateChainTooDeep,
                 $"Delegation chain depth {task.DelegateDepth} exceeds the maximum of {NopConstants.MaxDelegateChainDepth}.");
         }
@@ -124,7 +136,23 @@ public sealed class NopOrchestrator : INopOrchestrator
             if (_opts.EnableCallback && !string.IsNullOrEmpty(task.CallbackUrl))
                 _ = FireCallbackAsync(task.CallbackUrl, result);
 
+            sw.Stop();
             _log.LogInformation("Task {TaskId} finished as {State}", task.TaskId, finalState);
+
+            bool succeeded = result.FinalState == TaskState.Completed;
+            if (succeeded)
+            {
+                activity?.SetStatus(ActivityStatusCode.Ok);
+                NopTelemetry.TasksCompleted.Add(1);
+            }
+            else
+            {
+                activity?.SetStatus(ActivityStatusCode.Error, result.ErrorCode);
+                NopTelemetry.TasksFailed.Add(1);
+            }
+            NopTelemetry.TaskDurationMs.Record(sw.Elapsed.TotalMilliseconds,
+                new TagList { { "outcome", succeeded ? "success" : "failure" } });
+
             return result;
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
@@ -132,6 +160,10 @@ public sealed class NopOrchestrator : INopOrchestrator
             // Our own timeout fired
             _log.LogWarning("Task {TaskId} exceeded timeout of {Timeout}ms", task.TaskId, timeoutMs);
             await _store.UpdateStateAsync(task.TaskId, TaskState.Failed, ct);
+            sw.Stop();
+            activity?.SetStatus(ActivityStatusCode.Error, NopErrorCodes.TaskTimeout);
+            NopTelemetry.TasksFailed.Add(1);
+            NopTelemetry.TaskDurationMs.Record(sw.Elapsed.TotalMilliseconds, new TagList { { "outcome", "timeout" } });
             return NopTaskResult.Failure(task.TaskId, NopErrorCodes.TaskTimeout,
                 $"Task exceeded timeout of {timeoutMs}ms.");
         }
@@ -287,6 +319,14 @@ public sealed class NopOrchestrator : INopOrchestrator
         var idempotencyKey = Guid.NewGuid().ToString("D"); // same across retries
         int maxRetries     = node.RetryPolicy?.MaxRetries ?? task.MaxRetries;
 
+        using var nodeActivity = NopTelemetry.Source.StartActivity("nps.nop.node.execute", ActivityKind.Client);
+        nodeActivity?.SetTag("nps.node.id",         node.Id);
+        nodeActivity?.SetTag("nps.node.agent_nid",  node.Agent);
+        nodeActivity?.SetTag("nps.node.action",     node.Action);
+        nodeActivity?.SetTag("nps.node.max_retries", maxRetries);
+
+        var nodeSw = Stopwatch.StartNew();
+
         for (int attempt = 1; attempt <= maxRetries + 1; attempt++)
         {
             ct.ThrowIfCancellationRequested();
@@ -322,6 +362,10 @@ public sealed class NopOrchestrator : INopOrchestrator
             {
                 await _store.UpdateSubtaskAsync(task.TaskId, node.Id, subtaskId,
                     TaskState.Completed, result: outcome.Result, attempt: attempt, ct: ct);
+                nodeSw.Stop();
+                nodeActivity?.SetTag("nps.node.attempts", attempt);
+                nodeActivity?.SetStatus(ActivityStatusCode.Ok);
+                NopTelemetry.NodeDurationMs.Record(nodeSw.Elapsed.TotalMilliseconds, new TagList { { "outcome", "success" } });
                 return outcome;
             }
 
@@ -334,9 +378,14 @@ public sealed class NopOrchestrator : INopOrchestrator
                 await _store.UpdateSubtaskAsync(task.TaskId, node.Id, subtaskId,
                     TaskState.Failed, errorCode: outcome.ErrorCode, errorMsg: outcome.ErrorMessage,
                     attempt: attempt, ct: ct);
+                nodeSw.Stop();
+                nodeActivity?.SetTag("nps.node.attempts", attempt);
+                nodeActivity?.SetStatus(ActivityStatusCode.Error, outcome.ErrorCode);
+                NopTelemetry.NodeDurationMs.Record(nodeSw.Elapsed.TotalMilliseconds, new TagList { { "outcome", "failure" } });
                 return outcome;
             }
 
+            NopTelemetry.NodeRetries.Add(1);
             var delayMs = (int)(node.RetryPolicy?.ComputeDelayMs(attempt - 1) ?? 1000);
             _log.LogDebug("Node {NodeId} retrying in {Delay}ms (attempt {A}/{Max})",
                 node.Id, delayMs, attempt, maxRetries + 1);
@@ -347,6 +396,9 @@ public sealed class NopOrchestrator : INopOrchestrator
         await _store.UpdateSubtaskAsync(task.TaskId, node.Id, subtaskId,
             TaskState.Failed, errorCode: NopErrorCodes.DelegateTimeout,
             errorMsg: $"Node '{node.Id}' exhausted {maxRetries} retries.", ct: ct);
+        nodeSw.Stop();
+        nodeActivity?.SetStatus(ActivityStatusCode.Error, NopErrorCodes.DelegateTimeout);
+        NopTelemetry.NodeDurationMs.Record(nodeSw.Elapsed.TotalMilliseconds, new TagList { { "outcome", "exhausted" } });
         return new NodeOutcome(TaskState.Failed, null, NopErrorCodes.DelegateTimeout);
     }
 
@@ -378,6 +430,18 @@ public sealed class NopOrchestrator : INopOrchestrator
         var deadline = DateTime.UtcNow.AddMilliseconds(nodeTimeoutMs);
         var scope    = JsonDocument.Parse("{}").RootElement; // scope handled by NIP layer
 
+        // Propagate current span into DelegateFrame so the worker agent can link its spans.
+        var delegateCtx = task.Context;
+        if (Activity.Current is { } currentActivity)
+        {
+            delegateCtx = (delegateCtx ?? new TaskContext()) with
+            {
+                TraceId    = currentActivity.TraceId.ToString(),
+                SpanId     = currentActivity.SpanId.ToString(),
+                TraceFlags = (byte)currentActivity.ActivityTraceFlags,
+            };
+        }
+
         var delegateFrame = new DelegateFrame
         {
             ParentTaskId   = task.TaskId,
@@ -390,7 +454,7 @@ public sealed class NopOrchestrator : INopOrchestrator
             DeadlineAt     = deadline.ToString("O"),
             IdempotencyKey = idempotencyKey,
             Priority       = task.Priority,
-            Context        = task.Context,
+            Context        = delegateCtx,
             DelegateDepth  = task.DelegateDepth + 1,
         };
 
@@ -627,6 +691,28 @@ public sealed class NopOrchestrator : INopOrchestrator
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
     };
+
+    // ── Telemetry helpers ─────────────────────────────────────────────────────
+
+    private static ActivityContext ExtractTaskContext(TaskContext? ctx)
+    {
+        if (ctx is not { TraceId: { Length: 32 } traceId, SpanId: { Length: 16 } spanId })
+            return default;
+
+        try
+        {
+            var actTraceId = ActivityTraceId.CreateFromString(traceId.AsSpan());
+            var actSpanId  = ActivitySpanId.CreateFromString(spanId.AsSpan());
+            var flags      = ctx.TraceFlags.HasValue
+                ? (ActivityTraceFlags)ctx.TraceFlags.Value
+                : ActivityTraceFlags.None;
+            return new ActivityContext(actTraceId, actSpanId, flags, isRemote: true);
+        }
+        catch (ArgumentException)
+        {
+            return default;
+        }
+    }
 
     // ── Inner types ───────────────────────────────────────────────────────────
 

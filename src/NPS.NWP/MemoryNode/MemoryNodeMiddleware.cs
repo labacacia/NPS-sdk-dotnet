@@ -1,6 +1,7 @@
 // Copyright 2026 INNO LOTUS PTY LTD
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -133,6 +134,15 @@ public sealed class MemoryNodeMiddleware
 
     private async Task HandleQuery(HttpContext ctx)
     {
+        var parentContext = ExtractTraceContext(ctx);
+        using var activity = NwpTelemetry.Source.StartActivity(
+            "nps.nwp.memory.query", ActivityKind.Server, parentContext);
+        activity?.SetTag("nps.frame.type",  "query");
+        activity?.SetTag("nps.anchor.id",   _anchorId);
+        activity?.SetTag("nps.agent.nid",   ctx.Request.Headers[NwpHttpHeaders.Agent].ToString());
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
         QueryFrame frame;
         try
         {
@@ -140,12 +150,15 @@ public sealed class MemoryNodeMiddleware
         }
         catch (Exception ex)
         {
+            NwpTelemetry.FrameErrors.Add(1, new TagList { { "frame_type", "query" }, { "error_code", NwpErrorCodes.QueryFilterInvalid } });
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             await WriteError(ctx, 400, "NPS-CLIENT-BAD-REQUEST", NwpErrorCodes.QueryFilterInvalid, ex.Message);
             return;
         }
 
         // Budget
         var budget = ParseBudget(ctx);
+        activity?.SetTag("nps.request.budget", budget);
 
         MemoryNodeQueryResult result;
         try
@@ -154,12 +167,16 @@ public sealed class MemoryNodeMiddleware
         }
         catch (NwpFilterException ex)
         {
+            NwpTelemetry.FrameErrors.Add(1, new TagList { { "frame_type", "query" }, { "error_code", ex.NwpErrorCode } });
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             await WriteError(ctx, 400, "NPS-CLIENT-BAD-REQUEST", ex.NwpErrorCode, ex.Message);
             return;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Memory Node query failed");
+            NwpTelemetry.FrameErrors.Add(1, new TagList { { "frame_type", "query" }, { "error_code", "NWP-NODE-UNAVAILABLE" } });
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             await WriteError(ctx, 500, "NPS-SERVER-INTERNAL", "NWP-NODE-UNAVAILABLE", "Internal server error.");
             return;
         }
@@ -192,11 +209,29 @@ public sealed class MemoryNodeMiddleware
         ctx.Response.Headers[NwpHttpHeaders.Tokens]  = tokenEst.ToString();
         ctx.Response.Headers[NwpHttpHeaders.NodeType] = "memory";
 
+        sw.Stop();
+        activity?.SetTag("nps.response.count", dataElements.Count);
+        activity?.SetTag("nps.response.cgn",   tokenEst);
+        activity?.SetStatus(ActivityStatusCode.Ok);
+
+        NwpTelemetry.FramesProcessed.Add(1, new TagList { { "frame_type", "query" }, { "result", "success" } });
+        NwpTelemetry.FrameDurationMs.Record(sw.Elapsed.TotalMilliseconds, new TagList { { "frame_type", "query" } });
+        NwpTelemetry.CgnConsumed.Add(tokenEst, new TagList { { "frame_type", "query" } });
+
         await ctx.Response.WriteAsync(JsonSerializer.Serialize(caps, s_json));
     }
 
     private async Task HandleStream(HttpContext ctx)
     {
+        var parentContext = ExtractTraceContext(ctx);
+        using var activity = NwpTelemetry.Source.StartActivity(
+            "nps.nwp.memory.stream", ActivityKind.Server, parentContext);
+        activity?.SetTag("nps.frame.type", "stream");
+        activity?.SetTag("nps.anchor.id",  _anchorId);
+        activity?.SetTag("nps.agent.nid",  ctx.Request.Headers[NwpHttpHeaders.Agent].ToString());
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
         QueryFrame frame;
         try
         {
@@ -204,6 +239,8 @@ public sealed class MemoryNodeMiddleware
         }
         catch (Exception ex)
         {
+            NwpTelemetry.FrameErrors.Add(1, new TagList { { "frame_type", "stream" }, { "error_code", NwpErrorCodes.QueryFilterInvalid } });
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             await WriteError(ctx, 400, "NPS-CLIENT-BAD-REQUEST", NwpErrorCodes.QueryFilterInvalid, ex.Message);
             return;
         }
@@ -213,14 +250,16 @@ public sealed class MemoryNodeMiddleware
         ctx.Response.Headers[NwpHttpHeaders.Schema]   = _anchorId;
         ctx.Response.Headers[NwpHttpHeaders.NodeType] = "memory";
 
-        uint seq     = 0;
-        var streamId = Guid.NewGuid().ToString("N");
+        uint seq      = 0;
+        var  streamId = Guid.NewGuid().ToString("N");
+        uint chunks   = 0;
 
         try
         {
             await foreach (var page in _provider.StreamAsync(frame, _options.Schema, _options, ctx.RequestAborted))
             {
                 var elements = page.Select(r => JsonSerializer.SerializeToElement(r, s_json)).ToList();
+                chunks++;
 
                 var chunk = new StreamFrame
                 {
@@ -243,10 +282,18 @@ public sealed class MemoryNodeMiddleware
                 Data     = Array.Empty<JsonElement>(),
             };
             await ctx.Response.WriteAsync(JsonSerializer.Serialize(final, s_json) + "\n");
+
+            sw.Stop();
+            activity?.SetTag("nps.stream.chunks", chunks);
+            activity?.SetStatus(ActivityStatusCode.Ok);
+            NwpTelemetry.FramesProcessed.Add(1, new TagList { { "frame_type", "stream" }, { "result", "success" } });
+            NwpTelemetry.FrameDurationMs.Record(sw.Elapsed.TotalMilliseconds, new TagList { { "frame_type", "stream" } });
         }
         catch (NwpFilterException ex)
         {
             _logger.LogWarning("Stream filter error: {Msg}", ex.Message);
+            NwpTelemetry.FrameErrors.Add(1, new TagList { { "frame_type", "stream" }, { "error_code", ex.NwpErrorCode } });
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             var errChunk = new StreamFrame
             {
                 StreamId  = streamId,
@@ -261,10 +308,21 @@ public sealed class MemoryNodeMiddleware
         catch (Exception ex)
         {
             _logger.LogError(ex, "Memory Node stream failed");
+            NwpTelemetry.FrameErrors.Add(1, new TagList { { "frame_type", "stream" }, { "error_code", "NWP-NODE-UNAVAILABLE" } });
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
         }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private static ActivityContext ExtractTraceContext(HttpContext ctx)
+    {
+        var traceparent = ctx.Request.Headers["traceparent"].ToString();
+        if (string.IsNullOrEmpty(traceparent)) return default;
+        var tracestate  = ctx.Request.Headers["tracestate"].ToString();
+        ActivityContext.TryParse(traceparent, tracestate, isRemote: true, out var context);
+        return context;
+    }
 
     private static async Task<T> ReadFrame<T>(HttpContext ctx)
     {
