@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NPS.NIP.Acme;
 using NPS.NIP.Ca;
+using NPS.NIP.Ca.Ra;
 using NPS.NIP.Crypto;
 using NPS.NIP.Http;
 using NPS.NIP.Storage;
@@ -161,6 +162,10 @@ public static class NipServiceExtensions
 
         services.AddSingleton<INipCaStore>(store);
 
+        // RA stores — registered unconditionally; only used if the matching tier is selected
+        services.AddSingleton<IBootstrapTokenStore, InMemoryBootstrapTokenStore>();
+        services.AddSingleton<IPendingStore>(new InMemoryPendingStore(opts.PendingQueueMaxAge));
+
         services.AddSingleton<NipCaService>(sp => new NipCaService(
             opts,
             sp.GetRequiredService<INipCaStore>(),
@@ -211,9 +216,11 @@ public static class NipServiceExtensions
     /// </summary>
     public static IEndpointRouteBuilder MapNipCa(this IEndpointRouteBuilder app)
     {
-        var opts = app.ServiceProvider.GetRequiredService<NipCaOptions>();
-        var ca   = app.ServiceProvider.GetRequiredService<NipCaService>();
-        NipCaRouter.MapNipCa(app, opts, ca);
+        var opts                = app.ServiceProvider.GetRequiredService<NipCaOptions>();
+        var ca                  = app.ServiceProvider.GetRequiredService<NipCaService>();
+        var bootstrapTokenStore = app.ServiceProvider.GetService<IBootstrapTokenStore>();
+        var pendingStore        = app.ServiceProvider.GetService<IPendingStore>();
+        NipCaRouter.MapNipCa(app, opts, ca, bootstrapTokenStore, pendingStore);
         return app;
     }
 

@@ -130,6 +130,42 @@ public sealed class NipCaOptions
     /// </summary>
     public IReadOnlySet<string>? AllowedCapabilities { get; set; }
 
+    // ── Enrollment / RA (NPS-CR-0005) ────────────────────────────────────────
+
+    /// <summary>
+    /// Enrollment tier that governs how inbound registration requests are
+    /// admitted (NPS-CR-0005 §3). Default <see cref="EnrollmentTier.Allowlist"/>.
+    /// </summary>
+    public EnrollmentTier EnrollmentTier { get; set; } = EnrollmentTier.Allowlist;
+
+    /// <summary>
+    /// Glob patterns used by <see cref="EnrollmentTier.Allowlist"/> (Tier 1).
+    /// An identifier that matches at least one pattern is admitted; all
+    /// others are rejected with <c>NIP-RA-NID-NOT-ALLOWED</c>.
+    /// Default <c>["*"]</c> (open CA — all identifiers allowed).
+    /// </summary>
+    public IReadOnlyList<string> EnrollmentAllowlistPatterns { get; set; } = ["*"];
+
+    /// <summary>
+    /// Maximum TTL for bootstrap tokens created via
+    /// <c>POST /v1/enrollment/tokens</c>. Requests that exceed this cap are
+    /// clamped. Default 24 hours (NPS-CR-0005 §3.3).
+    /// </summary>
+    public TimeSpan BootstrapTokenMaxTtl { get; set; } = TimeSpan.FromHours(24);
+
+    /// <summary>
+    /// Maximum number of records in <c>Pending</c> status allowed in the
+    /// queue at one time (NPS-CR-0005 §3.4). New registrations are rejected
+    /// with <c>503</c> when the queue is full. Default 1000.
+    /// </summary>
+    public int PendingQueueMaxSize { get; set; } = 1000;
+
+    /// <summary>
+    /// Age after which non-pending (approved/rejected) records are swept from
+    /// the in-memory pending store. Default 7 days (NPS-CR-0005 §3.4).
+    /// </summary>
+    public TimeSpan PendingQueueMaxAge { get; set; } = TimeSpan.FromDays(7);
+
     // ── ACME ──────────────────────────────────────────────────────────────────
 
     /// <summary>

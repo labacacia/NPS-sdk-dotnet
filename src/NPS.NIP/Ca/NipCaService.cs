@@ -4,6 +4,7 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
+using NPS.NIP.Ca.Ra;
 using NPS.NIP.Crypto;
 using NPS.NIP.Frames;
 using NPS.NIP.X509;
@@ -104,6 +105,66 @@ public sealed class NipCaService
         await _store.SaveAsync(record, ct);
 
         return frame;
+    }
+
+    // ── Register with RA gate (NPS-CR-0005) ───────────────────────────────────
+
+    /// <summary>
+    /// RA-gated registration: runs the active <see cref="IEnrollmentPolicy"/>
+    /// before delegating to <see cref="RegisterAsync"/>.
+    /// </summary>
+    /// <remarks>
+    /// The caller (HTTP layer) is responsible for extracting
+    /// <paramref name="enrollmentToken"/> from the
+    /// <c>X-NPS-Enrollment-Token</c> header and passing it here.
+    /// </remarks>
+    /// <exception cref="NipCaException">Enrollment denied.</exception>
+    /// <exception cref="NipRaPendingException">
+    /// Enrollment queued (Tier 3) — caller should return 202.
+    /// </exception>
+    public async Task<IdentFrame> RegisterWithRaAsync(
+        string                entityType,
+        string                identifier,
+        string                pubKey,
+        IReadOnlyList<string> capabilities,
+        string                scopeJson,
+        string?               metadataJson       = null,
+        string?               enrollmentToken    = null,
+        IEnrollmentPolicy?    enrollmentPolicy   = null,
+        CancellationToken     ct                 = default)
+    {
+        if (enrollmentPolicy is not null)
+        {
+            await enrollmentPolicy.CheckAsync(
+                entityType, identifier, pubKey,
+                capabilities, scopeJson, metadataJson,
+                enrollmentToken, ct);
+        }
+        return await RegisterAsync(entityType, identifier, pubKey, capabilities, scopeJson, metadataJson, ct);
+    }
+
+    /// <summary>
+    /// Constructs the <see cref="IEnrollmentPolicy"/> selected by
+    /// <see cref="NipCaOptions.EnrollmentTier"/>.
+    /// </summary>
+    public static IEnrollmentPolicy CreateEnrollmentPolicy(
+        NipCaOptions opts,
+        IBootstrapTokenStore? bootstrapTokenStore,
+        IPendingStore?        pendingStore)
+    {
+        return opts.EnrollmentTier switch
+        {
+            EnrollmentTier.Allowlist      => new AllowlistPolicy(opts.EnrollmentAllowlistPatterns),
+            EnrollmentTier.BootstrapToken => bootstrapTokenStore is not null
+                ? new BootstrapTokenPolicy(bootstrapTokenStore)
+                : throw new InvalidOperationException(
+                    "EnrollmentTier.BootstrapToken requires IBootstrapTokenStore to be registered."),
+            EnrollmentTier.PendingQueue   => pendingStore is not null
+                ? new PendingQueuePolicy(pendingStore, opts.PendingQueueMaxSize)
+                : throw new InvalidOperationException(
+                    "EnrollmentTier.PendingQueue requires IPendingStore to be registered."),
+            _ => throw new InvalidOperationException($"Unknown EnrollmentTier: {opts.EnrollmentTier}"),
+        };
     }
 
     // ── Register X.509 (NPS-RFC-0002 prototype) ───────────────────────────────
@@ -898,4 +959,30 @@ public static class NipErrorCodes
     /// check, NPS-3 §7 step 3a). NPS-CR-0003. → NPS-AUTH-UNAUTHENTICATED.
     /// </summary>
     public const string ParentRevoked = "NIP-CERT-PARENT-REVOKED";
+
+    // ── RA error codes (NPS-CR-0005) ──────────────────────────────────────────
+
+    /// <summary>
+    /// Bootstrap token is missing, has an invalid prefix, or does not match
+    /// any stored token hash. NPS-CR-0005 §3.3. → NPS-AUTH-UNAUTHENTICATED.
+    /// </summary>
+    public const string RaTokenInvalid = "NIP-RA-TOKEN-INVALID";
+
+    /// <summary>
+    /// Bootstrap token matched but is expired or already consumed.
+    /// NPS-CR-0005 §3.3. → NPS-AUTH-UNAUTHENTICATED.
+    /// </summary>
+    public const string RaTokenExpired = "NIP-RA-TOKEN-EXPIRED";
+
+    /// <summary>
+    /// Identifier does not match any pattern in the enrollment allowlist.
+    /// NPS-CR-0005 §3.2. → NPS-AUTH-FORBIDDEN.
+    /// </summary>
+    public const string RaNidNotAllowed = "NIP-RA-NID-NOT-ALLOWED";
+
+    /// <summary>
+    /// Operator explicitly rejected this pending registration.
+    /// NPS-CR-0005 §3.4. → NPS-AUTH-FORBIDDEN.
+    /// </summary>
+    public const string RaPendingRejected = "NIP-RA-PENDING-REJECTED";
 }

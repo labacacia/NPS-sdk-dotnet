@@ -225,4 +225,7 @@ internal sealed class InMemBenchStore : INipCaStore
         Task.FromResult($"0x{Interlocked.Increment(ref _serial):X}");
     public Task<IReadOnlyList<NipCertRecord>> GetRevokedAsync(CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<NipCertRecord>>(Array.Empty<NipCertRecord>());
+    public Task<IReadOnlyList<NipCertRecord>> GetByParentNidAsync(string parentNid, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<NipCertRecord>>(
+            _records.Where(r => r.ParentNid == parentNid).ToList());
 }
