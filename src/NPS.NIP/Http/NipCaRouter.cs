@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
 using NPS.NIP.Ca;
+using NPS.NIP.Ca.Ra;
 using NPS.NIP.Crypto;
 using NPS.NIP.Frames;
 using NPS.NIP;
@@ -45,9 +46,16 @@ public static class NipCaRouter
     /// Registers all NIP CA routes on <paramref name="app"/> under
     /// the configured <see cref="NipCaOptions.RoutePrefix"/>.
     /// </summary>
-    public static void MapNipCa(IEndpointRouteBuilder app, NipCaOptions opts, NipCaService ca)
+    public static void MapNipCa(
+        IEndpointRouteBuilder  app,
+        NipCaOptions           opts,
+        NipCaService           ca,
+        IBootstrapTokenStore?  bootstrapTokenStore = null,
+        IPendingStore?         pendingStore        = null)
     {
         var pfx = opts.RoutePrefix.TrimEnd('/');
+
+        var enrollmentPolicy = NipCaService.CreateEnrollmentPolicy(opts, bootstrapTokenStore, pendingStore);
 
         // ── Discovery ─────────────────────────────────────────────────────────
 
@@ -67,7 +75,8 @@ public static class NipCaRouter
                     ocsp     = $"{opts.BaseUrl}{pfx}/ocsp",
                     crl      = $"{opts.BaseUrl}{pfx}/v1/crl",
                 },
-                capabilities          = new[] { "agent", "node", "orchestrator-group" },
+                capabilities          = new[] { "agent", "node", "orchestrator-group",
+                    $"ra-tier-{(int)opts.EnrollmentTier}" },
                 max_cert_validity_days = opts.AgentCertValidityDays,
             };
             return Results.Json(body, s_json);
@@ -104,15 +113,22 @@ public static class NipCaRouter
 
             if (!ValidateRegisterRequest(req, out var err)) return BadRequest(err!);
 
+            var enrollToken = ctx.Request.Headers["X-NPS-Enrollment-Token"].FirstOrDefault();
             try
             {
-                var frame = await ca.RegisterAsync(
+                var frame = await ca.RegisterWithRaAsync(
                     "agent", req.Identifier!, req.PubKey!,
                     req.Capabilities ?? [],
                     req.ScopeJson    ?? "{}",
                     req.MetadataJson,
+                    enrollToken,
+                    enrollmentPolicy,
                     ct);
                 return Results.Json(frame, s_json, statusCode: 201);
+            }
+            catch (NipRaPendingException ex)
+            {
+                return Results.Json(new { pending_id = ex.PendingId, status = "queued" }, s_json, statusCode: 202);
             }
             catch (NipCaException ex)
             {
@@ -132,14 +148,21 @@ public static class NipCaRouter
 
             if (!ValidateRegisterRequest(req, out var err)) return BadRequest(err!);
 
+            var enrollToken = ctx.Request.Headers["X-NPS-Enrollment-Token"].FirstOrDefault();
             try
             {
-                var frame = await ca.RegisterAsync(
+                var frame = await ca.RegisterWithRaAsync(
                     "node", req.Identifier!, req.PubKey!,
                     req.Capabilities ?? ["nwp:query", "nwp:stream"],
                     req.ScopeJson    ?? "{}",
+                    enrollmentToken:  enrollToken,
+                    enrollmentPolicy: enrollmentPolicy,
                     ct: ct);
                 return Results.Json(frame, s_json, statusCode: 201);
+            }
+            catch (NipRaPendingException ex)
+            {
+                return Results.Json(new { pending_id = ex.PendingId, status = "queued" }, s_json, statusCode: 202);
             }
             catch (NipCaException ex)
             {
@@ -514,6 +537,113 @@ public static class NipCaRouter
                 }),
             }, s_json);
         });
+
+        // ── Enrollment: create bootstrap token (NPS-CR-0005 §3.3) ───────────
+
+        app.MapPost($"{pfx}/v1/enrollment/tokens", async (HttpContext ctx, ILogger<NipCaService> log, CancellationToken ct) =>
+        {
+            if (!IsAuthorized(ctx, opts)) return Unauthorized();
+            if (bootstrapTokenStore is null)
+                return Results.Json(new { error_code = "NIP-CA-BAD-REQUEST",
+                    message = "Bootstrap token enrollment is not enabled on this CA." }, s_json, statusCode: 400);
+
+            var req = await ReadJson<CreateTokenRequest>(ctx, log, ct);
+            var ttl = req?.TtlSeconds is > 0
+                ? TimeSpan.FromSeconds(req.TtlSeconds.Value)
+                : opts.BootstrapTokenMaxTtl;
+            if (ttl > opts.BootstrapTokenMaxTtl) ttl = opts.BootstrapTokenMaxTtl;
+
+            var expiresAt = DateTimeOffset.UtcNow + ttl;
+            var raw = await bootstrapTokenStore.CreateAsync(req?.Label, expiresAt, ct);
+            return Results.Json(new { token = raw, expires_at = expiresAt, label = req?.Label }, s_json, statusCode: 201);
+        });
+
+        // ── Enrollment: list pending (NPS-CR-0005 §3.4) ──────────────────────
+
+        app.MapGet($"{pfx}/v1/enrollment/pending", async (HttpContext ctx, CancellationToken ct) =>
+        {
+            if (!IsAuthorized(ctx, opts)) return Unauthorized();
+            if (pendingStore is null)
+                return Results.Json(new { error_code = "NIP-CA-BAD-REQUEST",
+                    message = "Pending-queue enrollment is not enabled on this CA." }, s_json, statusCode: 400);
+
+            var records = await pendingStore.ListAsync(ct);
+            var items = records.Select(r => new
+            {
+                id           = r.Id,
+                entity_type  = r.EntityType,
+                identifier   = r.Identifier,
+                pub_key      = r.PubKey,
+                capabilities = r.Capabilities,
+                scope_json   = r.ScopeJson,
+                requested_at = r.RequestedAt,
+                status       = r.Status.ToString().ToLowerInvariant(),
+                reject_reason = r.RejectReason,
+            });
+            return Results.Json(new { count = records.Count, items }, s_json);
+        });
+
+        // ── Enrollment: approve pending (NPS-CR-0005 §3.4) ───────────────────
+
+        app.MapPost($"{pfx}/v1/enrollment/pending/{{id}}/approve", async (
+            string id, HttpContext ctx, ILogger<NipCaService> log, CancellationToken ct) =>
+        {
+            if (!IsAuthorized(ctx, opts)) return Unauthorized();
+            if (pendingStore is null)
+                return Results.Json(new { error_code = "NIP-CA-BAD-REQUEST",
+                    message = "Pending-queue enrollment is not enabled on this CA." }, s_json, statusCode: 400);
+
+            var record = await pendingStore.GetAsync(id, ct);
+            if (record is null)
+                return Results.Json(new { error_code = NipErrorCodes.NidNotFound,
+                    message = $"Pending registration '{id}' not found." }, s_json, statusCode: 404);
+
+            if (record.Status != PendingStatus.Pending)
+                return Results.Json(new { error_code = "NIP-CA-BAD-REQUEST",
+                    message = $"Record '{id}' is already {record.Status}." }, s_json, statusCode: 409);
+
+            try
+            {
+                var frame = await ca.RegisterAsync(
+                    record.EntityType, record.Identifier, record.PubKey,
+                    record.Capabilities, record.ScopeJson, record.MetadataJson, ct);
+                await pendingStore.ApproveAsync(id, ct);
+                return Results.Json(frame, s_json, statusCode: 201);
+            }
+            catch (NipCaException ex)
+            {
+                log.LogWarning("Approve pending {Id} failed: {Msg}", id, ex.Message);
+                return ErrorResult(ex);
+            }
+        });
+
+        // ── Enrollment: reject pending (NPS-CR-0005 §3.4) ────────────────────
+
+        app.MapPost($"{pfx}/v1/enrollment/pending/{{id}}/reject", async (
+            string id, HttpContext ctx, ILogger<NipCaService> log, CancellationToken ct) =>
+        {
+            if (!IsAuthorized(ctx, opts)) return Unauthorized();
+            if (pendingStore is null)
+                return Results.Json(new { error_code = "NIP-CA-BAD-REQUEST",
+                    message = "Pending-queue enrollment is not enabled on this CA." }, s_json, statusCode: 400);
+
+            var req    = await ReadJson<RejectPendingRequest>(ctx, log, ct);
+            var reason = req?.Reason ?? "rejected_by_operator";
+
+            var ok = await pendingStore.RejectAsync(id, reason, ct);
+            if (!ok)
+            {
+                var record = await pendingStore.GetAsync(id, ct);
+                var msg = record is null
+                    ? $"Pending registration '{id}' not found."
+                    : $"Record '{id}' is already {record.Status}.";
+                return Results.Json(new { error_code = "NIP-CA-BAD-REQUEST", message = msg },
+                    s_json, statusCode: record is null ? 404 : 409);
+            }
+
+            log.LogInformation("Pending registration {Id} rejected: {Reason}", id, reason);
+            return Results.Json(new { id, status = "rejected", reason }, s_json);
+        });
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
@@ -604,6 +734,10 @@ public static class NipCaRouter
             NipErrorCodes.CertExpired            => 401,
             NipErrorCodes.CertRevoked            => 401,
             NipErrorCodes.ParentRevoked          => 401,
+            NipErrorCodes.RaTokenInvalid         => 401,
+            NipErrorCodes.RaTokenExpired         => 401,
+            NipErrorCodes.RaNidNotAllowed        => 403,
+            NipErrorCodes.RaPendingRejected      => 403,
             _                                    => 400,
         };
         return Results.Json(new { error_code = ex.ErrorCode, message = ex.Message }, s_json, statusCode: status);
@@ -692,6 +826,17 @@ public static class NipCaRouter
         public IReadOnlyList<string>? Capabilities    { get; set; }
         public string?                ScopeJson       { get; set; }
         public string?                MetadataJson    { get; set; }
+    }
+
+    private sealed class CreateTokenRequest
+    {
+        public int?    TtlSeconds { get; set; }
+        public string? Label      { get; set; }
+    }
+
+    private sealed class RejectPendingRequest
+    {
+        public string? Reason { get; set; }
     }
 
     /// <summary>
