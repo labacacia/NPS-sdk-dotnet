@@ -10,7 +10,7 @@
     <RootNamespace>NPS.Daemon.Observability</RootNamespace>
     <AssemblyName>NPS.Daemon.Observability</AssemblyName>
     <PackageId>LabAcacia.NPS.Daemon.Observability</PackageId>
-    <Version>1.0.0-alpha.6</Version>
+    <Version>1.0.0-alpha.7</Version>
     <Description>NPS daemon enterprise baseline: structured JSON logging, /healthz + /readyz probes, /metrics Prometheus exporter, SIGTERM graceful shutdown. Shared across npsd, nip-ca-server, and other long-running NPS services.</Description>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Authors>LabAcacia / INNO LOTUS PTY LTD</Authors>
