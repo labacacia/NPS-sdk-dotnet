@@ -7,14 +7,14 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <RootNamespace>NPS.NIP</RootNamespace>
-    <PackageId>LabAcacia.NPS.NIP</PackageId>
-    <AssemblyName>NPS.NIP</AssemblyName>
+    <AssemblyName>NPS.NIP.Storage.Postgres</AssemblyName>
+    <PackageId>LabAcacia.NPS.NIP.Storage.Postgres</PackageId>
     <Version>1.0.0-alpha.7</Version>
-    <Description>NPS — Neural Identity Protocol CA Server library. Issues, renews, revokes, and verifies NID certificates (Ed25519). Embeddable in any ASP.NET Core app or deployed standalone via Docker.</Description>
+    <Description>PostgreSQL storage backend for the LabAcacia.NPS.NIP CA Server. Provides PostgreSqlNipCaStore and the AddNipCaWithPostgres() DI extension.</Description>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Authors>LabAcacia / INNO LOTUS PTY LTD</Authors>
     <Company>INNO LOTUS PTY LTD</Company>
-    <PackageTags>nps;nip;ai;agent;identity;ca;certificate;ed25519</PackageTags>
+    <PackageTags>nps;nip;ai;agent;identity;ca;certificate;postgres;postgresql;npgsql</PackageTags>
     <PackageProjectUrl>https://github.com/labacacia/nps</PackageProjectUrl>
     <RepositoryUrl>https://github.com/labacacia/nps</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
@@ -26,7 +26,8 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
-    <PackageReference Include="NSec.Cryptography" Version="25.4.0" />
+    <PackageReference Include="Dapper" Version="2.1.66" />
+    <PackageReference Include="Npgsql" Version="8.0.7" />
   </ItemGroup>
 
   <ItemGroup>
@@ -34,7 +35,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\NPS.Core\NPS.Core.csproj" />
+    <ProjectReference Include="..\NPS.NIP\NPS.NIP.csproj" />
   </ItemGroup>
 
 </Project>

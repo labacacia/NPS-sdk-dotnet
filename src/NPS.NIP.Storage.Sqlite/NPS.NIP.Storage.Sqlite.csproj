@@ -7,14 +7,14 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <RootNamespace>NPS.NIP</RootNamespace>
-    <PackageId>LabAcacia.NPS.NIP</PackageId>
-    <AssemblyName>NPS.NIP</AssemblyName>
+    <AssemblyName>NPS.NIP.Storage.Sqlite</AssemblyName>
+    <PackageId>LabAcacia.NPS.NIP.Storage.Sqlite</PackageId>
     <Version>1.0.0-alpha.7</Version>
-    <Description>NPS — Neural Identity Protocol CA Server library. Issues, renews, revokes, and verifies NID certificates (Ed25519). Embeddable in any ASP.NET Core app or deployed standalone via Docker.</Description>
+    <Description>SQLite storage backend for the LabAcacia.NPS.NIP CA Server. Provides SqliteNipCaStore and the AddNipCaWithSqlite() DI extension. Suitable for embedded / single-binary deployments.</Description>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Authors>LabAcacia / INNO LOTUS PTY LTD</Authors>
     <Company>INNO LOTUS PTY LTD</Company>
-    <PackageTags>nps;nip;ai;agent;identity;ca;certificate;ed25519</PackageTags>
+    <PackageTags>nps;nip;ai;agent;identity;ca;certificate;sqlite;embedded</PackageTags>
     <PackageProjectUrl>https://github.com/labacacia/nps</PackageProjectUrl>
     <RepositoryUrl>https://github.com/labacacia/nps</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
@@ -26,7 +26,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
-    <PackageReference Include="NSec.Cryptography" Version="25.4.0" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.*" />
   </ItemGroup>
 
   <ItemGroup>
@@ -34,7 +34,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\NPS.Core\NPS.Core.csproj" />
+    <ProjectReference Include="..\NPS.NIP\NPS.NIP.csproj" />
   </ItemGroup>
 
 </Project>
