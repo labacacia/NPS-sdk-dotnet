@@ -10,7 +10,6 @@ using NPS.NIP.Ca;
 using NPS.NIP.Ca.Ra;
 using NPS.NIP.Crypto;
 using NPS.NIP.Http;
-using NPS.NIP.Storage;
 using NPS.NIP.Verification;
 
 namespace NPS.NIP.Extensions;
@@ -28,39 +27,6 @@ namespace NPS.NIP.Extensions;
 /// </summary>
 public static class NipServiceExtensions
 {
-    /// <summary>
-    /// Registers NIP CA services into the DI container using a PostgreSQL store.
-    /// Loads (or generates) the CA keypair from the configured key file.
-    /// <para>
-    /// <see cref="NipCaOptions.ConnectionString"/> must be set to a valid PostgreSQL connection string.
-    /// For SQLite or custom stores use <see cref="AddNipCa(IServiceCollection,Action{NipCaOptions},INipCaStore,bool)"/>
-    /// or <see cref="AddNipCaWithSqlite"/>.
-    /// </para>
-    /// </summary>
-    /// <param name="services">The service collection.</param>
-    /// <param name="configure">Callback to configure <see cref="NipCaOptions"/>.</param>
-    /// <param name="generateKeyIfMissing">
-    /// When <c>true</c>, generates a new CA keypair if <see cref="NipCaOptions.KeyFilePath"/>
-    /// does not exist. Useful for first-run / development.
-    /// Defaults to <c>false</c> (fail-fast in production).
-    /// </param>
-    public static IServiceCollection AddNipCa(
-        this IServiceCollection services,
-        Action<NipCaOptions> configure,
-        bool generateKeyIfMissing = false)
-    {
-        var opts = BuildOptions(configure);
-
-        if (string.IsNullOrWhiteSpace(opts.ConnectionString))
-            throw new InvalidOperationException(
-                "NipCaOptions.ConnectionString must be set when using the default PostgreSQL backend. " +
-                "For SQLite use AddNipCaWithSqlite(), or supply a custom store via " +
-                "AddNipCa(configure, INipCaStore store).");
-
-        var store = new PostgreSqlNipCaStore(opts.ConnectionString);
-        return RegisterCore(services, opts, store, generateKeyIfMissing);
-    }
-
     /// <summary>
     /// Registers NIP CA services into the DI container using a caller-supplied store.
     /// Loads (or generates) the CA keypair from the configured key file.
@@ -83,33 +49,6 @@ public static class NipServiceExtensions
         bool generateKeyIfMissing = false)
     {
         var opts = BuildOptions(configure);
-        return RegisterCore(services, opts, store, generateKeyIfMissing);
-    }
-
-    /// <summary>
-    /// Registers NIP CA services into the DI container using a SQLite store.
-    /// Runs schema migrations synchronously during startup.
-    /// Loads (or generates) the CA keypair from the configured key file.
-    /// </summary>
-    /// <param name="services">The service collection.</param>
-    /// <param name="configure">Callback to configure <see cref="NipCaOptions"/>.</param>
-    /// <param name="sqliteConnectionString">
-    /// SQLite connection string, e.g. <c>"Data Source=nip-ca.db"</c>.
-    /// The database file is created if it does not exist.
-    /// </param>
-    /// <param name="generateKeyIfMissing">
-    /// When <c>true</c>, generates a new CA keypair if <see cref="NipCaOptions.KeyFilePath"/>
-    /// does not exist.
-    /// </param>
-    public static IServiceCollection AddNipCaWithSqlite(
-        this IServiceCollection services,
-        Action<NipCaOptions> configure,
-        string sqliteConnectionString,
-        bool generateKeyIfMissing = false)
-    {
-        var opts  = BuildOptions(configure);
-        var store = SqliteNipCaStore.OpenAsync(sqliteConnectionString)
-            .GetAwaiter().GetResult();
         return RegisterCore(services, opts, store, generateKeyIfMissing);
     }
 

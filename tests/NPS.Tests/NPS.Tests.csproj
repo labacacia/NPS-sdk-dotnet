@@ -37,6 +37,7 @@
     <ProjectReference Include="..\..\src\NPS.NWP.Anchor\NPS.NWP.Anchor.csproj" />
     <ProjectReference Include="..\..\src\NPS.NOP\NPS.NOP.csproj" />
     <ProjectReference Include="..\..\src\NPS.NIP\NPS.NIP.csproj" />
+    <ProjectReference Include="..\..\src\NPS.NIP.Storage.Sqlite\NPS.NIP.Storage.Sqlite.csproj" />
     <ProjectReference Include="..\..\src\NPS.NDP\NPS.NDP.csproj" />
     <ProjectReference Include="..\..\benchmarks\NPS.Benchmarks.TokenSavings\NPS.Benchmarks.TokenSavings.csproj" />
     <ProjectReference Include="..\..\benchmarks\NPS.Benchmarks.WireSize\NPS.Benchmarks.WireSize.csproj" />
