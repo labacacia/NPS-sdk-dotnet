@@ -572,7 +572,7 @@ public sealed class AnchorNodeMiddleware
             ? a.ToString() : null;
         var priority         = frame.Priority ?? "normal";
         var effectiveTimeout = ClampTimeout(frame.TimeoutMs, spec);
-        var budgetCgn        = ReadBudget(ctx);
+        var budgetCgn        = ReadEffectiveBudget(ctx);
         var cgnCostHint      = spec.EstimatedCgn ?? 0;
 
         // Rate limit check (per-consumer).
@@ -585,6 +585,18 @@ public sealed class AnchorNodeMiddleware
             await WriteError(ctx, 429, "NPS-LIMIT-RATE",
                 NwpErrorCodes.BudgetExceeded,
                 rate.Reason ?? "rate limit exceeded.");
+            return;
+        }
+
+        // Pre-execution CGN-limit check (token-budget.md §7.2 step 4, CGN-Estimate basis).
+        // If the action's estimated CGN already exceeds the effective budget, reject before
+        // calling the router — no trim is possible at this stage.
+        if (budgetCgn > 0 && cgnCostHint > 0 && cgnCostHint > budgetCgn)
+        {
+            await WriteError(ctx, 400, "NPS-CLIENT-REQUEST-TOO-LARGE",
+                NwpErrorCodes.CgnLimitExceeded,
+                $"estimated CGN {cgnCostHint} exceeds effective budget {budgetCgn}.",
+                new { effective_budget = budgetCgn, estimated_cgn = cgnCostHint });
             return;
         }
 
@@ -719,12 +731,22 @@ public sealed class AnchorNodeMiddleware
         return requested > hardMax ? hardMax : requested;
     }
 
-    private uint ReadBudget(HttpContext ctx)
+    private uint ReadEffectiveBudget(HttpContext ctx)
     {
+        // Agent-declared budget (may be absent → 0 = unlimited).
+        uint agentBudget;
         if (ctx.Request.Headers.TryGetValue(NwpHttpHeaders.Budget, out var v) &&
             uint.TryParse(v.ToString(), out var parsed))
-            return parsed;
-        return _options.DefaultTokenBudget;
+            agentBudget = parsed;
+        else
+            agentBudget = _options.DefaultTokenBudget;
+
+        // Operator cap: effective = min(cgn_limit, agent_budget), 0 = unlimited.
+        // token-budget.md §7: effective_budget = min(cgn_limit, X-NWP-Budget)
+        var cgnLimit = _options.CgnLimit;
+        if (cgnLimit == 0) return agentBudget;          // no operator cap
+        if (agentBudget == 0) return cgnLimit;           // no agent cap → operator cap
+        return Math.Min(cgnLimit, agentBudget);
     }
 
     /// <summary>
@@ -829,12 +851,16 @@ public sealed class AnchorNodeMiddleware
     }
 
     private static Task WriteError(HttpContext ctx, int status, string npsStatus, string errorCode, string message)
+        => WriteError(ctx, status, npsStatus, errorCode, message, null);
+
+    private static Task WriteError(HttpContext ctx, int status, string npsStatus, string errorCode, string message, object? details)
     {
         var err = new ErrorFrame
         {
             Status  = npsStatus,
             Error   = errorCode,
             Message = message,
+            Details = details is null ? null : JsonSerializer.SerializeToElement(details, Json),
         };
         ctx.Response.StatusCode  = status;
         ctx.Response.ContentType = "application/json";
@@ -872,6 +898,9 @@ public sealed class AnchorNodeMiddleware
                 Invoke = $"{baseUrl}/invoke",
                 Schema = $"{baseUrl}/.schema",
             },
+            TokenBudget = opt.CgnLimit > 0
+                ? new NPS.NWP.Nwm.NwmTokenBudget { CgnLimit = opt.CgnLimit }
+                : null,
         };
 
         // Serialize the NWM as a base, then splice in the rate_limits block which
