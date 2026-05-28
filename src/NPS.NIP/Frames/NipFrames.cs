@@ -108,6 +108,15 @@ public sealed record IdentFrame : IFrame
     public IReadOnlyList<string>? CertChain { get; init; }
 
     /// <summary>
+    /// DER-encoded OCSP response, base64url (NIP v0.9 §8.2). Present when
+    /// <see cref="CertFormat"/> is <c>"v2-x509"</c> and the CA provides
+    /// OCSP stapling. Receivers MUST verify the staple signature and check
+    /// <c>thisUpdate</c> / <c>nextUpdate</c>; expired staple → <c>NIP-OCSP-STAPLE-EXPIRED</c>.
+    /// </summary>
+    [JsonPropertyName("ocsp_staple")]
+    public string? OcspStaple { get; init; }
+
+    /// <summary>
     /// Signed lineage metadata (NPS-CR-0003 §5.1.3). Present when this
     /// IdentFrame represents an orchestrator group NID
     /// (<c>lineage.role = "group"</c>) or a short-lived session NID

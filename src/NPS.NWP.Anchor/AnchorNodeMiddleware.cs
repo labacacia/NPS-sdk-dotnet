@@ -1032,6 +1032,13 @@ public sealed class AnchorNodeMiddleware
                 JsonSerializer.Serialize(writer, repPolicy, Json);
             }
 
+            // NWP v0.13 §4.1: advertise trusted CA NID URNs.
+            if (opt.TrustAnchors is { Count: > 0 } anchors)
+            {
+                writer.WritePropertyName("trust_anchors");
+                JsonSerializer.Serialize(writer, anchors, Json);
+            }
+
             // actions block: AaaS manifests include actions directly so that a
             // single fetch of /.nwm tells a consumer everything they need.
             writer.WritePropertyName("actions");

@@ -45,22 +45,41 @@ public sealed record NdpResolveResult
 }
 
 /// <summary>
-/// A single node entry inside a <see cref="GraphFrame"/> full sync (NPS-4 §3.3).
+/// A node entry in a <see cref="GraphFrame"/> topology snapshot (NPS-4 §5, NDP v0.8).
 /// </summary>
 public sealed record NdpGraphNode
 {
     /// <summary>Node NID.</summary>
     public required string Nid { get; init; }
 
-    /// <summary>Node type, e.g. <c>"memory"</c>, <c>"action"</c>, <c>"complex"</c>.</summary>
-    [JsonPropertyName("node_type")]
-    public string? NodeType { get; init; }
+    /// <summary>NID of this node's cluster Anchor, when part of a multi-cluster topology.</summary>
+    [JsonPropertyName("cluster_anchor")]
+    public string? ClusterAnchor { get; init; }
 
-    /// <summary>Physical addresses the node is reachable at.</summary>
-    public required IReadOnlyList<NdpAddress> Addresses { get; init; }
+    /// <summary>Node role set, e.g. <c>["memory"]</c> or <c>["action", "bridge"]</c>.</summary>
+    [JsonPropertyName("node_roles")]
+    public IReadOnlyList<string>? NodeRoles { get; init; }
+}
 
-    /// <summary>Capabilities the node advertises.</summary>
-    public required IReadOnlyList<string> Capabilities { get; init; }
+/// <summary>
+/// A directed edge in a <see cref="GraphFrame"/> topology snapshot (NPS-4 §5, NDP v0.8).
+/// </summary>
+public sealed record NdpGraphEdge
+{
+    /// <summary>Source node NID.</summary>
+    [JsonPropertyName("from_nid")]
+    public required string FromNid { get; init; }
+
+    /// <summary>Destination node NID.</summary>
+    [JsonPropertyName("to_nid")]
+    public required string ToNid { get; init; }
+
+    /// <summary>Observed round-trip latency in milliseconds (informational).</summary>
+    [JsonPropertyName("latency_ms")]
+    public uint? LatencyMs { get; init; }
+
+    /// <summary>Transport protocol used on this edge, e.g. <c>"ncp"</c>, <c>"https"</c>.</summary>
+    public string? Protocol { get; init; }
 }
 
 // ── AnnounceFrame (0x30) ──────────────────────────────────────────────────────
@@ -204,12 +223,11 @@ public sealed record ResolveFrame : IFrame
 // ── GraphFrame (0x32) ─────────────────────────────────────────────────────────
 
 /// <summary>
-/// Node graph synchronisation frame (NPS-4 §3.3).
-/// Sent by a Registry to subscribers either as a full initial snapshot
-/// (<see cref="InitialSync"/> = <c>true</c>) or as incremental JSON Patch updates.
-///
-/// <para>The <see cref="Seq"/> counter MUST be strictly monotonically increasing per publisher.
-/// A gap in sequence numbers SHOULD trigger a re-sync request (error <c>NDP-GRAPH-SEQ-GAP</c>).</para>
+/// Multi-cluster topology graph snapshot (NPS-4 §5, NDP v0.8).
+/// Published by Registries or Anchor Nodes to describe inter-cluster connectivity.
+/// Max 256 nodes, max 1024 edges per frame.
+/// Oversized frames MUST be rejected with <c>NDP-GRAPH-TOO-LARGE</c>;
+/// structural errors with <c>NDP-GRAPH-INVALID</c>.
 /// </summary>
 public sealed record GraphFrame : IFrame
 {
@@ -222,21 +240,19 @@ public sealed record GraphFrame : IFrame
     [JsonPropertyName("frame")]
     public string Frame { get; init; } = "0x32";
 
-    /// <summary>
-    /// <c>true</c> = full snapshot; <see cref="Nodes"/> is populated.
-    /// <c>false</c> = incremental; <see cref="Patch"/> (RFC 6902 JSON Patch) is populated.
-    /// </summary>
-    [JsonPropertyName("initial_sync")]
-    public required bool InitialSync { get; init; }
+    /// <summary>Opaque snapshot identifier assigned by the publisher.</summary>
+    [JsonPropertyName("graph_id")]
+    public required string GraphId { get; init; }
 
-    /// <summary>Full node list when <see cref="InitialSync"/> is <c>true</c>. Null otherwise.</summary>
-    public IReadOnlyList<NdpGraphNode>? Nodes { get; init; }
+    /// <summary>Node entries in this snapshot. Maximum 256.</summary>
+    public required IReadOnlyList<NdpGraphNode> Nodes { get; init; }
 
-    /// <summary>
-    /// RFC 6902 JSON Patch array when <see cref="InitialSync"/> is <c>false</c>. Null otherwise.
-    /// </summary>
-    public JsonElement? Patch { get; init; }
+    /// <summary>Directed edges describing inter-node connectivity. Maximum 1024.</summary>
+    public required IReadOnlyList<NdpGraphEdge> Edges { get; init; }
 
-    /// <summary>Monotonically increasing graph version sequence number.</summary>
-    public required ulong Seq { get; init; }
+    /// <summary>Time-to-live for this snapshot in seconds. 0 means no expiry.</summary>
+    public required uint Ttl { get; init; }
+
+    /// <summary>Free-form publisher metadata (informational only).</summary>
+    public JsonElement? Metadata { get; init; }
 }

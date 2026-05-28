@@ -113,6 +113,16 @@ public sealed class AnchorNodeOptions
     /// </summary>
     public ReputationPolicy? ReputationPolicy { get; set; }
 
+    // ── Trust anchors ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// CA NID URNs that this node trusts as root certificate authorities
+    /// (NPS-2 §4.1, NWP v0.13). Published in the NWM under <c>trust_anchors</c>
+    /// so connecting Agents know which CA signed this node's certificate.
+    /// Optional; omit for single-CA deployments.
+    /// </summary>
+    public IReadOnlyList<string>? TrustAnchors { get; set; }
+
     // ── Observability ────────────────────────────────────────────────────────
 
     /// <summary>
