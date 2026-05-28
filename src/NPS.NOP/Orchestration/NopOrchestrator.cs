@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using NPS.NOP.Frames;
 using NPS.NOP.Models;
 using NPS.NOP.Validation;
+using CompensationPolicy = NPS.NOP.Models.CompensationPolicy;
 
 namespace NPS.NOP.Orchestration;
 
@@ -284,10 +285,14 @@ public sealed class NopOrchestrator : INopOrchestrator
                     _log.LogWarning("Node {NodeId} failed; end node(s) cannot recover — aborting task {TaskId}",
                         finishedNodeId, task.TaskId);
                     await WaitAndAbortInFlightAsync(inFlight);
+                    var compensation = task.CompensationPolicy is CompensationPolicy.OnFailure or CompensationPolicy.Always
+                        ? await RunSagaCompensationAsync(task, allNodes, topoOrder, nodeResults, nodeStates, ct)
+                        : null;
                     return NopTaskResult.Failure(
                         task.TaskId,
                         NopErrorCodes.SyncDependencyFailed,
-                        $"Node '{finishedNodeId}' failed: {outcome.ErrorCode}");
+                        $"Node '{finishedNodeId}' failed: {outcome.ErrorCode}",
+                        compensation);
                 }
             }
         }
@@ -296,15 +301,23 @@ public sealed class NopOrchestrator : INopOrchestrator
         var failedNodes = nodeStates.Where(kv => kv.Value == TaskState.Failed).ToList();
         if (failedNodes.Count > 0 && endNodeIds.Any(e => nodeStates.GetValueOrDefault(e) == TaskState.Failed))
         {
+            var compensation = task.CompensationPolicy is CompensationPolicy.OnFailure or CompensationPolicy.Always
+                ? await RunSagaCompensationAsync(task, allNodes, topoOrder, nodeResults, nodeStates, ct)
+                : null;
             return NopTaskResult.Failure(task.TaskId, NopErrorCodes.SyncDependencyFailed,
-                $"End node(s) failed: {string.Join(", ", failedNodes.Select(kv => kv.Key))}");
+                $"End node(s) failed: {string.Join(", ", failedNodes.Select(kv => kv.Key))}",
+                compensation);
         }
 
         // Aggregate end-node results
         var aggregated = NopResultAggregator.AggregateEndNodes(
             endNodeIds, nodeResults, _opts.DefaultAggregateStrategy);
 
-        return NopTaskResult.Success(task.TaskId, aggregated, nodeResults);
+        var successCompensation = task.CompensationPolicy == CompensationPolicy.Always
+            ? await RunSagaCompensationAsync(task, allNodes, topoOrder, nodeResults, nodeStates, ct)
+            : null;
+
+        return NopTaskResult.Success(task.TaskId, aggregated, nodeResults, successCompensation);
     }
 
     // ── Node execution + retry ────────────────────────────────────────────────
@@ -691,6 +704,78 @@ public sealed class NopOrchestrator : INopOrchestrator
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
     };
+
+    // ── Saga compensation ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Dispatches compensation actions for all completed nodes that declared a
+    /// <c>compensate_action</c>, in reverse topological order (NPS-5 §3.5).
+    /// Compensation failures are non-fatal — the overall task result is unchanged.
+    /// </summary>
+    private async Task<SagaCompensationResult> RunSagaCompensationAsync(
+        TaskFrame                                task,
+        Dictionary<string, DagNode>              allNodes,
+        IReadOnlyList<string>                    topoOrder,
+        Dictionary<string, JsonElement>          nodeResults,
+        Dictionary<string, TaskState>            nodeStates,
+        CancellationToken                        ct)
+    {
+        // Collect nodes that completed AND have a compensate_action, reverse topo order.
+        var toCompensate = topoOrder
+            .Where(id => nodeStates.TryGetValue(id, out var s) && s == TaskState.Completed
+                      && allNodes.TryGetValue(id, out var n) && n.CompensateAction is not null)
+            .Reverse()
+            .ToList();
+
+        if (toCompensate.Count == 0)
+            return new SagaCompensationResult(0, 0, 0, []);
+
+        _log.LogInformation("Saga compensation: {Count} node(s) to compensate for task {TaskId}",
+            toCompensate.Count, task.TaskId);
+
+        await _store.UpdateStateAsync(task.TaskId, TaskState.Compensating, ct);
+
+        int succeeded   = 0;
+        var failedIds   = new List<string>();
+
+        foreach (var nodeId in toCompensate)
+        {
+            var node = allNodes[nodeId];
+            // Synthetic node: same agent, compensation action + params
+            var compensationNode = node with
+            {
+                Action       = node.CompensateAction!,
+                InputMapping = node.CompensateParamsMapping,
+            };
+
+            var outcome = await ExecuteNodeOnceAsync(
+                task, compensationNode,
+                subtaskId:      Guid.NewGuid().ToString("D"),
+                idempotencyKey: Guid.NewGuid().ToString("D"),
+                context:        nodeResults,
+                ct:             ct);
+
+            if (outcome.State == TaskState.Completed)
+            {
+                succeeded++;
+                _log.LogInformation("Compensation for node {NodeId} succeeded", nodeId);
+            }
+            else
+            {
+                failedIds.Add(nodeId);
+                _log.LogWarning("Compensation for node {NodeId} failed: {ErrorCode} — {Msg}",
+                    nodeId, outcome.ErrorCode, outcome.ErrorMessage);
+            }
+        }
+
+        int failed = failedIds.Count;
+        if (failed == 0)
+            _log.LogInformation("Saga compensation for task {TaskId} complete ({Total} succeeded)", task.TaskId, succeeded);
+        else
+            _log.LogWarning("Saga compensation for task {TaskId}: {Failed}/{Total} failed", task.TaskId, failed, toCompensate.Count);
+
+        return new SagaCompensationResult(toCompensate.Count, succeeded, failed, failedIds);
+    }
 
     // ── Telemetry helpers ─────────────────────────────────────────────────────
 

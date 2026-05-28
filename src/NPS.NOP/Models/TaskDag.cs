@@ -63,6 +63,21 @@ public sealed record DagNode
     /// </summary>
     [JsonPropertyName("min_required")]
     public uint MinRequired { get; init; }
+
+    /// <summary>
+    /// Saga compensation action URL (<c>nwp://...</c>) called when the task is rolled back
+    /// (NPS-5 §3.5). Null means this node has no compensation step.
+    /// </summary>
+    [JsonPropertyName("compensate_action")]
+    public string? CompensateAction { get; init; }
+
+    /// <summary>
+    /// Parameter mapping for the compensation call — same JSONPath syntax as
+    /// <see cref="InputMapping"/>, resolved against the node's own completed output
+    /// and prior node results (NPS-5 §3.5.2).
+    /// </summary>
+    [JsonPropertyName("compensate_params_mapping")]
+    public IReadOnlyDictionary<string, JsonElement>? CompensateParamsMapping { get; init; }
 }
 
 /// <summary>

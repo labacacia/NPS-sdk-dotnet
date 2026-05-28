@@ -25,5 +25,7 @@ public static class NopErrorCodes
     public const string StreamNidMismatch      = "NOP-STREAM-NID-MISMATCH";
     public const string ResourceInsufficient   = "NOP-RESOURCE-INSUFFICIENT";
     public const string ConditionEvalError     = "NOP-CONDITION-EVAL-ERROR";
-    public const string InputMappingError      = "NOP-INPUT-MAPPING-ERROR";
+    public const string InputMappingError         = "NOP-INPUT-MAPPING-ERROR";
+    public const string CompensationFailed        = "NOP-COMPENSATION-FAILED";
+    public const string CompensationPartialFailed = "NOP-COMPENSATION-PARTIAL-FAILED";
 }
