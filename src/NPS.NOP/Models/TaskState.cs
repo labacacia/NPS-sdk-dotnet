@@ -16,4 +16,10 @@ public enum TaskState
     Failed,
     Cancelled,
     Skipped,
+
+    /// <summary>Saga rollback in progress — compensation actions are being dispatched.</summary>
+    Compensating,
+
+    /// <summary>Saga rollback complete — all compensation actions have been dispatched.</summary>
+    Compensated,
 }

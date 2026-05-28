@@ -1,7 +1,9 @@
 // Copyright 2026 INNO LOTUS PTY LTD
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Net;
 using NPS.NDP.Frames;
+using NPS.NDP.Models;
 
 namespace NPS.NDP.Registry;
 
@@ -10,19 +12,51 @@ namespace NPS.NDP.Registry;
 ///
 /// <para>TTL expiry is evaluated lazily on every read (no background timer).
 /// Evicted entries are removed during <see cref="GetAll"/> and <see cref="Resolve"/> calls.</para>
+///
+/// <para>Security profile enforcement (NPS-4 §7.2) and activation_mode TTL capping
+/// (NPS-4 §3.1.7.1) are applied in <see cref="Announce"/>.</para>
 /// </summary>
 public sealed class InMemoryNdpRegistry : INdpRegistry
 {
     // NID → (frame, absolute expiry time)
     private readonly Dictionary<string, (AnnounceFrame Frame, DateTime ExpiresAt)> _store = new();
     private readonly Lock _lock = new();
+    private readonly NdpRegistryOptions _opts;
+
+    /// <summary>
+    /// Creates a registry with default options (<see cref="SecurityProfile.LocalDev"/>,
+    /// no address enforcement).
+    /// </summary>
+    public InMemoryNdpRegistry() : this(new NdpRegistryOptions()) { }
+
+    /// <summary>Creates a registry with the specified options.</summary>
+    public InMemoryNdpRegistry(NdpRegistryOptions options)
+    {
+        _opts = options;
+    }
 
     /// <summary>Optional clock override (for unit tests).</summary>
     public Func<DateTime> Clock { get; init; } = () => DateTime.UtcNow;
 
     // ── INdpRegistry ──────────────────────────────────────────────────────────
 
-    /// <inheritdoc/>
+    /// <summary>
+    /// Registers or refreshes a node/agent announcement (NPS-4 §3.1).
+    ///
+    /// <para>Two pre-store checks are applied when a security profile is configured:</para>
+    /// <list type="bullet">
+    ///   <item><see cref="SecurityProfile.OrgPrivate"/>: rejects frames whose first address
+    ///         is a globally-routable IP.</item>
+    ///   <item><see cref="SecurityProfile.PublicFederated"/>: rejects frames whose first address
+    ///         is a private or loopback IP.</item>
+    /// </list>
+    ///
+    /// <para><see cref="Models.ActivationMode.Ephemeral"/> frames have their effective TTL
+    /// capped at <see cref="NdpConstants.EphemeralMaxTtlSeconds"/> (NPS-4 §3.1.7.1).</para>
+    /// </summary>
+    /// <exception cref="NdpAnnounceRejectedException">
+    /// Thrown when the frame violates the configured security profile.
+    /// </exception>
     public void Announce(AnnounceFrame frame)
     {
         lock (_lock)
@@ -34,7 +68,15 @@ public sealed class InMemoryNdpRegistry : INdpRegistry
                 return;
             }
 
-            var expiresAt = Clock().AddSeconds(frame.Ttl);
+            // Security profile enforcement (NPS-4 §7.2)
+            EnforceSecurityProfile(frame);
+
+            // Activation-mode TTL cap (NPS-4 §3.1.7.1)
+            uint effectiveTtl = frame.ActivationMode == ActivationMode.Ephemeral
+                ? Math.Min(frame.Ttl, NdpConstants.EphemeralMaxTtlSeconds)
+                : frame.Ttl;
+
+            var expiresAt = Clock().AddSeconds(effectiveTtl);
             _store[frame.Nid] = (frame, expiresAt);
         }
     }
@@ -162,12 +204,78 @@ public sealed class InMemoryNdpRegistry : INdpRegistry
         {
             Host            = host,
             Port            = port,
-            Ttl             = 300,
+            Ttl             = NdpConstants.DnsFallbackTtlSeconds,
             CertFingerprint = string.IsNullOrWhiteSpace(fp) ? null : fp,
         };
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Enforces the configured security profile against an announce frame's addresses.
+    /// Caller MUST hold <c>_lock</c>.
+    /// </summary>
+    /// <exception cref="NdpAnnounceRejectedException">Thrown when the profile is violated.</exception>
+    private void EnforceSecurityProfile(AnnounceFrame frame)
+    {
+        if (_opts.SecurityProfile == SecurityProfile.LocalDev)
+            return; // no enforcement
+
+        foreach (var addr in frame.Addresses)
+        {
+            bool isPrivate = IsPrivateOrLoopback(addr.Host);
+
+            if (_opts.SecurityProfile == SecurityProfile.OrgPrivate && !isPrivate)
+            {
+                throw new NdpAnnounceRejectedException(
+                    NdpErrorCodes.AnnounceProfileViolation,
+                    $"Security profile '{SecurityProfile.OrgPrivate}' rejected address '{addr.Host}' " +
+                    $"for NID '{frame.Nid}': only private/loopback addresses are permitted.");
+            }
+
+            if (_opts.SecurityProfile == SecurityProfile.PublicFederated && isPrivate)
+            {
+                throw new NdpAnnounceRejectedException(
+                    NdpErrorCodes.AnnounceProfileViolation,
+                    $"Security profile '{SecurityProfile.PublicFederated}' rejected address '{addr.Host}' " +
+                    $"for NID '{frame.Nid}': private/loopback addresses are not permitted.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Returns <c>true</c> when <paramref name="host"/> resolves to a private or loopback address.
+    /// Checks RFC-1918, RFC-4193 (ULA), link-local, and loopback ranges.
+    /// If the host is a hostname (not parseable as IP), returns <c>false</c> (assume public).
+    /// </summary>
+    private static bool IsPrivateOrLoopback(string host)
+    {
+        if (!IPAddress.TryParse(host, out var ip))
+            return false; // hostname — assume public
+
+        if (IPAddress.IsLoopback(ip))
+            return true;
+
+        // Map IPv4-mapped IPv6 to IPv4 for simpler checks
+        if (ip.IsIPv4MappedToIPv6)
+            ip = ip.MapToIPv4();
+
+        var bytes = ip.GetAddressBytes();
+        if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+        {
+            // IPv4: 10.x, 172.16-31.x, 192.168.x, 169.254.x
+            return bytes[0] == 10
+                || (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31)
+                || (bytes[0] == 192 && bytes[1] == 168)
+                || (bytes[0] == 169 && bytes[1] == 254);
+        }
+        else
+        {
+            // IPv6: fc00::/7 (ULA), fe80::/10 (link-local)
+            return (bytes[0] & 0xFE) == 0xFC   // fc00::/7 (ULA)
+                || (bytes[0] == 0xFE && (bytes[1] & 0xC0) == 0x80); // fe80::/10
+        }
+    }
 
     // Caller must hold _lock.
     private void Purge(DateTime now)

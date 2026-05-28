@@ -33,27 +33,41 @@ public sealed class NopTaskResult
     public IReadOnlyDictionary<string, JsonElement> NodeResults { get; init; }
         = new Dictionary<string, JsonElement>();
 
+    /// <summary>
+    /// Saga compensation outcome, populated when <c>TaskFrame.compensation_policy</c>
+    /// is <c>"on_failure"</c> or <c>"always"</c> and at least one node had a
+    /// <c>compensate_action</c>. Null when no compensation was attempted.
+    /// </summary>
+    public SagaCompensationResult? Compensation { get; init; }
+
     // ── Factory helpers ───────────────────────────────────────────────────────
 
     public static NopTaskResult Success(
         string taskId,
         JsonElement? aggregatedResult,
-        IReadOnlyDictionary<string, JsonElement> nodeResults) =>
+        IReadOnlyDictionary<string, JsonElement> nodeResults,
+        SagaCompensationResult? compensation = null) =>
         new()
         {
             TaskId           = taskId,
             FinalState       = TaskState.Completed,
             AggregatedResult = aggregatedResult,
             NodeResults      = nodeResults,
+            Compensation     = compensation,
         };
 
-    public static NopTaskResult Failure(string taskId, string errorCode, string errorMessage) =>
+    public static NopTaskResult Failure(
+        string taskId,
+        string errorCode,
+        string errorMessage,
+        SagaCompensationResult? compensation = null) =>
         new()
         {
             TaskId       = taskId,
             FinalState   = TaskState.Failed,
             ErrorCode    = errorCode,
             ErrorMessage = errorMessage,
+            Compensation = compensation,
         };
 
     public static NopTaskResult Cancelled(string taskId, string reason) =>

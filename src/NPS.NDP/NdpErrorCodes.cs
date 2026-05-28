@@ -26,4 +26,7 @@ public static class NdpErrorCodes
 
     /// <summary>NDP Registry is temporarily unavailable.</summary>
     public const string RegistryUnavailable       = "NDP-REGISTRY-UNAVAILABLE";
+
+    /// <summary>Announce rejected: address violates the registry security profile (NPS-4 §7.2).</summary>
+    public const string AnnounceProfileViolation  = "NDP-ANNOUNCE-PROFILE-VIOLATION";
 }

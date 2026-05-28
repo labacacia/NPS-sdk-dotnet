@@ -116,6 +116,53 @@ public sealed record AnnounceFrame : IFrame
     /// frame (minus the <c>signature</c> field), produced with the publisher's private key.
     /// </summary>
     public required string Signature { get; init; }
+
+    // ── NPS-4 v0.7 fields ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Lifecycle model of this node (NPS-4 §3.1.7):
+    /// <c>"ephemeral"</c> — short-lived, evicted quickly;
+    /// <c>"resident"</c> — persistent long-running service (default);
+    /// <c>"hybrid"</c> — resident base that can spin up ephemeral instances.
+    /// Receivers cap effective TTL per activation_mode (§3.1.7.1).
+    /// </summary>
+    [JsonPropertyName("activation_mode")]
+    public string? ActivationMode { get; init; }
+
+    /// <summary>
+    /// Semantic roles this node fulfils, e.g. <c>["orchestrator","memory"]</c> (NPS-4 §3.1.8).
+    /// Used by consumers to filter nodes by function rather than capability.
+    /// </summary>
+    [JsonPropertyName("node_roles")]
+    public IReadOnlyList<string>? NodeRoles { get; init; }
+
+    /// <summary>
+    /// NID of the cluster anchor that coordinates this node's cluster (NPS-4 §3.1.9).
+    /// Present only for nodes that are members of a named cluster.
+    /// </summary>
+    [JsonPropertyName("cluster_anchor")]
+    public string? ClusterAnchor { get; init; }
+
+    /// <summary>
+    /// URI reference to a machine-readable spawn specification (NPS-4 §3.1.10).
+    /// Consumers can fetch this spec to understand how to launch a new instance.
+    /// </summary>
+    [JsonPropertyName("spawn_spec_ref")]
+    public string? SpawnSpecRef { get; init; }
+
+    /// <summary>
+    /// Additional bridging protocols supported by this node beyond the primary address
+    /// list, e.g. <c>["a2a","mcp"]</c> (NPS-4 §3.1.11).
+    /// </summary>
+    [JsonPropertyName("bridge_protocols")]
+    public IReadOnlyList<string>? BridgeProtocols { get; init; }
+
+    /// <summary>
+    /// NWP URL at which the node accepts activation (spawn) requests (NPS-4 §3.1.12).
+    /// Present only when <see cref="ActivationMode"/> is <c>"hybrid"</c>.
+    /// </summary>
+    [JsonPropertyName("activation_endpoint")]
+    public string? ActivationEndpoint { get; init; }
 }
 
 // ── ResolveFrame (0x31) ───────────────────────────────────────────────────────
