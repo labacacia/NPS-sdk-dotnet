@@ -23,6 +23,15 @@ public static class NwpHttpHeaders
     public const string Budget   = "X-NWP-Budget";
 
     /// <summary>
+    /// Caller's <see cref="NPS.NIP.Frames.IdentFrame"/> serialised as compact JSON (UTF-8).
+    /// When present the Anchor Node extracts the caller's <c>assurance_level</c>
+    /// for RFC-0005 §4.1.4 step 1 (<c>min_assurance_level</c> enforcement).
+    /// Full cryptographic verification of the IdentFrame is out of scope for the
+    /// Anchor middleware; use <c>NipIdentVerifier</c> at the connection/session layer.
+    /// </summary>
+    public const string Ident    = "X-NWP-Ident";
+
+    /// <summary>
     /// Comma-separated list of capability tokens the agent declares for this
     /// request (e.g. <c>"topology:read,action:invoke"</c>). Nodes with
     /// capability-gated operations check this header and reject callers that

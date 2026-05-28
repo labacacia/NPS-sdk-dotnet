@@ -146,6 +146,35 @@ public sealed record IdentMetadata
 
     /// <summary>Runtime identifier, e.g. <c>"langchain/0.2"</c>.</summary>
     public string? Runtime { get; init; }
+
+    /// <summary>
+    /// Advisory reputation policy hint (RFC-0005 §4.2). Unsigned; Nodes MUST NOT
+    /// use this to bypass their own configured policy or elevate trust.
+    /// </summary>
+    [JsonPropertyName("reputation_policy")]
+    public IdentReputationPolicyHint? ReputationPolicy { get; init; }
+}
+
+/// <summary>
+/// Agent-side advisory hint for reputation log endorsement (RFC-0005 §4.2).
+/// Carried in <see cref="IdentMetadata.ReputationPolicy"/> — unsigned, informational only.
+/// </summary>
+public sealed record IdentReputationPolicyHint
+{
+    /// <summary>
+    /// Log operators the Agent endorses. Advisory hint for log discovery;
+    /// Nodes MUST NOT treat this as an authoritative allowlist.
+    /// </summary>
+    [JsonPropertyName("log_sources")]
+    public IReadOnlyList<string>? LogSources { get; init; }
+
+    /// <summary>
+    /// Agent's consent preference: <c>"public"</c> (any Node may query) or
+    /// <c>"private"</c> (prefer queries limited to direct counterparties).
+    /// Advisory only — Nodes MAY query any log regardless of this field.
+    /// </summary>
+    [JsonPropertyName("consent")]
+    public string? Consent { get; init; }
 }
 
 /// <summary>
