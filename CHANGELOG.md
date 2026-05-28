@@ -8,6 +8,76 @@ Until NPS reaches v1.0 stable, every repository in the suite is synchronized to 
 
 ---
 
+## [1.0.0-alpha.11] — 2026-05-28
+
+### Added
+
+- **`NPS.NWP` — `SubscribeFrame` CR-0006** (Breaking rewrite): Old wire format (`action`, `stream_id`, `heartbeat_interval` in seconds, `resume_from_seq`) replaced by CR-0006 formal spec — `subscription_id` (UUID v4), `filter` (`JsonElement?`), `heartbeat_interval_ms`, `max_events`, opaque `cursor` for lossless resume. **Wire breaking change** vs alpha.8–10.
+
+- **`NPS.NWP.Anchor` — `AnchorNodeOptions.TrustAnchors`**: `IReadOnlyList<string>? TrustAnchors` spliced into the `/.nwm` JSON response as `trust_anchors` (NWP v0.13 §4.1). Each URN must start with `urn:nps:`.
+
+- **`NPS.NIP` — `IdentFrame.OcspStaple`**: Nullable `ocsp_staple` wire field — base64url DER OCSP response (NIP v0.9 §8.2). Receivers MUST verify staple signature; expired → `NIP-OCSP-STAPLE-EXPIRED`.
+
+- **`NPS.NIP.X509` — `NpsX509Oids.IdNpsCapabilities`**: New constant `"1.3.6.1.4.1.65715.2.3"` for the agent capability set X.509 extension (ASN.1 SEQUENCE OF UTF8String, NIP v0.9 §8.2).
+
+- **`NPS.NOP` — AlignStream ack/NAK**: `AlignStreamFrame` gains `AckSeq` (`ulong?`) and `NakSeq` (`ulong?`) for the NOP v0.6 `window_size=16` sliding-window acknowledgement protocol.
+
+- **`NPS.NOP` — Webhook HMAC signing**: `TaskFrame` gains `CallbackSecret` (`string?`). Callers MUST populate `X-NPS-Signature: sha256=…` on webhook delivery (`NOP-CALLBACK-HMAC-MISSING` when absent).
+
+- **`NPS.NOP` — Cross-cluster delegation**: `DelegateFrame` gains `TargetClusterAnchor` (`string?`) for routing tasks to a specific cluster anchor (NOP v0.6).
+
+- **`NPS.NOP.Models` — `AggregateStrategy`**: New constants `WeightedFirstK = "weighted_first_k"` and `MergeAll = "merge_all"` (NOP v0.6).
+
+- **`NPS.NDP` — GraphFrame §5 topology-snapshot format** (Breaking rewrite): `NdpGraphNode` now carries `Nid`, `ClusterAnchor`, `NodeRoles`; new `NdpGraphEdge` type with `FromNid`, `ToNid`, `LatencyMs`, `Protocol`; `GraphFrame` carries `GraphId`, `Nodes`, `Edges`, `Ttl`, `Metadata`. Max 256 nodes / 1024 edges.
+
+### Tracking the suite
+
+This release tracks NPS suite `v1.0.0-alpha.11`. NCP v0.7 / NWP v0.13 / NIP v0.9 / NDP v0.8 / NOP v0.6.
+
+---
+
+## [1.0.0-alpha.10] — 2026-05-28
+
+### Added
+
+- **`NPS.NOP` — Saga compensation**: `CompensationPolicy` type; `DagNode` gains `CompensateAction` / `CompensateParamsMapping` fields; `TaskState` enum gains `Compensating` / `Compensated` states.
+
+- **`NPS.NDP` — `SecurityProfile`**: New enum — `LocalDev` / `OrgPrivate` / `PublicFederated` (NDP §6). Ephemeral TTL cap enforced for `LocalDev` registries.
+
+- **`NPS.NIP` — `IdentReputationPolicyHint`**: Structured type for reputation policy hints carried in identity frames; `IdentMetadata` type for opaque metadata attachments.
+
+### Tracking the suite
+
+This release tracks NPS suite `v1.0.0-alpha.10`.
+
+---
+
+## [1.0.0-alpha.9] — 2026-05-28
+
+### Changed
+
+- **`NPS.NIP` — `IdentFrame` assurance extraction improvements**: Structured assurance-level extraction aligned with NPS-RFC-0003 draft; `IdentMetadata` drafted.
+
+### Tracking the suite
+
+This release tracks NPS suite `v1.0.0-alpha.9`.
+
+---
+
+## [1.0.0-alpha.8] — 2026-05-28
+
+### Added
+
+- **`NPS.NWP.Anchor` — `ReputationPolicyEvaluator` (RFC-0005)**: `IReputationPolicyEvaluator` / `DefaultReputationPolicyEvaluator` with in-process ban cache + per-NID query cache. `AnchorNodeOptions.ReputationPolicy`. NWM `reputation_policy` JSON block published on `GET /.nwm`. New error codes: `NWP-REPUTATION-THROTTLED`, `NWP-REPUTATION-REJECTED`, `NWP-REPUTATION-BANNED`. Response headers: `X-NWP-Reputation-Status`, `X-NWP-Ban-Expires`. `cgn_limit` pre-execution budget enforcement in `AnchorNodeMiddleware` (token-budget.md §7.2 MUST).
+
+- **`NPS.NWP` — `SubscribeFrame` (0x12)**: Initial `SubscribeFrame` type added (pre-CR-0006 wire format — replaced in alpha.11).
+
+### Tracking the suite
+
+This release tracks NPS suite `v1.0.0-alpha.8`. NPS-RFC-0005 (Reputation Policy Enforcement) and NPS-RFC-0002 (NPS X.509 OID Registry) promoted to Accepted.
+
+---
+
 ## [1.0.0-alpha.7] — 2026-05-17
 
 ### Added
