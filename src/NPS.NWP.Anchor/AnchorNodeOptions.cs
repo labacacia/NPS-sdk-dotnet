@@ -87,6 +87,16 @@ public sealed class AnchorNodeOptions
     /// </summary>
     public uint CgnLimit { get; set; } = 0;
 
+    // ── Auth enforcement ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// URL of the CA enrollment page advertised in the <c>hint</c> field when
+    /// a request is rejected with <c>NWP-AUTH-ASSURANCE-TOO-LOW</c>
+    /// (RFC-0005 §4.1.4 step 1). Optional; if omitted no hint is returned.
+    /// Example: <c>"https://ca.example.com/enroll"</c>.
+    /// </summary>
+    public string? AssuranceHintUrl { get; set; }
+
     // ── Reputation policy ────────────────────────────────────────────────────
 
     /// <summary>

@@ -593,16 +593,20 @@ public sealed class AnchorNodeMiddleware
             return;
         }
 
+        // Extract caller's assurance level from X-NWP-Ident header (RFC-0005 §4.1.4 step 1).
+        // Full IdentFrame signature verification is out of scope here — trust the declared
+        // assurance_level value. Falls back to Anonymous when header is absent or malformed.
+        var callerAssuranceLevel = ExtractIdentAssuranceLevel(ctx);
+
         // Reputation policy check (RFC-0005 §4.1.4) — after identity and rate-limit,
-        // before action dispatch. AssuranceLevel defaults to Anonymous until IdentFrame
-        // verification is wired into the pipeline.
+        // before action dispatch.
         if (_options.ReputationPolicy is { } repPolicy && _evaluator is not null)
         {
             ReputationDecision decision;
             try
             {
                 decision = await _evaluator.EvaluateAsync(
-                    consumerKey, AssuranceLevel.Anonymous, repPolicy, ctx.RequestAborted);
+                    consumerKey, callerAssuranceLevel, repPolicy, ctx.RequestAborted);
             }
             catch (Exception ex)
             {
@@ -628,14 +632,20 @@ public sealed class AnchorNodeMiddleware
                     return;
 
                 case ReputationOutcome.Reject:
+                    // For assurance-too-low rejections, include a CA enrollment hint (RFC-0005 §4.1.4 step 1).
+                    object? rejectExtra = decision.ErrorCode == NwpErrorCodes.AuthAssuranceTooLow
+                        ? new { matched_incident = (string?)null, hint = _options.AssuranceHintUrl }
+                        : decision.MatchedIncident is not null
+                            ? new { matched_incident = decision.MatchedIncident, matched_severity = decision.MatchedSeverity }
+                            : null;
                     await WriteError(ctx, 403, "NPS-AUTH-FORBIDDEN",
                         decision.ErrorCode ?? NwpErrorCodes.ReputationRejected,
-                        decision.MatchedIncident is not null
-                            ? $"Request rejected: {decision.MatchedIncident} ({decision.MatchedSeverity})."
-                            : "Request rejected by reputation policy.",
-                        decision.MatchedIncident is not null
-                            ? new { matched_incident = decision.MatchedIncident, matched_severity = decision.MatchedSeverity }
-                            : null);
+                        decision.ErrorCode == NwpErrorCodes.AuthAssuranceTooLow
+                            ? $"Assurance level too low: request requires '{repPolicy.MinAssuranceLevel}', caller declared '{AssuranceLevels.ToWire(callerAssuranceLevel)}'."
+                            : decision.MatchedIncident is not null
+                                ? $"Request rejected: {decision.MatchedIncident} ({decision.MatchedSeverity})."
+                                : "Request rejected by reputation policy.",
+                        rejectExtra);
                     return;
 
                 case ReputationOutcome.Throttle:
@@ -912,6 +922,37 @@ public sealed class AnchorNodeMiddleware
             ctx.Response.Headers["X-NWP-Request-Id"] = requestId;
 
         return ctx.Response.WriteAsync(JsonSerializer.Serialize(caps, Json));
+    }
+
+    // ── Identity helpers ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Reads the <c>X-NWP-Ident</c> header and extracts the caller's
+    /// <c>assurance_level</c> field from the embedded IdentFrame JSON (RFC-0005 §4.1.4 step 1).
+    /// Returns <see cref="AssuranceLevel.Anonymous"/> when the header is absent, malformed,
+    /// or declares no assurance level (backward compat with pre-RFC-0003 callers).
+    /// </summary>
+    private static AssuranceLevel ExtractIdentAssuranceLevel(HttpContext ctx)
+    {
+        if (!ctx.Request.Headers.TryGetValue(NwpHttpHeaders.Ident, out var raw) || raw.Count == 0)
+            return AssuranceLevel.Anonymous;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(raw.ToString());
+            if (doc.RootElement.TryGetProperty("assurance_level", out var el)
+                && el.ValueKind == JsonValueKind.String
+                && AssuranceLevels.TryParse(el.GetString(), out var level))
+            {
+                return level;
+            }
+        }
+        catch
+        {
+            // malformed JSON — fall through to Anonymous
+        }
+
+        return AssuranceLevel.Anonymous;
     }
 
     private static Task WriteError(HttpContext ctx, int status, string npsStatus, string errorCode, string message)
