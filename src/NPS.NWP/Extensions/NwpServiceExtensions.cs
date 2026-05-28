@@ -64,8 +64,9 @@ public static class NwpServiceExtensions
                 .Register<NPS.Core.Frames.Ncp.CapsFrame>  (FrameType.Caps)
                 .Register<NPS.Core.Frames.Ncp.ErrorFrame>(FrameType.Error)
                 // NWP frames
-                .Register<QueryFrame> (FrameType.Query)
-                .Register<ActionFrame>(FrameType.Action)
+                .Register<QueryFrame>    (FrameType.Query)
+                .Register<ActionFrame>   (FrameType.Action)
+                .Register<SubscribeFrame>(FrameType.Subscribe)
                 .Build());
 
         return services;

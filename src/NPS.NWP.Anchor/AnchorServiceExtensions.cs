@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using NPS.NOP.Orchestration;
+using NPS.NWP.Anchor.Reputation;
 using NPS.NWP.Anchor.Topology;
 
 namespace NPS.NWP.Anchor;
@@ -38,6 +39,7 @@ public static class AnchorServiceExtensions
         services.AddSingleton(opts);
         services.AddSingleton<IAnchorRouter, TRouter>();
         services.TryAddSingleton<IAnchorRateLimiter, InMemoryAnchorRateLimiter>();
+        services.TryAddSingleton<IReputationPolicyEvaluator, DefaultReputationPolicyEvaluator>();
         return services;
     }
 
@@ -79,7 +81,8 @@ public static class AnchorServiceExtensions
             var orchestrator = ctx.RequestServices.GetRequiredService<INopOrchestrator>();
             var limiter      = ctx.RequestServices.GetRequiredService<IAnchorRateLimiter>();
             var logger       = ctx.RequestServices.GetRequiredService<ILogger<AnchorNodeMiddleware>>();
-            var mw = new AnchorNodeMiddleware(next, opts, router, orchestrator, limiter, logger);
+            var evaluator    = ctx.RequestServices.GetService<IReputationPolicyEvaluator>();
+            var mw = new AnchorNodeMiddleware(next, opts, router, orchestrator, limiter, logger, evaluator);
             return mw.InvokeAsync(ctx);
         });
     }

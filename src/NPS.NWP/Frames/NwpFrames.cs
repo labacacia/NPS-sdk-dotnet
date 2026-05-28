@@ -149,6 +149,66 @@ public sealed record ActionFrame : IFrame
     public string? RequestId { get; init; }
 }
 
+// ── SubscribeFrame (0x12) ────────────────────────────────────────────────────
+
+/// <summary>
+/// Change-subscription management frame (NPS-2 §8).
+/// Sent to the <c>/subscribe</c> sub-path. The node acknowledges with a
+/// <c>CapsFrame</c> and subsequently pushes <c>DiffFrame</c> events on the stream.
+/// </summary>
+public sealed record SubscribeFrame : IFrame
+{
+    public FrameType    FrameType     => FrameType.Subscribe;
+    public EncodingTier PreferredTier => EncodingTier.MsgPack;
+
+    /// <summary>
+    /// Subscription control action: <c>"subscribe"</c>, <c>"unsubscribe"</c>, or <c>"ping"</c>.
+    /// </summary>
+    public required string Action { get; init; }
+
+    /// <summary>
+    /// Client-generated UUID v4 identifying the subscription stream.
+    /// The node echoes it in the acknowledgement <c>CapsFrame</c> and all subsequent
+    /// <c>DiffFrame</c> pushes for this stream.
+    /// </summary>
+    [JsonPropertyName("stream_id")]
+    public required string StreamId { get; init; }
+
+    /// <summary>
+    /// anchor_id of the data being subscribed (required when <c>action="subscribe"</c>
+    /// and <c>Type</c> is <c>null</c> or the reserved type requires an anchor).
+    /// </summary>
+    [JsonPropertyName("anchor_ref")]
+    public string? AnchorRef { get; init; }
+
+    /// <summary>
+    /// Filter conditions applied server-side before pushing events (NPS-2 §8.1).
+    /// Requires <c>capabilities.subscribe_filter = true</c>.
+    /// </summary>
+    public JsonElement? Filter { get; init; }
+
+    /// <summary>
+    /// Server-to-client heartbeat interval in seconds (0 = disabled, default 30).
+    /// </summary>
+    [JsonPropertyName("heartbeat_interval")]
+    public uint? HeartbeatInterval { get; init; }
+
+    /// <summary>
+    /// Reconnection cursor. When provided, the node replays events with
+    /// <c>seq &gt; ResumeFromSeq</c>. If the server can no longer satisfy the request,
+    /// it returns <c>NWP-SUBSCRIBE-SEQ-TOO-OLD</c>.
+    /// </summary>
+    [JsonPropertyName("resume_from_seq")]
+    public ulong? ResumeFromSeq { get; init; }
+
+    /// <summary>
+    /// Reserved subscribe type identifier (NPS-2 §12), e.g. <c>"topology.stream"</c>.
+    /// When set, type-specific request fields apply.
+    /// </summary>
+    [JsonPropertyName("type")]
+    public string? Type { get; init; }
+}
+
 /// <summary>
 /// Response body for an asynchronous <see cref="ActionFrame"/> execution (NPS-2 §6.2).
 /// Returned when <c>ActionFrame.Async == true</c>.
