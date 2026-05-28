@@ -45,6 +45,12 @@ public static class NpsX509Oids
     /// </summary>
     public const string IdNpsNodeRoles           = ExtensionArc + ".2";
 
+    /// <summary>
+    /// Custom non-critical extension OID — encodes the agent capability set
+    /// as an ASN.1 SEQUENCE OF UTF8String (NPS-3 §8.2, NIP v0.9).
+    /// </summary>
+    public const string IdNpsCapabilities        = ExtensionArc + ".3";
+
     /// <summary>RFC 8410 — Ed25519 in X.509 (algorithm identifier OID).</summary>
     public const string Ed25519                  = "1.3.101.112";
 }

@@ -98,41 +98,30 @@ public sealed class NdpFrameTests
     // ── GraphFrame ────────────────────────────────────────────────────────────
 
     [Fact]
-    public void GraphFrame_InitialSync_FrameType()
+    public void GraphFrame_TopologySnapshot_FrameType()
     {
         var frame = new GraphFrame
         {
-            InitialSync = true,
-            Nodes       = [new NdpGraphNode
+            GraphId = "snap-001",
+            Nodes   = [new NdpGraphNode
             {
-                Nid          = "urn:nps:node:api.test:products",
-                NodeType     = "memory",
-                Addresses    = [new NdpAddress { Host = "10.0.0.1", Port = 17434, Protocol = "nwp" }],
-                Capabilities = ["nwp:query"],
+                Nid       = "urn:nps:node:api.test:products",
+                NodeRoles = ["memory"],
             }],
-            Seq = 1,
+            Edges = [new NdpGraphEdge
+            {
+                FromNid  = "urn:nps:node:api.test:router",
+                ToNid    = "urn:nps:node:api.test:products",
+                Protocol = "ncp",
+            }],
+            Ttl = 300,
         };
         Assert.Equal(FrameType.Graph, frame.FrameType);
         Assert.Equal(EncodingTier.MsgPack, frame.PreferredTier);
         Assert.Equal("0x32", frame.Frame);
         Assert.NotNull(frame.Nodes);
         Assert.Single(frame.Nodes);
-    }
-
-    [Fact]
-    public void GraphFrame_Incremental_HasPatch()
-    {
-        var patch = JsonDocument.Parse("""[{"op":"replace","path":"/nodes/0/ttl","value":600}]""");
-        var frame = new GraphFrame
-        {
-            InitialSync = false,
-            Patch       = patch.RootElement,
-            Seq         = 2,
-        };
-        Assert.False(frame.InitialSync);
-        Assert.Null(frame.Nodes);
-        Assert.NotNull(frame.Patch);
-        Assert.Equal(JsonValueKind.Array, frame.Patch.Value.ValueKind);
+        Assert.Single(frame.Edges);
     }
 
     // ── NwpTargetMatchesNid ───────────────────────────────────────────────────

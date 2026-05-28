@@ -152,9 +152,13 @@ public sealed record ActionFrame : IFrame
 // ── SubscribeFrame (0x12) ────────────────────────────────────────────────────
 
 /// <summary>
-/// Change-subscription management frame (NPS-2 §8).
-/// Sent to the <c>/subscribe</c> sub-path. The node acknowledges with a
-/// <c>CapsFrame</c> and subsequently pushes <c>DiffFrame</c> events on the stream.
+/// Server-push subscription frame (NPS-2 §13, CR-0006; NWP v0.13).
+/// Sent to the <c>/subscribe</c> endpoint. The node responds with a
+/// <c>CapsFrame</c> (status=open) then streams <c>DiffFrame</c> events until
+/// cancelled, the <see cref="MaxEvents"/> cap is reached, or the connection drops.
+/// Cursor-based resume: re-send the same <see cref="SubscriptionId"/> with the
+/// last received <c>cursor</c> from a <c>DiffFrame</c> to resume losslessly.
+/// If the cursor has expired, the node returns <c>NWP-SUBSCRIBE-SEQ-TOO-OLD</c>.
 /// </summary>
 public sealed record SubscribeFrame : IFrame
 {
@@ -162,51 +166,40 @@ public sealed record SubscribeFrame : IFrame
     public EncodingTier PreferredTier => EncodingTier.MsgPack;
 
     /// <summary>
-    /// Subscription control action: <c>"subscribe"</c>, <c>"unsubscribe"</c>, or <c>"ping"</c>.
+    /// Client-generated UUID v4 that identifies this subscription.
+    /// Echoed in every <c>DiffFrame</c> push. Re-use the same ID with a
+    /// non-null <see cref="Cursor"/> to resume after a disconnect.
     /// </summary>
-    public required string Action { get; init; }
+    [JsonPropertyName("subscription_id")]
+    public required string SubscriptionId { get; init; }
 
     /// <summary>
-    /// Client-generated UUID v4 identifying the subscription stream.
-    /// The node echoes it in the acknowledgement <c>CapsFrame</c> and all subsequent
-    /// <c>DiffFrame</c> pushes for this stream.
-    /// </summary>
-    [JsonPropertyName("stream_id")]
-    public required string StreamId { get; init; }
-
-    /// <summary>
-    /// anchor_id of the data being subscribed (required when <c>action="subscribe"</c>
-    /// and <c>Type</c> is <c>null</c> or the reserved type requires an anchor).
-    /// </summary>
-    [JsonPropertyName("anchor_ref")]
-    public string? AnchorRef { get; init; }
-
-    /// <summary>
-    /// Filter conditions applied server-side before pushing events (NPS-2 §8.1).
-    /// Requires <c>capabilities.subscribe_filter = true</c>.
+    /// QueryFrame-compatible filter predicate applied server-side before
+    /// pushing events. <c>null</c> means no filter (push all events on the anchor).
+    /// Unsupported filter → <c>NWP-SUBSCRIBE-FILTER-UNSUPPORTED</c>.
     /// </summary>
     public JsonElement? Filter { get; init; }
 
     /// <summary>
-    /// Server-to-client heartbeat interval in seconds (0 = disabled, default 30).
+    /// Server-to-client keepalive interval in milliseconds (default 30000, 0 = disabled).
+    /// Heartbeat events carry <c>event_type="heartbeat"</c> and an empty payload.
     /// </summary>
-    [JsonPropertyName("heartbeat_interval")]
-    public uint? HeartbeatInterval { get; init; }
+    [JsonPropertyName("heartbeat_interval_ms")]
+    public uint? HeartbeatIntervalMs { get; init; }
 
     /// <summary>
-    /// Reconnection cursor. When provided, the node replays events with
-    /// <c>seq &gt; ResumeFromSeq</c>. If the server can no longer satisfy the request,
-    /// it returns <c>NWP-SUBSCRIBE-SEQ-TOO-OLD</c>.
+    /// Maximum number of events to deliver before the server closes the stream.
+    /// 0 or absent means unlimited.
     /// </summary>
-    [JsonPropertyName("resume_from_seq")]
-    public ulong? ResumeFromSeq { get; init; }
+    [JsonPropertyName("max_events")]
+    public uint? MaxEvents { get; init; }
 
     /// <summary>
-    /// Reserved subscribe type identifier (NPS-2 §12), e.g. <c>"topology.stream"</c>.
-    /// When set, type-specific request fields apply.
+    /// Opaque resume cursor from the last received <c>DiffFrame</c>. When set,
+    /// the server replays events from that point. Expired cursor →
+    /// <c>NWP-SUBSCRIBE-SEQ-TOO-OLD</c>.
     /// </summary>
-    [JsonPropertyName("type")]
-    public string? Type { get; init; }
+    public string? Cursor { get; init; }
 }
 
 /// <summary>

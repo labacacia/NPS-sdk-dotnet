@@ -43,6 +43,15 @@ public sealed record TaskFrame : IFrame
     [JsonPropertyName("callback_url")]
     public string? CallbackUrl { get; init; }
 
+    /// <summary>
+    /// Shared secret for HMAC-SHA256 signing of callback POSTs (NPS-5 §8.4).
+    /// When set, the Orchestrator MUST include <c>X-NPS-Signature: sha256={hex}</c>
+    /// in every webhook delivery. Workers that receive a <c>callback_secret</c>
+    /// MUST propagate it to their own callbacks; absent → <c>NOP-CALLBACK-HMAC-MISSING</c>.
+    /// </summary>
+    [JsonPropertyName("callback_secret")]
+    public string? CallbackSecret { get; init; }
+
     /// <summary>When true, run resource pre-flight checks before execution (NPS-5 §4).</summary>
     [JsonPropertyName("preflight")]
     public bool Preflight { get; init; }
@@ -135,6 +144,15 @@ public sealed record DelegateFrame : IFrame
     /// </summary>
     [JsonPropertyName("delegate_depth")]
     public int DelegateDepth { get; init; }
+
+    /// <summary>
+    /// NID of the Anchor Node in the target cluster (NPS-5 §3.2, NOP v0.6).
+    /// When set, the Orchestrator resolves this NID via NDP before forwarding
+    /// the DelegateFrame. The receiving cluster validates via its own NWM.
+    /// SSRF guard: MUST be an NPS NID URN (urn:nps:…), never a raw URL.
+    /// </summary>
+    [JsonPropertyName("target_cluster_anchor")]
+    public string? TargetClusterAnchor { get; init; }
 }
 
 // ── SyncFrame (0x42) ────────────────────────────────────────────────────────
@@ -227,4 +245,20 @@ public sealed record AlignStreamFrame : IFrame
     /// <summary>Error details when <see cref="IsFinal"/> is true and the sub-task failed.</summary>
     [JsonPropertyName("error")]
     public StreamError? Error { get; init; }
+
+    /// <summary>
+    /// Last acknowledged sequence number from the receiver (NOP v0.6 §3.4.2).
+    /// Sender advances its send window when <c>ack_seq</c> advances. Absence
+    /// means no acknowledgment has been issued yet.
+    /// </summary>
+    [JsonPropertyName("ack_seq")]
+    public ulong? AckSeq { get; init; }
+
+    /// <summary>
+    /// Negative-acknowledgment sequence number (NOP v0.6 §3.4.2).
+    /// Receiver sets this when a gap is detected; sender MUST retransmit
+    /// from <c>nak_seq + 1</c>. Raises <c>NOP-STREAM-NAK</c> if unresolvable.
+    /// </summary>
+    [JsonPropertyName("nak_seq")]
+    public ulong? NakSeq { get; init; }
 }

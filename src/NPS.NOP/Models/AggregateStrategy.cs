@@ -19,4 +19,16 @@ public static class AggregateStrategy
 
     /// <summary>Take the fastest <c>min_required</c> results in array format.</summary>
     public const string FastestK = "fastest_k";
+
+    /// <summary>
+    /// Take the <c>min_required</c> fastest results, weighted by node priority
+    /// (NPS-5 §3.3.2, NOP v0.6). Requires per-node weight metadata.
+    /// </summary>
+    public const string WeightedFirstK = "weighted_first_k";
+
+    /// <summary>
+    /// Merge all results (including from nodes beyond <c>min_required</c>)
+    /// into a single object (NPS-5 §3.3.2, NOP v0.6).
+    /// </summary>
+    public const string MergeAll = "merge_all";
 }
