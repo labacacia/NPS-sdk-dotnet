@@ -27,6 +27,8 @@ public enum FrameType : byte
     Query       = 0x10,
     /// <summary>Operation invocation targeting an Action or Complex Node.</summary>
     Action      = 0x11,
+    /// <summary>Change-subscription management targeting a Memory or Anchor Node (NPS-2 §8).</summary>
+    Subscribe   = 0x12,
 
     // ── NIP  0x20–0x2F ──────────────────────────────────────────────
     /// <summary>Agent identity declaration carrying NID certificate.</summary>

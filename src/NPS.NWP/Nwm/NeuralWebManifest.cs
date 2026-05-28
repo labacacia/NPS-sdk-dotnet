@@ -87,6 +87,26 @@ public sealed record NeuralWebManifest
     /// </summary>
     [JsonPropertyName("min_assurance_level")]
     public string? MinAssuranceLevel { get; init; }
+
+    /// <summary>
+    /// Node-operator CGN budget declaration (token-budget.md §7.1).
+    /// Present only when the node enforces a <c>cgn_limit</c> cap.
+    /// </summary>
+    [JsonPropertyName("token_budget")]
+    public NwmTokenBudget? TokenBudget { get; init; }
+}
+
+/// <summary>
+/// CGN budget block published in the NWM (token-budget.md §7.1).
+/// </summary>
+public sealed record NwmTokenBudget
+{
+    /// <summary>Per-request CGN cap enforced by this node. 0 = unlimited.</summary>
+    [JsonPropertyName("cgn_limit")]
+    public uint CgnLimit { get; init; }
+
+    /// <summary>CGN conversion profile in use, e.g. <c>"cgn.v1"</c>.</summary>
+    public string Profile { get; init; } = "cgn.v1";
 }
 
 /// <summary>

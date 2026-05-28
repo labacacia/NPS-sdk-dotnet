@@ -67,6 +67,20 @@ public static class NwpHttpHeaders
     /// <summary>Node type of the responding server: <c>"memory"</c>, <c>"action"</c>, or <c>"complex"</c>.</summary>
     public const string NodeType = "X-NWP-Node-Type";
 
+    /// <summary>
+    /// Reputation evaluation outcome on accepted requests: <c>"clean"</c>.
+    /// Set by the Anchor Node when <see cref="NwpErrorCodes.ReputationBanned"/> /
+    /// rejected / throttled are NOT triggered (RFC-0005 §4.1.4 step 7).
+    /// </summary>
+    public const string ReputationStatus = "X-NWP-Reputation-Status";
+
+    /// <summary>
+    /// Unix timestamp (seconds) when the ban on the requester NID expires.
+    /// Present only when the response error code is
+    /// <see cref="NwpErrorCodes.ReputationBanned"/> (RFC-0005 §4.4).
+    /// </summary>
+    public const string BanExpires = "X-NWP-Ban-Expires";
+
     // ── MIME types ───────────────────────────────────────────────────────────
 
     /// <summary>MIME type for NWP request frames (<c>Content-Type</c> on requests).</summary>
@@ -129,9 +143,33 @@ public static class NwpErrorCodes
 
     // Capacity / graph
     public const string BudgetExceeded           = "NWP-BUDGET-EXCEEDED";
+    public const string CgnLimitExceeded         = "NWP-CGN-LIMIT-EXCEEDED";
     public const string DepthExceeded            = "NWP-DEPTH-EXCEEDED";
     public const string GraphCycle               = "NWP-GRAPH-CYCLE";
     public const string NodeUnavailable          = "NWP-NODE-UNAVAILABLE";
+
+    // Reputation (NPS-RFC-0005 §4.4)
+
+    /// <summary>
+    /// Request rate-limited by a <c>throttle_on</c> rule (RFC-0005 §4.4).
+    /// HTTP 429. Response MUST include <c>Retry-After: 60</c>.
+    /// → NPS-CLIENT-RATE-LIMITED.
+    /// </summary>
+    public const string ReputationThrottled = "NWP-REPUTATION-THROTTLED";
+
+    /// <summary>
+    /// Request rejected by a <c>reject_on</c> rule (RFC-0005 §4.4).
+    /// HTTP 403. → NPS-AUTH-FORBIDDEN.
+    /// </summary>
+    public const string ReputationRejected  = "NWP-REPUTATION-REJECTED";
+
+    /// <summary>
+    /// Request rejected and NID temporarily banned by a <c>ban_on</c> rule
+    /// or an active ban cache entry (RFC-0005 §4.4). HTTP 403.
+    /// Response SHOULD include <c>X-NWP-Ban-Expires</c> (Unix timestamp).
+    /// → NPS-AUTH-FORBIDDEN.
+    /// </summary>
+    public const string ReputationBanned    = "NWP-REPUTATION-BANNED";
 
     // Manifest
     public const string ManifestVersionUnsupported = "NWP-MANIFEST-VERSION-UNSUPPORTED";

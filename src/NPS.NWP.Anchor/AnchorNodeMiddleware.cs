@@ -8,9 +8,11 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NPS.Core.Frames.Ncp;
+using NPS.NIP;
 using NPS.NOP.Frames;
 using NPS.NOP.Models;
 using NPS.NOP.Orchestration;
+using NPS.NWP.Anchor.Reputation;
 using NPS.NWP.Anchor.Topology;
 using NPS.NWP.Frames;
 using NPS.NWP.Http;
@@ -39,12 +41,13 @@ namespace NPS.NWP.Anchor;
 /// </summary>
 public sealed class AnchorNodeMiddleware
 {
-    private readonly RequestDelegate       _next;
-    private readonly AnchorNodeOptions    _options;
-    private readonly IAnchorRouter        _router;
-    private readonly INopOrchestrator      _orchestrator;
-    private readonly IAnchorRateLimiter   _limiter;
-    private readonly ILogger               _log;
+    private readonly RequestDelegate              _next;
+    private readonly AnchorNodeOptions           _options;
+    private readonly IAnchorRouter               _router;
+    private readonly INopOrchestrator             _orchestrator;
+    private readonly IAnchorRateLimiter          _limiter;
+    private readonly IReputationPolicyEvaluator? _evaluator;
+    private readonly ILogger                      _log;
 
     private readonly string _nwmJson;
     private readonly string _actionsJson;
@@ -58,18 +61,20 @@ public sealed class AnchorNodeMiddleware
     };
 
     public AnchorNodeMiddleware(
-        RequestDelegate                 next,
-        AnchorNodeOptions              options,
-        IAnchorRouter                  router,
-        INopOrchestrator                orchestrator,
-        IAnchorRateLimiter             limiter,
-        ILogger<AnchorNodeMiddleware>  logger)
+        RequestDelegate                    next,
+        AnchorNodeOptions                 options,
+        IAnchorRouter                     router,
+        INopOrchestrator                   orchestrator,
+        IAnchorRateLimiter                limiter,
+        ILogger<AnchorNodeMiddleware>     logger,
+        IReputationPolicyEvaluator?       evaluator = null)
     {
         _next         = next;
         _options      = options;
         _router       = router;
         _orchestrator = orchestrator;
         _limiter      = limiter;
+        _evaluator    = evaluator;
         _log          = logger;
 
         (_nwmJson, _actionsJson) = BuildStaticPayloads(_options);
@@ -588,6 +593,65 @@ public sealed class AnchorNodeMiddleware
             return;
         }
 
+        // Reputation policy check (RFC-0005 §4.1.4) — after identity and rate-limit,
+        // before action dispatch. AssuranceLevel defaults to Anonymous until IdentFrame
+        // verification is wired into the pipeline.
+        if (_options.ReputationPolicy is { } repPolicy && _evaluator is not null)
+        {
+            ReputationDecision decision;
+            try
+            {
+                decision = await _evaluator.EvaluateAsync(
+                    consumerKey, AssuranceLevel.Anonymous, repPolicy, ctx.RequestAborted);
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "ReputationPolicyEvaluator threw for NID {Nid}.", consumerKey);
+                await WriteError(ctx, 500, "NPS-SERVER-INTERNAL",
+                    NwpErrorCodes.NodeUnavailable,
+                    "reputation evaluation failed.");
+                return;
+            }
+
+            switch (decision.Outcome)
+            {
+                case ReputationOutcome.Ban:
+                    if (decision.BanExpiresAt is { } exp)
+                        ctx.Response.Headers[NwpHttpHeaders.BanExpires] =
+                            exp.ToUnixTimeSeconds().ToString();
+                    await WriteError(ctx, 403, "NPS-AUTH-FORBIDDEN",
+                        NwpErrorCodes.ReputationBanned,
+                        $"Request rejected: {decision.MatchedIncident} ({decision.MatchedSeverity}) — NID temporarily banned.",
+                        decision.BanExpiresAt is { } e
+                            ? new { matched_incident = decision.MatchedIncident, matched_severity = decision.MatchedSeverity, ban_expires = e.ToUnixTimeSeconds() }
+                            : null);
+                    return;
+
+                case ReputationOutcome.Reject:
+                    await WriteError(ctx, 403, "NPS-AUTH-FORBIDDEN",
+                        decision.ErrorCode ?? NwpErrorCodes.ReputationRejected,
+                        decision.MatchedIncident is not null
+                            ? $"Request rejected: {decision.MatchedIncident} ({decision.MatchedSeverity})."
+                            : "Request rejected by reputation policy.",
+                        decision.MatchedIncident is not null
+                            ? new { matched_incident = decision.MatchedIncident, matched_severity = decision.MatchedSeverity }
+                            : null);
+                    return;
+
+                case ReputationOutcome.Throttle:
+                    ctx.Response.Headers["Retry-After"] = "60";
+                    await WriteError(ctx, 429, "NPS-CLIENT-RATE-LIMITED",
+                        NwpErrorCodes.ReputationThrottled,
+                        $"Request rate-limited: {decision.MatchedIncident} ({decision.MatchedSeverity}).",
+                        new { matched_incident = decision.MatchedIncident, matched_severity = decision.MatchedSeverity });
+                    return;
+
+                case ReputationOutcome.Accept:
+                    ctx.Response.Headers[NwpHttpHeaders.ReputationStatus] = "clean";
+                    break;
+            }
+        }
+
         // Pre-execution CGN-limit check (token-budget.md §7.2 step 4, CGN-Estimate basis).
         // If the action's estimated CGN already exceeds the effective budget, reject before
         // calling the router — no trim is possible at this stage.
@@ -918,6 +982,13 @@ public sealed class AnchorNodeMiddleware
             {
                 writer.WritePropertyName("rate_limits");
                 JsonSerializer.Serialize(writer, opt.RateLimits, Json);
+            }
+
+            // RFC-0005 §4.5: publish full policy when enabled.
+            if (opt.ReputationPolicy is { Enabled: true } repPolicy)
+            {
+                writer.WritePropertyName("reputation_policy");
+                JsonSerializer.Serialize(writer, repPolicy, Json);
             }
 
             // actions block: AaaS manifests include actions directly so that a

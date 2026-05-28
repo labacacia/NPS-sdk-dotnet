@@ -35,6 +35,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\NPS.Core\NPS.Core.csproj" />
+    <ProjectReference Include="..\NPS.NIP\NPS.NIP.csproj" />
     <ProjectReference Include="..\NPS.NWP\NPS.NWP.csproj" />
     <ProjectReference Include="..\NPS.NOP\NPS.NOP.csproj" />
   </ItemGroup>

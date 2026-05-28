@@ -1,6 +1,8 @@
 // Copyright 2026 INNO LOTUS PTY LTD
 // SPDX-License-Identifier: Apache-2.0
 
+using NPS.NWP.Anchor.Reputation;
+
 namespace NPS.NWP.Anchor;
 
 /// <summary>
@@ -76,6 +78,30 @@ public sealed class AnchorNodeOptions
 
     /// <summary>Default token budget when <c>X-NWP-Budget</c> header is absent. 0 = unlimited.</summary>
     public uint DefaultTokenBudget { get; set; } = 0;
+
+    /// <summary>
+    /// Node-operator CGN cap per request (token-budget.md §7). 0 = unlimited.
+    /// When non-zero, the effective budget is <c>min(CgnLimit, X-NWP-Budget)</c>.
+    /// Published in the NWM under <c>token_budget.cgn_limit</c> so agents can
+    /// discover the cap before sending requests.
+    /// </summary>
+    public uint CgnLimit { get; set; } = 0;
+
+    // ── Reputation policy ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// NPS-RFC-0005 reputation policy for this Anchor Node. When non-null and
+    /// <see cref="ReputationPolicy.Enabled"/> is <c>true</c>, the node queries
+    /// the configured log sources and evaluates admission rules on every
+    /// <c>/invoke</c> request. Published verbatim in the NWM under the
+    /// <c>reputation_policy</c> key (RFC-0005 §4.5).
+    /// <para>
+    /// Enforcement requires an <see cref="IReputationPolicyEvaluator"/>
+    /// registered in DI (defaults to <see cref="DefaultReputationPolicyEvaluator"/>
+    /// when <c>AddAnchorNode</c> is used).
+    /// </para>
+    /// </summary>
+    public ReputationPolicy? ReputationPolicy { get; set; }
 
     // ── Observability ────────────────────────────────────────────────────────
 
