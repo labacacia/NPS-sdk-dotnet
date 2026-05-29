@@ -27,19 +27,19 @@ SDK 拆分为五个 NuGet 包，按需引用即可；每个包会自动依赖 `N
 
 ```bash
 # 核心帧类型与编解码（所有包的基础依赖）
-dotnet add package NPS.Core --version 1.0.0-alpha.1
+dotnet add package NPS.Core --version 1.0.0-alpha.11
 
 # 神经网络协议 — 查询/动作帧、Memory Node 中间件
-dotnet add package NPS.NWP --version 1.0.0-alpha.1
+dotnet add package NPS.NWP --version 1.0.0-alpha.11
 
 # 神经身份协议 — 身份帧、密钥管理、CA 客户端
-dotnet add package NPS.NIP --version 1.0.0-alpha.1
+dotnet add package NPS.NIP --version 1.0.0-alpha.11
 
 # 神经发现协议 — 公告/解析/图谱帧、内存注册表
-dotnet add package NPS.NDP --version 1.0.0-alpha.1
+dotnet add package NPS.NDP --version 1.0.0-alpha.11
 
 # 神经编排协议 — 任务/委托/同步帧、DAG 编排器
-dotnet add package NPS.NOP --version 1.0.0-alpha.1
+dotnet add package NPS.NOP --version 1.0.0-alpha.11
 ```
 
 若包尚未发布至 nuget.org，请添加私有 NuGet 源：
@@ -637,7 +637,7 @@ builder.Services.AddNwp(opts =>
 运行完整测试套件（429 个测试）：
 
 ```bash
-cd /path/to/release/1.0.0-alpha.1
+cd /path/to/release/1.0.0-alpha.11
 dotnet test NPS.sln --verbosity normal
 ```
 

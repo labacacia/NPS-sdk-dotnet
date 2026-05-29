@@ -27,19 +27,19 @@ The SDK ships as five NuGet packages. Add only the packages you need; each pulls
 
 ```bash
 # Core framing + codec (required by all packages)
-dotnet add package NPS.Core --version 1.0.0-alpha.1
+dotnet add package NPS.Core --version 1.0.0-alpha.11
 
 # Neural Web Protocol — query/action frames, Memory Node middleware
-dotnet add package NPS.NWP --version 1.0.0-alpha.1
+dotnet add package NPS.NWP --version 1.0.0-alpha.11
 
 # Neural Identity Protocol — identity frames, key management, CA client
-dotnet add package NPS.NIP --version 1.0.0-alpha.1
+dotnet add package NPS.NIP --version 1.0.0-alpha.11
 
 # Neural Discovery Protocol — announce/resolve/graph frames, in-memory registry
-dotnet add package NPS.NDP --version 1.0.0-alpha.1
+dotnet add package NPS.NDP --version 1.0.0-alpha.11
 
 # Neural Orchestration Protocol — task/delegate/sync frames, DAG orchestrator
-dotnet add package NPS.NOP --version 1.0.0-alpha.1
+dotnet add package NPS.NOP --version 1.0.0-alpha.11
 ```
 
 Add the NuGet source if packages are not yet on nuget.org:
@@ -637,7 +637,7 @@ builder.Services.AddNwp(opts =>
 Run the full test suite (429 tests):
 
 ```bash
-cd /path/to/release/1.0.0-alpha.1
+cd /path/to/release/1.0.0-alpha.11
 dotnet test NPS.sln --verbosity normal
 ```
 
