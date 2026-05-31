@@ -162,3 +162,21 @@ public sealed class NcpPreambleInvalidException : NpsException
         Reason = reason;
     }
 }
+
+/// <summary>
+/// Thrown when the NCP native-mode handshake fails because the server sent an
+/// <see cref="Frames.Ncp.ErrorFrame"/> or an unexpected frame type in response to
+/// <see cref="Frames.Ncp.HelloFrame"/>.
+/// </summary>
+public sealed class NcpHandshakeException : NpsException
+{
+    /// <summary>Protocol-level error code from the server's ErrorFrame (e.g. <c>NCP-VERSION-INCOMPATIBLE</c>).</summary>
+    public string ErrorCode { get; }
+
+    public NcpHandshakeException(string errorCode, string? message)
+        : base(message ?? $"NCP handshake failed: {errorCode}",
+               NpsStatusCodes.ProtoVersionIncompatible, errorCode)
+    {
+        ErrorCode = errorCode;
+    }
+}

@@ -312,3 +312,33 @@ public sealed record AlignFrame : IFrame
     [JsonPropertyName("round")]
     public uint Round { get; init; }
 }
+
+// ── NcpHandshakeCapsFrame (0x04, native-mode handshake response) ──────────────
+
+/// <summary>
+/// Server's capability response to <see cref="HelloFrame"/> in native mode (NPS-1 §4.6).
+/// Carries the server NID and its capability list. Uses frame type 0x04 (Caps) on the wire.
+/// The encoding tier of the response frame header determines the negotiated encoding —
+/// not a field in this payload.
+/// </summary>
+public sealed record NcpHandshakeCapsFrame : IFrame
+{
+    public FrameType    FrameType     => FrameType.Caps;
+    public EncodingTier PreferredTier => EncodingTier.Json;
+
+    /// <summary>The server's NID in <c>urn:nps:agent:{domain}:{id}</c> format.</summary>
+    [JsonPropertyName("node_id")]
+    public required string NodeId { get; init; }
+
+    /// <summary>Protocols and capabilities the server supports, e.g. <c>["ncp","nwp","nip"]</c>.</summary>
+    [JsonPropertyName("caps")]
+    public required IReadOnlyList<string> Caps { get; init; }
+
+    /// <summary>Optional anchor reference for the server's first offered schema.</summary>
+    [JsonPropertyName("anchor_ref")]
+    public string? AnchorRef { get; init; }
+
+    /// <summary>Optional additional metadata (implementation-defined).</summary>
+    [JsonPropertyName("payload")]
+    public JsonElement? Payload { get; init; }
+}
