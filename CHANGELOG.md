@@ -30,6 +30,8 @@ Until NPS reaches v1.0 stable, every repository in the suite is synchronized to 
 
 - **`NPS.NDP` — GraphFrame §5 topology-snapshot format** (Breaking rewrite): `NdpGraphNode` now carries `Nid`, `ClusterAnchor`, `NodeRoles`; new `NdpGraphEdge` type with `FromNid`, `ToNid`, `LatencyMs`, `Protocol`; `GraphFrame` carries `GraphId`, `Nodes`, `Edges`, `Ttl`, `Metadata`. Max 256 nodes / 1024 edges.
 
+- **`NPS.Core` — NCP native-mode transport** (NPS-1 §4.6 / RFC-0006): `NcpNativeClient` connects to a Node over TCP/QUIC, sends the 8-byte preamble + `HelloFrame` (Tier-1 JSON), reads the `NcpHandshakeCapsFrame` response, and returns a negotiated `NcpSession`. `NcpServer` accepts incoming TCP connections, validates the preamble, deserialises the `HelloFrame`, and yields `NcpServerConnection` for the application layer to accept or reject. `NcpHandshakeException` carries the protocol-level error code from the server's `ErrorFrame`. `NcpHandshakeCapsFrame` record (distinct from the query-response `CapsFrame`) carries `NodeId`, `Caps`, `AnchorRef?`, `Payload?`.
+
 ### Tracking the suite
 
 This release tracks NPS suite `v1.0.0-alpha.11`. NCP v0.7 / NWP v0.13 / NIP v0.9 / NDP v0.8 / NOP v0.6.

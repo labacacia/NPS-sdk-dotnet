@@ -8,6 +8,80 @@
 
 ---
 
+## [1.0.0-alpha.11] —— 2026-05-31
+
+### 新增
+
+- **`NPS.NWP` — `SubscribeFrame` CR-0006**（Breaking 重写）：旧协议字段（`action`、`stream_id`、`heartbeat_interval`、`resume_from_seq`）替换为 CR-0006 正式规范——`subscription_id`（UUID v4）、`filter`（`JsonElement?`）、`heartbeat_interval_ms`、`max_events`、不透明 `cursor`（可无损续订）。**相对 alpha.8–10 为 wire 破坏性变更。**
+
+- **`NPS.NWP.Anchor` — `AnchorNodeOptions.TrustAnchors`**：`IReadOnlyList<string>? TrustAnchors` 注入 `/.nwm` JSON 响应的 `trust_anchors` 字段（NWP v0.13 §4.1）。每条 URN 必须以 `urn:nps:` 开头。
+
+- **`NPS.NIP` — `IdentFrame.OcspStaple`**：可空 `ocsp_staple` wire 字段——base64url DER OCSP 响应（NIP v0.9 §8.2）。接收方 MUST 验证装订签名；过期时抛出 `NIP-OCSP-STAPLE-EXPIRED`。
+
+- **`NPS.NIP.X509` — `NpsX509Oids.IdNpsCapabilities`**：新增常量 `"1.3.6.1.4.1.65715.2.3"`，用于代理能力集 X.509 扩展（NIP v0.9 §8.2）。
+
+- **`NPS.NOP` — AlignStream ack/NAK**：`AlignStreamFrame` 新增 `AckSeq`（`ulong?`）和 `NakSeq`（`ulong?`），支持 NOP v0.6 `window_size=16` 滑动窗口确认协议。
+
+- **`NPS.NOP` — Webhook HMAC 签名**：`TaskFrame` 新增 `CallbackSecret`（`string?`）。回调必须携带 `X-NPS-Signature: sha256=…`（缺失时返回 `NOP-CALLBACK-HMAC-MISSING`）。
+
+- **`NPS.NOP` — 跨集群委托**：`DelegateFrame` 新增 `TargetClusterAnchor`（`string?`），用于将任务路由到指定集群锚点（NOP v0.6）。
+
+- **`NPS.NOP.Models` — `AggregateStrategy`**：新增常量 `WeightedFirstK = "weighted_first_k"` 和 `MergeAll = "merge_all"`（NOP v0.6）。
+
+- **`NPS.NDP` — GraphFrame §5 拓扑快照格式**（Breaking 重写）：`NdpGraphNode` 携带 `Nid`、`ClusterAnchor`、`NodeRoles`；新增 `NdpGraphEdge`（`FromNid`、`ToNid`、`LatencyMs`、`Protocol`）；`GraphFrame` 携带 `GraphId`、`Nodes`、`Edges`、`Ttl`、`Metadata`。最多 256 节点 / 1024 边。
+
+- **`NPS.Core` — NCP 原生模式传输**（NPS-1 §4.6 / RFC-0006）：`NcpNativeClient` 通过 TCP/QUIC 连接节点，发送 8 字节 preamble + `HelloFrame`（Tier-1 JSON），读取 `NcpHandshakeCapsFrame` 响应，返回已协商的 `NcpSession`。`NcpServer` 接受 TCP 连接、验证 preamble、反序列化 `HelloFrame`，向应用层暴露 `NcpServerConnection`。`NcpHandshakeException` 携带服务端 `ErrorFrame` 的协议错误码。`NcpHandshakeCapsFrame` 记录（与查询响应 `CapsFrame` 独立）携带 `NodeId`、`Caps`、`AnchorRef?`、`Payload?`。
+
+### 跟随套件
+
+本次跟随 NPS 套件 `v1.0.0-alpha.11`。NCP v0.7 / NWP v0.13 / NIP v0.9 / NDP v0.8 / NOP v0.6。
+
+---
+
+## [1.0.0-alpha.10] —— 2026-05-28
+
+### 新增
+
+- **`NPS.NOP` — Saga 补偿**：`CompensationPolicy` 类型；`DagNode` 新增 `CompensateAction` / `CompensateParamsMapping` 字段；`TaskState` 枚举新增 `Compensating` / `Compensated` 状态。
+
+- **`NPS.NDP` — `SecurityProfile`**：新枚举——`LocalDev` / `OrgPrivate` / `PublicFederated`（NDP §6）。`LocalDev` 注册表强制 TTL 上限。
+
+- **`NPS.NIP` — `IdentReputationPolicyHint`**：用于身份帧中声誉策略提示的结构化类型；`IdentMetadata` 不透明元数据封装类型。
+
+### 跟随套件
+
+本次跟随 NPS 套件 `v1.0.0-alpha.10`。
+
+---
+
+## [1.0.0-alpha.9] —— 2026-05-28
+
+### 变更
+
+- **`NPS.NIP` — `IdentFrame` 保证级别提取改进**：结构化保证级别提取对齐 NPS-RFC-0003 草案。
+
+### 新增
+
+- **`NPS.NWP` — `SubscribeFrame`（0x12）**：初始 `SubscribeFrame` 类型（pre-CR-0006 wire 格式，已在 alpha.11 替换）。
+
+### 跟随套件
+
+本次跟随 NPS 套件 `v1.0.0-alpha.8`。NPS-RFC-0005（声誉策略执行）和 NPS-RFC-0002（NPS X.509 OID 注册表）晋升为 Accepted。
+
+---
+
+## [1.0.0-alpha.8] —— 2026-05-28
+
+### 新增
+
+- **`NPS.NWP.Anchor` — `ReputationPolicyEvaluator`（RFC-0005）**：`IReputationPolicyEvaluator` / `DefaultReputationPolicyEvaluator`，含进程内封禁缓存和 per-NID 查询缓存。`AnchorNodeOptions.ReputationPolicy`。`GET /.nwm` 发布 NWM `reputation_policy` JSON 块。新增错误码：`NWP-REPUTATION-THROTTLED`、`NWP-REPUTATION-REJECTED`、`NWP-REPUTATION-BANNED`。响应头：`X-NWP-Reputation-Status`、`X-NWP-Ban-Expires`。`AnchorNodeMiddleware` 中 `cgn_limit` 预执行预算执行（token-budget.md §7.2 MUST）。
+
+### 跟随套件
+
+本次跟随 NPS 套件 `v1.0.0-alpha.8`。
+
+---
+
 ## [1.0.0-alpha.7] —— 2026-05-17
 
 ### 新增
