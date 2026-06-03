@@ -9,7 +9,7 @@
     <RootNamespace>NPS.NIP</RootNamespace>
     <AssemblyName>NPS.NIP.Storage.Sqlite</AssemblyName>
     <PackageId>LabAcacia.NPS.NIP.Storage.Sqlite</PackageId>
-    <Version>1.0.0-alpha.11</Version>
+    <Version>1.0.0-alpha.12</Version>
     <Description>SQLite storage backend for the LabAcacia.NPS.NIP CA Server. Provides SqliteNipCaStore and the AddNipCaWithSqlite() DI extension. Suitable for embedded / single-binary deployments.</Description>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Authors>LabAcacia / INNO LOTUS PTY LTD</Authors>

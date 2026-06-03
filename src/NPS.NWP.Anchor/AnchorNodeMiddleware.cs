@@ -521,7 +521,8 @@ public sealed class AnchorNodeMiddleware
     {
         ctx.Response.StatusCode  = 200;
         ctx.Response.ContentType = NwpHttpHeaders.MimeManifest;
-        ctx.Response.Headers[NwpHttpHeaders.NodeType] = "anchor";
+        ctx.Response.Headers[NwpHttpHeaders.NodeType]   = "anchor";
+        ctx.Response.Headers[NwpHttpHeaders.NwmVersion] = _options.ManifestVersion.ToString();
         return ctx.Response.WriteAsync(_nwmJson);
     }
 
@@ -1038,6 +1039,11 @@ public sealed class AnchorNodeMiddleware
                 writer.WritePropertyName("trust_anchors");
                 JsonSerializer.Serialize(writer, anchors, Json);
             }
+
+            // NWP v0.14 §4.1: manifest versioning fields.
+            writer.WriteNumber("manifest_version", opt.ManifestVersion);
+            if (opt.ManifestUpdatedAt is not null)
+                writer.WriteString("manifest_updated_at", opt.ManifestUpdatedAt);
 
             // actions block: AaaS manifests include actions directly so that a
             // single fetch of /.nwm tells a consumer everything they need.

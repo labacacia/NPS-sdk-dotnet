@@ -77,4 +77,19 @@ public static class NcpErrorCodes
     /// → NPS-PROTO-PREAMBLE-INVALID
     /// </summary>
     public const string PreambleInvalid       = "NCP-PREAMBLE-INVALID";
+
+    // ── Keepalive errors ──────────────────────────────────────────────────────
+    /// <summary>
+    /// No frame received for more than 3 × ping_interval_ms; peer is presumed dead.
+    /// Connection MUST be closed. → NPS-SERVER-TIMEOUT
+    /// </summary>
+    public const string KeepaliveTimeout      = "NCP-KEEPALIVE-TIMEOUT";
+
+    // ── Rekeying errors ───────────────────────────────────────────────────────
+    /// <summary>
+    /// E2E rekeying is required before continuing (either 2^32 frames sent or 24 h elapsed).
+    /// Sender MUST trigger rekeying before transmitting further encrypted frames.
+    /// → NPS-PROTO-VERSION-INCOMPATIBLE
+    /// </summary>
+    public const string RekeyRequired         = "NCP-REKEY-REQUIRED";
 }

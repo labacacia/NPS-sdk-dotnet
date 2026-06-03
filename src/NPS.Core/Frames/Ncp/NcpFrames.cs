@@ -285,6 +285,30 @@ public sealed record HelloFrame : IFrame
     /// </summary>
     [JsonPropertyName("e2e_enc_algorithms")]
     public IReadOnlyList<string>? E2EEncAlgorithms { get; init; }
+
+    /// <summary>
+    /// Preferred keepalive interval in milliseconds (NCP v0.8 §4.8 / §7.5).
+    /// 0 = disabled (default). When non-zero, both peers SHOULD send a <see cref="NopFrame"/>
+    /// at this interval. Dead-peer threshold is 3 × this value.
+    /// Minimum enforced value when non-zero: 1000 ms.
+    /// </summary>
+    [JsonPropertyName("ping_interval_ms")]
+    public uint PingIntervalMs { get; init; } = 0;
+}
+
+// ── NopFrame (0x07) ───────────────────────────────────────────────────────────
+
+/// <summary>
+/// Keepalive / heartbeat frame (NCP v0.8 §4.8 / §7.5).
+/// Carries no payload (single wire byte 0x07). Either peer MAY send at any time
+/// after handshake; the receiver MUST accept and SHOULD reply with another NopFrame.
+/// When <see cref="HelloFrame.PingIntervalMs"/> is non-zero, both peers SHOULD send
+/// at that interval. Dead-peer detection fires after 3 × ping_interval_ms of silence.
+/// </summary>
+public sealed record NopFrame : IFrame
+{
+    public FrameType    FrameType     => FrameType.Nop;
+    public EncodingTier PreferredTier => EncodingTier.Json;
 }
 
 // ── AlignFrame (0x05) — Deprecated ───────────────────────────────────────────

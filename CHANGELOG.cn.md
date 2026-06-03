@@ -8,6 +8,38 @@
 
 ---
 
+## [1.0.0-alpha.12] —— 2026-06-03
+
+### 新增
+
+- **`NPS.Core` — `FrameType.Nop` (0x07)**：NopFrame 保活/心跳帧枚举值（NCP v0.8 §4.8）。
+
+- **`NPS.Core` — `NopFrame`**：新密封记录类型，无载荷字段。握手后双方均可随时发送；接收方必须接受并应回复（NCP v0.8 §4.8）。
+
+- **`NPS.Core` — `HelloFrame.PingIntervalMs`**：新可选 `uint` 字段（`ping_interval_ms`）。0 = 禁用（默认）。非零时双方应以此间隔发送 `NopFrame`；死节点阈值为 3 倍值（最小 1000 ms）。
+
+- **`NPS.Core` — `NcpErrorCodes.KeepaliveTimeout` / `RekeyRequired`**：新 NCP v0.8 错误码常量（`NCP-KEEPALIVE-TIMEOUT`、`NCP-REKEY-REQUIRED`）。
+
+- **`NPS.NIP` — `IdentFrame.NodeRoles`**：新可选字段 `IReadOnlyList<string>? NodeRoles`（`node_roles`）。Phase 1–2 自声明；Phase 3 需与 OID 65715.2.2 的 X.509 扩展匹配。
+
+- **`NPS.NIP` — `NipErrorCodes.CertNodeRolesMismatch` / `OcspStapleExpired`**：新错误码常量（`NIP-CERT-NODE-ROLES-MISMATCH`、`NIP-OCSP-STAPLE-EXPIRED`）。
+
+- **`NPS.NDP` — `AnnounceFrame.HeartbeatIntervalMs`**：新 `uint` 字段，默认 60000 ms（NDP v0.9 §3.1）。Registry 在 2 倍间隔内未收到心跳时应标记节点为 stale。
+
+- **`NPS.NDP` — `NdpSpawnSpecRef` + `NdpResourceLimits`**：类型化 spawn 规格对象，替换原字符串字段。字段：`OciImage`（必填）、`Command`（可选）、`ResourceLimits`（`CpuMillicores`、`MemoryMb`）。仅限 Profile L3（NDP v0.9 §3.1.1）。
+
+- **`NPS.NDP` — `NdpErrorCodes.AnnounceStale` / `GraphTooLarge` / `GraphInvalid` / `FederationLoop`**：新 NDP v0.8–v0.9 错误码常量。
+
+- **`NPS.NWP` — `NwpHttpHeaders.NwmVersion`**：新常量 `"X-NWM-Version"`，用于 NWM 版本响应头（NWP v0.14 §4.1）。
+
+- **`NPS.NWP.Anchor` — `AnchorNodeOptions.ManifestVersion` / `ManifestUpdatedAt`**：NWM 清单版本化选项。`ManifestVersion`（uint，默认 1）发布为 `manifest_version`；`ManifestUpdatedAt`（ISO 8601，可选）发布为 `manifest_updated_at`。每次 `GET /.nwm` 响应均携带 `X-NWM-Version` 头。
+
+- **`NPS.NOP` — `TaskFrame.ResultTtlSeconds`**：新 `uint` 字段，默认 3600 s（NOP v0.7）。TTL 过期后结果查询返回 `NOP-TASK-RESULT-EXPIRED`。
+
+- **`NPS.NOP` — `NopErrorCodes.TaskResultExpired` / `CallbackHmacMissing` / `StreamNakUnresolvable`**：新 NOP v0.6–v0.7 错误码常量。
+
+---
+
 ## [1.0.0-alpha.11] —— 2026-05-31
 
 ### 新增

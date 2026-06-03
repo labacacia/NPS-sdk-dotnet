@@ -29,4 +29,23 @@ public static class NdpErrorCodes
 
     /// <summary>Announce rejected: address violates the registry security profile (NPS-4 §7.2).</summary>
     public const string AnnounceProfileViolation  = "NDP-ANNOUNCE-PROFILE-VIOLATION";
+
+    // ── NDP v0.8 error codes ──────────────────────────────────────────────────
+
+    /// <summary>GraphFrame exceeds the 256-node / 1024-edge limit (NPS-4 §3.3).</summary>
+    public const string GraphTooLarge             = "NDP-GRAPH-TOO-LARGE";
+
+    /// <summary>GraphFrame failed structural validation (invalid NIDs, self-edge, etc.) (NPS-4 §3.3).</summary>
+    public const string GraphInvalid              = "NDP-GRAPH-INVALID";
+
+    /// <summary>Own NID detected in ndp-forwarded-by header: federation loop (NPS-4 §9).</summary>
+    public const string FederationLoop            = "NDP-FEDERATION-LOOP";
+
+    // ── NDP v0.9 error codes ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// No heartbeat received within 2 × heartbeat_interval_ms; node is considered stale (NPS-4 §3.1).
+    /// Registry SHOULD evict the node and notify subscribers.
+    /// </summary>
+    public const string AnnounceStale             = "NDP-ANNOUNCE-STALE";
 }

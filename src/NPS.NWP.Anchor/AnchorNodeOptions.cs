@@ -123,6 +123,24 @@ public sealed class AnchorNodeOptions
     /// </summary>
     public IReadOnlyList<string>? TrustAnchors { get; set; }
 
+    // ── Manifest versioning ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// Monotonically incrementing manifest version counter (NWP v0.14 §4.1).
+    /// Starts at 1; increment whenever the NWM structure changes.
+    /// Published in the NWM as <c>manifest_version</c> and returned in the
+    /// <c>X-NWM-Version</c> response header on every <c>GET /.nwm</c> request.
+    /// Agents use it as the <c>If-None-Match</c> value for conditional requests.
+    /// </summary>
+    public uint ManifestVersion { get; set; } = 1;
+
+    /// <summary>
+    /// ISO 8601 UTC timestamp of the last NWM structural change (NWP v0.14 §4.1).
+    /// Set this whenever you increment <see cref="ManifestVersion"/>.
+    /// Published in the NWM as <c>manifest_updated_at</c>. Optional.
+    /// </summary>
+    public string? ManifestUpdatedAt { get; set; }
+
     // ── Observability ────────────────────────────────────────────────────────
 
     /// <summary>

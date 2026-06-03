@@ -90,6 +90,13 @@ public static class NwpHttpHeaders
     /// </summary>
     public const string BanExpires = "X-NWP-Ban-Expires";
 
+    /// <summary>
+    /// Current NWM <c>manifest_version</c> (uint32 monotonic counter, NWP v0.14 §4.1).
+    /// MUST be included on every <c>GET /.nwm</c> response.
+    /// Agents use the value in subsequent <c>If-None-Match</c> conditional requests.
+    /// </summary>
+    public const string NwmVersion = "X-NWM-Version";
+
     // ── MIME types ───────────────────────────────────────────────────────────
 
     /// <summary>MIME type for NWP request frames (<c>Content-Type</c> on requests).</summary>

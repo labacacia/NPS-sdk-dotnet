@@ -80,6 +80,14 @@ public sealed record TaskFrame : IFrame
     /// </summary>
     [JsonPropertyName("compensation_policy")]
     public string CompensationPolicy { get; init; } = Models.CompensationPolicy.None;
+
+    /// <summary>
+    /// How long (seconds) the Orchestrator retains the task result after completion
+    /// (NOP v0.7 / NPS-5 §3.1). Default 3600 (1 h). After TTL expires, result
+    /// retrieval returns <c>NOP-TASK-RESULT-EXPIRED</c>.
+    /// </summary>
+    [JsonPropertyName("result_ttl_seconds")]
+    public uint ResultTtlSeconds { get; init; } = 3600;
 }
 
 // ── DelegateFrame (0x41) ────────────────────────────────────────────────────

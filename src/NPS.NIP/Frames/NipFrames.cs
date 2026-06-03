@@ -127,6 +127,15 @@ public sealed record IdentFrame : IFrame
     /// </summary>
     [JsonPropertyName("lineage")]
     public IdentLineage? Lineage { get; init; }
+
+    /// <summary>
+    /// Self-declared node-role tags (NIP v0.10 / NPS-3 §5.1.4).
+    /// Phase 1–2: informational, not enforced by the CA.
+    /// Phase 3 flag day: MUST match the <c>id-nps-node-roles</c> X.509 extension
+    /// (OID 1.3.6.1.4.1.65715.2.2); mismatch returns <c>NIP-CERT-NODE-ROLES-MISMATCH</c>.
+    /// </summary>
+    [JsonPropertyName("node_roles")]
+    public IReadOnlyList<string>? NodeRoles { get; init; }
 }
 
 /// <summary>String constants for <see cref="IdentFrame.CertFormat"/>

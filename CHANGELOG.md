@@ -8,6 +8,38 @@ Until NPS reaches v1.0 stable, every repository in the suite is synchronized to 
 
 ---
 
+## [1.0.0-alpha.12] — 2026-06-03
+
+### Added
+
+- **`NPS.Core` — `FrameType.Nop` (0x07)**: New enum member for the NopFrame keepalive/heartbeat (NCP v0.8 §4.8).
+
+- **`NPS.Core` — `NopFrame`**: New sealed record with no payload fields. Either peer MAY send at any time after handshake; receiver MUST accept and SHOULD reply (NCP v0.8 §4.8).
+
+- **`NPS.Core` — `HelloFrame.PingIntervalMs`**: New optional `uint` field (`ping_interval_ms`). 0 = disabled (default). When non-zero, both peers SHOULD send `NopFrame` at this interval; dead-peer threshold is 3 × value (minimum 1000 ms).
+
+- **`NPS.Core` — `NcpErrorCodes.KeepaliveTimeout` / `RekeyRequired`**: New NCP v0.8 error code constants (`NCP-KEEPALIVE-TIMEOUT`, `NCP-REKEY-REQUIRED`).
+
+- **`NPS.NIP` — `IdentFrame.NodeRoles`**: New optional `IReadOnlyList<string>? NodeRoles` field (`node_roles`). Self-declared Phase 1–2; Phase 3 must match `id-nps-node-roles` OID 65715.2.2.
+
+- **`NPS.NIP` — `NipErrorCodes.CertNodeRolesMismatch` / `OcspStapleExpired`**: New error code constants (`NIP-CERT-NODE-ROLES-MISMATCH`, `NIP-OCSP-STAPLE-EXPIRED`).
+
+- **`NPS.NDP` — `AnnounceFrame.HeartbeatIntervalMs`**: New `uint HeartbeatIntervalMs { get; init; } = 60_000` field (NDP v0.9 §3.1). Registries SHOULD mark node stale after 2 × interval.
+
+- **`NPS.NDP` — `NdpSpawnSpecRef` + `NdpResourceLimits`**: Typed spawn spec object replacing the old `string? SpawnSpecRef`. Fields: `OciImage` (required), `Command` (optional), `ResourceLimits` (`CpuMillicores`, `MemoryMb`). Profile L3 only (NDP v0.9 §3.1.1).
+
+- **`NPS.NDP` — `NdpErrorCodes.AnnounceStale` / `GraphTooLarge` / `GraphInvalid` / `FederationLoop`**: New NDP v0.8–v0.9 error code constants.
+
+- **`NPS.NWP` — `NwpHttpHeaders.NwmVersion`**: New constant `"X-NWM-Version"` for the manifest version response header (NWP v0.14 §4.1).
+
+- **`NPS.NWP.Anchor` — `AnchorNodeOptions.ManifestVersion` / `ManifestUpdatedAt`**: New options for NWM manifest versioning. `ManifestVersion` (uint, default 1) published as `manifest_version`; `ManifestUpdatedAt` (ISO 8601 string, optional) published as `manifest_updated_at`. `X-NWM-Version` header emitted on every `GET /.nwm` response.
+
+- **`NPS.NOP` — `TaskFrame.ResultTtlSeconds`**: New `uint ResultTtlSeconds { get; init; } = 3600` field (NOP v0.7). After TTL expires, result retrieval returns `NOP-TASK-RESULT-EXPIRED`.
+
+- **`NPS.NOP` — `NopErrorCodes.TaskResultExpired` / `CallbackHmacMissing` / `StreamNakUnresolvable`**: New NOP v0.6–v0.7 error code constants.
+
+---
+
 ## [1.0.0-alpha.11] — 2026-05-28
 
 ### Added

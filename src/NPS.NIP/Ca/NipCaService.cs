@@ -985,4 +985,22 @@ public static class NipErrorCodes
     /// NPS-CR-0005 §3.4. → NPS-AUTH-FORBIDDEN.
     /// </summary>
     public const string RaPendingRejected = "NIP-RA-PENDING-REJECTED";
+
+    // ── NIP v0.9 error codes ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// IdentFrame.ocsp_staple is present but the OCSP response thisUpdate/nextUpdate
+    /// window has elapsed. Receiver MUST reject the frame. NPS-3 §5.1.4.
+    /// → NPS-AUTH-UNAUTHENTICATED.
+    /// </summary>
+    public const string OcspStapleExpired    = "NIP-OCSP-STAPLE-EXPIRED";
+
+    // ── NIP v0.10 error codes ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// IdentFrame.node_roles does not match the id-nps-node-roles X.509 extension
+    /// (OID 1.3.6.1.4.1.65715.2.2). Phase 3 enforcement. NPS-3 §5.1.4.
+    /// → NPS-CLIENT-BAD-FRAME.
+    /// </summary>
+    public const string CertNodeRolesMismatch = "NIP-CERT-NODE-ROLES-MISMATCH";
 }

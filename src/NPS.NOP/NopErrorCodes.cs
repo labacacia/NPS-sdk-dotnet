@@ -28,4 +28,26 @@ public static class NopErrorCodes
     public const string InputMappingError         = "NOP-INPUT-MAPPING-ERROR";
     public const string CompensationFailed        = "NOP-COMPENSATION-FAILED";
     public const string CompensationPartialFailed = "NOP-COMPENSATION-PARTIAL-FAILED";
+
+    // ── NOP v0.6 error codes ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// Callback recipient rejected delivery because X-NPS-Signature header was absent;
+    /// callback_secret was set but signature was not computed. → NPS-AUTH-UNAUTHENTICATED.
+    /// </summary>
+    public const string CallbackHmacMissing       = "NOP-CALLBACK-HMAC-MISSING";
+
+    // ── NOP v0.7 error codes ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// Task result requested after result_ttl_seconds has elapsed; Orchestrator no
+    /// longer retains the result. → NPS-CLIENT-NOT-FOUND.
+    /// </summary>
+    public const string TaskResultExpired         = "NOP-TASK-RESULT-EXPIRED";
+
+    /// <summary>
+    /// NAK retransmission requested for a frame that is no longer available in the
+    /// sender's buffer (evicted). → NPS-STREAM-SEQ-GAP.
+    /// </summary>
+    public const string StreamNakUnresolvable     = "NOP-STREAM-NAK-UNRESOLVABLE";
 }

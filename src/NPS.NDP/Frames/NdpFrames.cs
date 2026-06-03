@@ -163,11 +163,12 @@ public sealed record AnnounceFrame : IFrame
     public string? ClusterAnchor { get; init; }
 
     /// <summary>
-    /// URI reference to a machine-readable spawn specification (NPS-4 §3.1.10).
-    /// Consumers can fetch this spec to understand how to launch a new instance.
+    /// Structured spawn specification for this node (NDP v0.9 §3.1.1 / NPS-4 §3.1.10).
+    /// Provides a machine-readable description of how to launch a new instance.
+    /// Supersedes the earlier URI-reference form; Profile L3 only.
     /// </summary>
     [JsonPropertyName("spawn_spec_ref")]
-    public string? SpawnSpecRef { get; init; }
+    public NdpSpawnSpecRef? SpawnSpecRef { get; init; }
 
     /// <summary>
     /// Additional bridging protocols supported by this node beyond the primary address
@@ -182,6 +183,49 @@ public sealed record AnnounceFrame : IFrame
     /// </summary>
     [JsonPropertyName("activation_endpoint")]
     public string? ActivationEndpoint { get; init; }
+
+    /// <summary>
+    /// Interval (milliseconds) between AnnounceFrame heartbeats (NDP v0.9 §3.1).
+    /// Default 60000 (60 s). Registries SHOULD mark the node stale if no heartbeat
+    /// arrives within 2 × this interval, and emit <c>NDP-ANNOUNCE-STALE</c>.
+    /// </summary>
+    [JsonPropertyName("heartbeat_interval_ms")]
+    public uint HeartbeatIntervalMs { get; init; } = 60_000;
+}
+
+// ── NdpSpawnSpecRef ───────────────────────────────────────────────────────────
+
+/// <summary>
+/// Machine-readable spawn specification for NDP AnnounceFrame (NDP v0.9 §3.1.1).
+/// Describes how to launch a new instance of this node. Profile L3 only.
+/// </summary>
+public sealed record NdpSpawnSpecRef
+{
+    /// <summary>OCI image reference, e.g. <c>"registry.example.com/my-agent:1.2.3"</c>.</summary>
+    [JsonPropertyName("oci_image")]
+    public required string OciImage { get; init; }
+
+    /// <summary>Override entrypoint command (optional). When absent, uses the image default.</summary>
+    [JsonPropertyName("command")]
+    public IReadOnlyList<string>? Command { get; init; }
+
+    /// <summary>Resource constraints for the spawned instance (optional).</summary>
+    [JsonPropertyName("resource_limits")]
+    public NdpResourceLimits? ResourceLimits { get; init; }
+}
+
+/// <summary>
+/// Resource limits within a <see cref="NdpSpawnSpecRef"/> (NDP v0.9 §3.1.1).
+/// </summary>
+public sealed record NdpResourceLimits
+{
+    /// <summary>CPU limit in milli-cores, e.g. 500 = 0.5 vCPU.</summary>
+    [JsonPropertyName("cpu_millicores")]
+    public uint? CpuMillicores { get; init; }
+
+    /// <summary>Memory limit in mebibytes.</summary>
+    [JsonPropertyName("memory_mb")]
+    public uint? MemoryMb { get; init; }
 }
 
 // ── ResolveFrame (0x31) ───────────────────────────────────────────────────────

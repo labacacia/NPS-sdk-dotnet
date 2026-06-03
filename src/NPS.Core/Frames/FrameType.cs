@@ -21,6 +21,8 @@ public enum FrameType : byte
     Align       = 0x05,
     /// <summary>Hello — native-mode client handshake; declares NPS version and capabilities (NPS-1 §4.6).</summary>
     Hello       = 0x06,
+    /// <summary>Nop — keepalive/heartbeat frame; null payload (NCP v0.8 §4.8).</summary>
+    Nop         = 0x07,
 
     // ── NWP  0x10–0x1F ──────────────────────────────────────────────
     /// <summary>Structured data query targeting a Memory Node.</summary>
