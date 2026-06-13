@@ -8,6 +8,14 @@ Until NPS reaches v1.0 stable, every repository in the suite is synchronized to 
 
 ---
 
+## [1.0.0-alpha.12] — 2026-06-13
+
+### Added
+- **NCP native mode** — `NcpNativeClient` + `NcpServer` (HelloFrame handshake, NPS-1 §4.6).
+- **NDP v0.9** — `AnnounceFrame.health` / `last_seen` liveness fields, wire-only and
+  excluded from the signed canonical form; `NipSigner` excludes them so per-heartbeat
+  `last_seen` updates never require re-signing.
+
 ## [1.0.0-alpha.11] — 2026-05-28
 
 ### Added
