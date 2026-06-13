@@ -4,6 +4,8 @@
 using System.Net.Sockets;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using MessagePack;
+using MessagePack.Resolvers;
 using NPS.Core.Codecs;
 using NPS.Core.Exceptions;
 using NPS.Core.Frames;
@@ -24,6 +26,12 @@ public sealed class NcpNativeClient
         DefaultIgnoreCondition      = JsonIgnoreCondition.WhenWritingNull,
         PropertyNameCaseInsensitive = true,
     };
+
+    // Mirrors Tier2MsgPackCodec's options so a MsgPack-negotiated CapsFrame decodes symmetrically.
+    private static readonly MessagePackSerializerOptions MsgPackOpts =
+        MessagePackSerializerOptions.Standard
+            .WithResolver(ContractlessStandardResolver.Instance)
+            .WithCompression(MessagePackCompression.None);
 
     private readonly NpsFrameCodec _codec;
 
@@ -83,12 +91,15 @@ public sealed class NcpNativeClient
                     "NCP-HANDSHAKE-UNEXPECTED-FRAME",
                     $"Expected CapsFrame (0x{(byte)FrameType.Caps:X2}), got 0x{(byte)header.FrameType:X2}.");
 
-            // 6 — decode NcpHandshakeCapsFrame (manually — not via registry)
-            var caps = JsonSerializer.Deserialize<NcpHandshakeCapsFrame>(payload, JsonOpts)
+            // 6 — decode NcpHandshakeCapsFrame (manually — not via registry) using the negotiated
+            // tier the server signalled in the response header flags. The server encodes the
+            // CapsFrame in that tier (JSON or MsgPack), so the client must decode symmetrically.
+            var negotiatedTier = header.EncodingTier;
+            var caps = (negotiatedTier == EncodingTier.MsgPack
+                           ? MessagePackSerializer.Deserialize<NcpHandshakeCapsFrame>(payload, MsgPackOpts)
+                           : JsonSerializer.Deserialize<NcpHandshakeCapsFrame>(payload, JsonOpts))
                        ?? throw new NcpHandshakeException("NCP-HANDSHAKE-FAILED", "Server sent an empty CapsFrame.");
 
-            // Negotiated tier is encoded in the response header flags
-            var negotiatedTier = header.EncodingTier;
             return new NcpSession(tcp, stream, caps, negotiatedTier);
         }
         catch

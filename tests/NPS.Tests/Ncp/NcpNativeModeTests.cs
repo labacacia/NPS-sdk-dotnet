@@ -3,6 +3,7 @@
 
 using System.Net;
 using System.Net.Sockets;
+using NPS.Core;
 using NPS.Core.Codecs;
 using NPS.Core.Exceptions;
 using NPS.Core.Frames;
