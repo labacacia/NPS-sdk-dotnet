@@ -8,13 +8,24 @@ Until NPS reaches v1.0 stable, every repository in the suite is synchronized to 
 
 ---
 
-## [1.0.0-alpha.12] — 2026-06-13
+## [1.0.0-alpha.13] — 2026-06-13
+
+> **Supersedes the withdrawn `1.0.0-alpha.12`.** The alpha.12 NuGet packages shipped a
+> day early with a vulnerable `MessagePack 3.0.300` dependency (advisory NU1903) and a
+> native-mode handshake bug; those packages are deprecated. alpha.13 is the corrected,
+> reviewed release — install alpha.13, not alpha.12.
 
 ### Added
 - **NCP native mode** — `NcpNativeClient` + `NcpServer` (HelloFrame handshake, NPS-1 §4.6).
 - **NDP v0.9** — `AnnounceFrame.health` / `last_seen` liveness fields, wire-only and
   excluded from the signed canonical form; `NipSigner` excludes them so per-heartbeat
   `last_seen` updates never require re-signing.
+
+### Fixed
+- **MessagePack `3.0.300` → `3.1.7`** — clears the high-severity NU1903 advisory.
+- **NCP native-mode handshake** — `NcpNativeClient` now decodes the server `CapsFrame`
+  using the negotiated encoding tier (MsgPack or JSON) instead of always assuming JSON,
+  fixing the `'0x84' is an invalid start of a value` failure when MsgPack is negotiated.
 
 ## [1.0.0-alpha.11] — 2026-05-28
 

@@ -9,7 +9,7 @@
     <RootNamespace>NPS.NIP</RootNamespace>
     <AssemblyName>NPS.NIP.Storage.Postgres</AssemblyName>
     <PackageId>LabAcacia.NPS.NIP.Storage.Postgres</PackageId>
-    <Version>1.0.0-alpha.12</Version>
+    <Version>1.0.0-alpha.13</Version>
     <Description>PostgreSQL storage backend for the LabAcacia.NPS.NIP CA Server. Provides PostgreSqlNipCaStore and the AddNipCaWithPostgres() DI extension.</Description>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Authors>LabAcacia / INNO LOTUS PTY LTD</Authors>
