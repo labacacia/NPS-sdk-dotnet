@@ -107,9 +107,14 @@ public static class NipSigner
     ///     not the v1 CA Ed25519 signature; excluding them here lets v1 and
     ///     v2 frames coexist on the wire (RFC §8.1 Phase 1) without
     ///     re-signing.</item>
+    ///   <item><c>health</c> + <c>last_seen</c> — NDP v0.9 AnnounceFrame advisory
+    ///     liveness fields. <c>last_seen</c> updates per liveness beat; excluding
+    ///     them lets a node refresh liveness without re-signing the whole frame,
+    ///     and keeps the signed form bit-compatible with pre-v0.9 frames and the
+    ///     other five SDKs (which exclude them from the signed canonical form).</item>
     /// </list>
     /// </summary>
-    private static readonly HashSet<string> s_excluded = ["signature", "metadata", "cert_format", "cert_chain"];
+    private static readonly HashSet<string> s_excluded = ["signature", "metadata", "cert_format", "cert_chain", "health", "last_seen"];
 
     private static void WriteCanonical(JsonElement el, StringBuilder sb)
     {

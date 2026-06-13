@@ -182,6 +182,22 @@ public sealed record AnnounceFrame : IFrame
     /// </summary>
     [JsonPropertyName("activation_endpoint")]
     public string? ActivationEndpoint { get; init; }
+
+    /// <summary>
+    /// Publisher liveness self-report (NDP v0.9). One of <c>"healthy"</c> / <c>"degraded"</c> /
+    /// <c>"draining"</c>. Absent ⇒ receivers treat as <c>"healthy"</c>. <c>"draining"</c> signals
+    /// the node is shutting down and SHOULD NOT receive new traffic (NPS-4 §3.1).
+    /// </summary>
+    [JsonPropertyName("health")]
+    public string? Health { get; init; }
+
+    /// <summary>
+    /// ISO 8601 UTC timestamp of the publisher's most recent liveness beat (NDP v0.9). When
+    /// present, a Registry uses <c>last_seen + ttl</c> (rather than <c>timestamp + ttl</c>) as the
+    /// resolve-time freshness deadline (NPS-4 §3.2.1). Absent ⇒ fall back to <c>timestamp</c>.
+    /// </summary>
+    [JsonPropertyName("last_seen")]
+    public string? LastSeen { get; init; }
 }
 
 // ── ResolveFrame (0x31) ───────────────────────────────────────────────────────
