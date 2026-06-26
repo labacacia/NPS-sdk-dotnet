@@ -41,7 +41,7 @@ public class InboxTests
         var post = await fx.Client.PostAsync($"/v1/inbox/{Uri.EscapeDataString(nid)}", content);
         Assert.Equal(HttpStatusCode.Created, post.StatusCode);
         var postBody = await post.Content.ReadFromJsonAsync<JsonElement>(s_json);
-        var msgId    = postBody.GetProperty("message_id").GetUInt64();
+        var msgId    = ulong.Parse(postBody.GetProperty("message_id").GetString()!);
         Assert.True(msgId > 0);
 
         var get = await fx.Client.GetAsync($"/v1/inbox/{Uri.EscapeDataString(nid)}?wait=0");
@@ -50,7 +50,7 @@ public class InboxTests
         Assert.Equal(1, body.GetProperty("count").GetInt32());
 
         var first  = body.GetProperty("messages").EnumerateArray().First();
-        Assert.Equal(msgId, first.GetProperty("message_id").GetUInt64());
+        Assert.Equal(msgId, ulong.Parse(first.GetProperty("message_id").GetString()!));
         Assert.Equal("application/test+plain", first.GetProperty("content_type").GetString());
         var b64 = first.GetProperty("payload_b64").GetString()!;
         Assert.Equal(payload, Convert.FromBase64String(b64));
@@ -105,8 +105,8 @@ public class InboxTests
         var post = await fx.Client.PostAsync(
             $"/v1/inbox/{Uri.EscapeDataString(nid)}",
             new ByteArrayContent(new byte[] { 1 }));
-        var msgId = (await post.Content.ReadFromJsonAsync<JsonElement>(s_json))
-            .GetProperty("message_id").GetUInt64();
+        var msgId = ulong.Parse((await post.Content.ReadFromJsonAsync<JsonElement>(s_json))
+            .GetProperty("message_id").GetString()!);
 
         var del = await fx.Client.DeleteAsync($"/v1/inbox/{Uri.EscapeDataString(nid)}/{msgId}");
         Assert.Equal(HttpStatusCode.NoContent, del.StatusCode);
