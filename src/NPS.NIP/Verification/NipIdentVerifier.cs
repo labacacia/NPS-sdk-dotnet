@@ -160,6 +160,24 @@ public sealed class NipIdentVerifier
                 $"Certificate serial {frame.Serial} is in the local revocation list.");
         }
 
+        if (_opts.RevocationCheck is not null)
+        {
+            var callbackResult = await _opts.RevocationCheck(frame, ct).ConfigureAwait(false);
+            if (callbackResult is { IsValid: false })
+                return callbackResult;
+        }
+
+        if (_opts.RevocationStore is not null)
+        {
+            var record = await _opts.RevocationStore.GetBySerialAsync(frame.Serial, ct).ConfigureAwait(false);
+            if (record?.RevokedAt is not null)
+            {
+                return NipIdentVerifyResult.Fail(4,
+                    NipErrorCodes.CertRevoked,
+                    $"Certificate serial {frame.Serial} was revoked at {record.RevokedAt:O}: {record.RevokeReason}");
+            }
+        }
+
         // OCSP call to the CA server (optional)
         if (_opts.OcspUrl is not null && _httpFactory is not null)
         {
@@ -172,10 +190,13 @@ public sealed class NipIdentVerifier
                 "OcspUrl is configured but IHttpClientFactory is not available. " +
                 "Skipping revocation check for NID {Nid}.", frame.Nid);
         }
-        else if (_opts.OcspUrl is null && (_opts.LocalRevokedSerials is null || _opts.LocalRevokedSerials.Count == 0))
+        else if (_opts.OcspUrl is null
+                 && (_opts.LocalRevokedSerials is null || _opts.LocalRevokedSerials.Count == 0)
+                 && _opts.RevocationCheck is null
+                 && _opts.RevocationStore is null)
         {
             _logger?.LogDebug(
-                "No revocation source configured (OcspUrl and LocalRevokedSerials are both unset). " +
+                "No revocation source configured. " +
                 "Skipping revocation check for NID {Nid}.", frame.Nid);
         }
 
@@ -221,10 +242,18 @@ public sealed class NipIdentVerifier
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
+            if (_opts.OcspFailOpen)
+            {
+                _logger?.LogWarning(ex,
+                    "OCSP call failed for NID {Nid}. Failing open because OcspFailOpen is enabled.", nid);
+                return NipIdentVerifyResult.Ok();
+            }
+
             _logger?.LogWarning(ex,
-                "OCSP call failed for NID {Nid}. Failing open (treating as not revoked).", nid);
-            // Fail-open per RFC 6960 §2.4 recommendation when OCSP is unavailable
-            return NipIdentVerifyResult.Ok();
+                "OCSP call failed for NID {Nid}. Failing closed.", nid);
+            return NipIdentVerifyResult.Fail(4,
+                NipErrorCodes.OcspUnavailable,
+                $"OCSP call failed for NID {nid}: {ex.Message}");
         }
     }
 

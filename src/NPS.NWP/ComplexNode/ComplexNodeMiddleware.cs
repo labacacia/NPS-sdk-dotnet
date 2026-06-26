@@ -465,7 +465,7 @@ public sealed class ComplexNodeMiddleware
 
         var caps = new CapsFrame
         {
-            AnchorRef = result.AnchorRef ?? spec.ResultAnchor,
+            AnchorRef = result.AnchorRef ?? spec.ResultAnchor ?? string.Empty,
             Count     = (uint)dataList.Length,
             Data      = dataList,
             TokenEst  = result.TokenEst,

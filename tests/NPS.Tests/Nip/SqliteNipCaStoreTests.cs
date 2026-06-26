@@ -169,6 +169,19 @@ public sealed class SqliteNipCaStoreTests : IAsyncLifetime
         Assert.Empty(crl);
     }
 
+    [Fact]
+    public async Task List_ReturnsAllRecords()
+    {
+        await _store.SaveAsync(MakeRecord("urn:nps:agent:sqlite.test:a", "agent", "0xA1"));
+        await _store.SaveAsync(MakeRecord("urn:nps:agent:sqlite.test:b", "agent", "0xA2"));
+
+        var records = await _store.ListAsync();
+
+        Assert.Equal(2, records.Count);
+        Assert.Contains(records, r => r.Serial == "0xA1");
+        Assert.Contains(records, r => r.Serial == "0xA2");
+    }
+
     // ── Persistence across open ───────────────────────────────────────────────
 
     [Fact]

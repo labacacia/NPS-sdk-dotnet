@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Security.Cryptography.X509Certificates;
+using NPS.NIP.Ca;
 
 namespace NPS.NIP.Verification;
 
@@ -30,6 +31,26 @@ public sealed class NipVerifierOptions
     /// Useful for offline scenarios and unit tests.
     /// </summary>
     public IReadOnlySet<string>? LocalRevokedSerials { get; init; }
+
+    /// <summary>
+    /// Optional live revocation callback. It runs after
+    /// <see cref="LocalRevokedSerials"/> and before store / OCSP checks, allowing
+    /// hosts to consult an external cache, CA plane, or policy service.
+    /// </summary>
+    public NipRevocationCheck? RevocationCheck { get; init; }
+
+    /// <summary>
+    /// Optional CA store used as a live revocation source. The verifier calls
+    /// <see cref="INipCaStore.GetBySerialAsync"/> and rejects records whose
+    /// <see cref="NipCertRecord.RevokedAt"/> is populated.
+    /// </summary>
+    public INipCaStore? RevocationStore { get; init; }
+
+    /// <summary>
+    /// When true, OCSP transport failures are treated as pass-through. The secure
+    /// default is fail-closed, returning <c>NIP-OCSP-UNAVAILABLE</c>.
+    /// </summary>
+    public bool OcspFailOpen { get; init; }
 
     /// <summary>
     /// Trusted X.509 root certificates for verifying

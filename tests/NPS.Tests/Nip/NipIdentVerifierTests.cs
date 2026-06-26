@@ -342,7 +342,59 @@ public sealed class NipIdentVerifierTests : IDisposable
     }
 
     [Fact]
-    public async Task Step4_Ocsp_NetworkError_FailsOpen()
+    public async Task Step4_LiveRevocationCallback_Fails()
+    {
+        var frame = MakeFrame();
+        var opts = new NipVerifierOptions
+        {
+            TrustedIssuers = _defaultOpts.TrustedIssuers,
+            RevocationCheck = (f, _) => ValueTask.FromResult<NipIdentVerifyResult?>(
+                NipIdentVerifyResult.Fail(4, NipErrorCodes.CertRevoked,
+                    $"Live revocation callback rejected {f.Serial}."))
+        };
+        var verifier = MakeVerifier(opts);
+
+        var result = await verifier.VerifyAsync(frame);
+
+        Assert.False(result.IsValid);
+        Assert.Equal(4, result.FailedStep);
+        Assert.Equal(NipErrorCodes.CertRevoked, result.ErrorCode);
+    }
+
+    [Fact]
+    public async Task Step4_RevocationStore_RevokedSerial_Fails()
+    {
+        var frame = MakeFrame();
+        var store = new LiveRevocationStore(new NipCertRecord
+        {
+            Nid          = frame.Nid,
+            EntityType   = "agent",
+            Serial       = frame.Serial,
+            PubKey       = frame.PubKey,
+            Capabilities = frame.Capabilities.ToArray(),
+            ScopeJson    = frame.Scope.GetRawText(),
+            IssuedBy     = frame.IssuedBy,
+            IssuedAt     = DateTime.UtcNow.AddHours(-1),
+            ExpiresAt    = DateTime.UtcNow.AddDays(1),
+            RevokedAt    = DateTime.UtcNow,
+            RevokeReason = "banyan-test",
+        });
+        var opts = new NipVerifierOptions
+        {
+            TrustedIssuers = _defaultOpts.TrustedIssuers,
+            RevocationStore = store,
+        };
+        var verifier = MakeVerifier(opts);
+
+        var result = await verifier.VerifyAsync(frame);
+
+        Assert.False(result.IsValid);
+        Assert.Equal(4, result.FailedStep);
+        Assert.Equal(NipErrorCodes.CertRevoked, result.ErrorCode);
+    }
+
+    [Fact]
+    public async Task Step4_Ocsp_NetworkError_FailsClosedByDefault()
     {
         var frame   = MakeFrame();
         var factory = new ThrowingHttpClientFactory();
@@ -353,7 +405,26 @@ public sealed class NipIdentVerifierTests : IDisposable
         };
         var verifier = MakeVerifier(opts, factory);
 
-        // RFC 6960 §2.4 fail-open: network error → treat as not revoked
+        var result = await verifier.VerifyAsync(frame);
+
+        Assert.False(result.IsValid);
+        Assert.Equal(4, result.FailedStep);
+        Assert.Equal(NipErrorCodes.OcspUnavailable, result.ErrorCode);
+    }
+
+    [Fact]
+    public async Task Step4_Ocsp_NetworkError_FailsOpenWhenEnabled()
+    {
+        var frame   = MakeFrame();
+        var factory = new ThrowingHttpClientFactory();
+        var opts    = new NipVerifierOptions
+        {
+            TrustedIssuers = _defaultOpts.TrustedIssuers,
+            OcspUrl        = "https://ocsp.test.example/nip",
+            OcspFailOpen   = true,
+        };
+        var verifier = MakeVerifier(opts, factory);
+
         var result = await verifier.VerifyAsync(frame);
 
         if (!result.IsValid)
@@ -567,4 +638,36 @@ file sealed class ThrowingHandler : HttpMessageHandler
     protected override Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken) =>
         throw new HttpRequestException("Simulated network failure");
+}
+
+file sealed class LiveRevocationStore : INipCaStore
+{
+    private readonly NipCertRecord _record;
+
+    public LiveRevocationStore(NipCertRecord record) => _record = record;
+
+    public Task SaveAsync(NipCertRecord record, CancellationToken ct = default) =>
+        Task.CompletedTask;
+
+    public Task<NipCertRecord?> GetByNidAsync(string nid, CancellationToken ct = default) =>
+        Task.FromResult<NipCertRecord?>(string.Equals(_record.Nid, nid, StringComparison.Ordinal)
+            ? _record
+            : null);
+
+    public Task<NipCertRecord?> GetBySerialAsync(string serial, CancellationToken ct = default) =>
+        Task.FromResult<NipCertRecord?>(string.Equals(_record.Serial, serial, StringComparison.Ordinal)
+            ? _record
+            : null);
+
+    public Task<bool> RevokeAsync(string nid, string reason, DateTime revokedAt, CancellationToken ct = default) =>
+        Task.FromResult(false);
+
+    public Task<string> NextSerialAsync(CancellationToken ct = default) =>
+        Task.FromResult("0x1");
+
+    public Task<IReadOnlyList<NipCertRecord>> GetRevokedAsync(CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<NipCertRecord>>([_record]);
+
+    public Task<IReadOnlyList<NipCertRecord>> GetByParentNidAsync(string parentNid, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<NipCertRecord>>([]);
 }

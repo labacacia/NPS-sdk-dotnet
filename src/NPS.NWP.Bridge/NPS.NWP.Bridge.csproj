@@ -10,7 +10,7 @@
     <PackageId>LabAcacia.NPS.NWP.Bridge</PackageId>
     <AssemblyName>NPS.NWP.Bridge</AssemblyName>
     <Version>1.0.0-alpha.13</Version>
-    <Description>NPS — NWP Bridge Node skeleton: stateless translator from NPS frames to non-NPS protocols (HTTP / gRPC / MCP / A2A target adapters). Phase 1 ships the public type surface only; concrete adapters per target protocol arrive in follow-up CRs.</Description>
+    <Description>NPS — NWP Bridge Node: stateless dispatcher from NPS frames to non-NPS protocols, with built-in HTTP/HTTPS, gRPC JSON unary, MCP JSON-RPC, and A2A JSON-RPC adapters. External-to-NPS adapters are published separately as LabAcacia.McpIngress, LabAcacia.A2aIngress, and LabAcacia.GrpcIngress.</Description>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Authors>LabAcacia / INNO LOTUS PTY LTD</Authors>
     <Company>INNO LOTUS PTY LTD</Company>
@@ -36,6 +36,10 @@
   <ItemGroup>
     <ProjectReference Include="..\NPS.Core\NPS.Core.csproj" />
     <ProjectReference Include="..\NPS.NWP\NPS.NWP.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
 </Project>

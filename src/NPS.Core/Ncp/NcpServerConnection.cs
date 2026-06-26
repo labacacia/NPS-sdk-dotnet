@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Net.Sockets;
+using System.IO;
 using NPS.Core.Codecs;
 using NPS.Core.Frames;
 using NPS.Core.Frames.Ncp;
@@ -16,7 +17,7 @@ namespace NPS.Core.Ncp;
 public sealed class NcpServerConnection : IAsyncDisposable
 {
     private readonly TcpClient     _tcp;
-    private readonly NetworkStream _stream;
+    private readonly Stream        _stream;
     private readonly NpsFrameCodec _codec;
 
     /// <summary>The <see cref="HelloFrame"/> sent by the connecting client.</summary>
@@ -24,7 +25,7 @@ public sealed class NcpServerConnection : IAsyncDisposable
 
     internal NcpServerConnection(
         TcpClient     tcp,
-        NetworkStream stream,
+        Stream        stream,
         NpsFrameCodec codec,
         HelloFrame    clientHello)
     {

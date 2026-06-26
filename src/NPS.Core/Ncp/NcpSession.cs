@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Net.Sockets;
+using System.IO;
 using NPS.Core.Frames;
 using NPS.Core.Frames.Ncp;
 
@@ -15,7 +16,7 @@ namespace NPS.Core.Ncp;
 public sealed class NcpSession : IAsyncDisposable
 {
     private readonly TcpClient     _tcp;
-    private readonly NetworkStream _stream;
+    private readonly Stream        _stream;
 
     /// <summary>Capabilities the server advertised during the handshake.</summary>
     public NcpHandshakeCapsFrame ServerCaps { get; }
@@ -28,7 +29,7 @@ public sealed class NcpSession : IAsyncDisposable
 
     internal NcpSession(
         TcpClient             tcp,
-        NetworkStream         stream,
+        Stream                stream,
         NcpHandshakeCapsFrame serverCaps,
         EncodingTier          negotiatedTier)
     {
@@ -39,10 +40,10 @@ public sealed class NcpSession : IAsyncDisposable
     }
 
     /// <summary>
-    /// Returns the raw <see cref="NetworkStream"/> for upper-layer protocol use.
+    /// Returns the authenticated transport stream for upper-layer protocol use.
     /// The stream is owned by this session — do not dispose it directly.
     /// </summary>
-    public NetworkStream GetStream() => _stream;
+    public Stream GetStream() => _stream;
 
     public async ValueTask DisposeAsync()
     {

@@ -74,6 +74,15 @@ public interface INipCaStore
     Task<string> NextSerialAsync(CancellationToken ct = default);
 
     /// <summary>
+    /// Returns all certificate records. Intended for diagnostics, CA admin UIs,
+    /// and small embedded deployments; high-volume stores may page this behind
+    /// their own administrative API.
+    /// </summary>
+    Task<IReadOnlyList<NipCertRecord>> ListAsync(CancellationToken ct = default) =>
+        Task.FromException<IReadOnlyList<NipCertRecord>>(
+            new NotSupportedException("This INipCaStore implementation does not support full enumeration."));
+
+    /// <summary>
     /// Returns all revoked certificates (for CRL generation).
     /// </summary>
     Task<IReadOnlyList<NipCertRecord>> GetRevokedAsync(CancellationToken ct = default);

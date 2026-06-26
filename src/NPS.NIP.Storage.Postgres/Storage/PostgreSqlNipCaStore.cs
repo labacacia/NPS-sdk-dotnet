@@ -111,6 +111,16 @@ public sealed class PostgreSqlNipCaStore : INipCaStore
     }
 
     /// <inheritdoc/>
+    public async Task<IReadOnlyList<NipCertRecord>> ListAsync(CancellationToken ct = default)
+    {
+        const string sql = "SELECT * FROM nip_certificates ORDER BY issued_at DESC";
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        var rows = await conn.QueryAsync<CertRow>(new CommandDefinition(sql, cancellationToken: ct));
+        return rows.Select(MapRow).ToList();
+    }
+
+    /// <inheritdoc/>
     public async Task<IReadOnlyList<NipCertRecord>> GetRevokedAsync(CancellationToken ct = default)
     {
         const string sql = "SELECT * FROM nip_certificates WHERE revoked_at IS NOT NULL ORDER BY revoked_at DESC";

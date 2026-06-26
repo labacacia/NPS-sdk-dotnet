@@ -2,6 +2,15 @@
 
   <PropertyGroup>
     <Version>1.0.0-alpha.13</Version>
+    <!-- XML documentation files are generated, but the alpha SDK still has broad
+         public-surface doc gaps; keep compile output clean until the doc sweep. -->
+    <NoWarn>$(NoWarn);CS1591;CS1573;CS1574;CS1734</NoWarn>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Latest SQLitePCLRaw.lib.e_sqlite3 (2.1.11) is still flagged by this advisory;
+         keep audit suppression explicit until an upstream fixed package exists. -->
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-2m69-gcr7-jv3q" />
+  </ItemGroup>
 
 </Project>

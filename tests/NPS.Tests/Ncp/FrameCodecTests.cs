@@ -60,6 +60,40 @@ public sealed class FrameCodecTests
     }
 
     [Fact]
+    public void CreateDefault_BuildsUsableCoreCodec()
+    {
+        var frame = new HelloFrame
+        {
+            NpsVersion         = "1.0",
+            SupportedEncodings = ["msgpack", "json"],
+            SupportedProtocols = ["ncp"],
+            AgentId            = "urn:nps:test:node",
+        };
+
+        var codec = NpsFrameCodec.CreateDefault();
+        var wire  = codec.Encode(frame, EncodingTier.Json);
+
+        Assert.IsType<HelloFrame>(codec.Decode(wire));
+    }
+
+    [Fact]
+    public void Peek_InstanceMatchesStaticHeaderPeek()
+    {
+        var frame = new HelloFrame
+        {
+            NpsVersion         = "1.0",
+            SupportedEncodings = ["msgpack", "json"],
+            SupportedProtocols = ["ncp"],
+            AgentId            = "urn:nps:test:node",
+        };
+
+        var codec = MakeCodec();
+        var wire  = codec.Encode(frame, EncodingTier.MsgPack);
+
+        Assert.Equal(NpsFrameCodec.PeekHeader(wire), codec.Peek(wire));
+    }
+
+    [Fact]
     public void AnchorFrame_WireHeader_HasCorrectFrameType()
     {
         var frame = new AnchorFrame { AnchorId = "sha256:" + new string('b', 64), Schema = MakeSchema() };
@@ -94,6 +128,7 @@ public sealed class FrameCodecTests
         Assert.Equal(frame.AnchorRef, result.AnchorRef);
         Assert.Equal(frame.BaseSeq,   result.BaseSeq);
         Assert.Equal(frame.EntityId,  result.EntityId);
+        Assert.NotNull(result.Patch);
         Assert.Equal(2,               result.Patch.Count);
         Assert.Equal("replace",       result.Patch[0].Op);
         Assert.Equal("/price",        result.Patch[0].Path);

@@ -651,6 +651,13 @@ public sealed class NipCaService
     public Task<IReadOnlyList<NipCertRecord>> GetCrlAsync(CancellationToken ct = default) =>
         _store.GetRevokedAsync(ct);
 
+    /// <summary>Returns all certificate records from the backing CA store.</summary>
+    public Task<IReadOnlyList<NipCertRecord>> ListCertificatesAsync(CancellationToken ct = default) =>
+        _store.ListAsync(ct);
+
+    /// <summary>Signs an arbitrary CA-owned JSON artifact with the CA Ed25519 key.</summary>
+    public string SignArtifact(object artifact) => NipSigner.Sign(_keys.PrivateKey, artifact);
+
     // ── CA public key ─────────────────────────────────────────────────────────
 
     /// <summary>Returns the CA public key in <c>ed25519:{base64url}</c> format.</summary>

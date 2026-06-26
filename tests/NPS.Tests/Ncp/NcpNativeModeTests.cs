@@ -172,4 +172,92 @@ public sealed class NcpNativeModeTests
 
         await serverTask;
     }
+
+    [Fact]
+    public async Task Server_AuthenticateStreamHook_RunsBeforeHandshake()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var codec = MakeCodec();
+        int port = GetFreePort();
+        var hookCalled = false;
+
+        await using var server = new NcpServer(port, codec, new NcpServerOptions
+        {
+            AuthenticateStreamAsync = (_, stream, _) =>
+            {
+                hookCalled = true;
+                return ValueTask.FromResult(stream);
+            },
+        });
+        server.Start();
+
+        var serverTask = Task.Run(async () =>
+        {
+            var conn = await server.AcceptConnectionAsync(cts.Token);
+            await using var _ = await conn.AcceptAsync(MakeCaps(), cts.Token);
+        }, cts.Token);
+
+        var client = new NcpNativeClient(codec);
+        await using var session = await client.ConnectAsync("127.0.0.1", port, MakeHello(), cts.Token);
+
+        await serverTask;
+        Assert.True(hookCalled);
+    }
+
+    [Fact]
+    public async Task Server_RequireAuthenticatedStream_RejectsPlaintextHook()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var codec = MakeCodec();
+        int port = GetFreePort();
+
+        await using var server = new NcpServer(port, codec, new NcpServerOptions
+        {
+            RequireAuthenticatedStream = true,
+            AuthenticateStreamAsync = (_, stream, _) => ValueTask.FromResult(stream),
+        });
+        server.Start();
+
+        var serverTask = Task.Run(async () =>
+        {
+            await Assert.ThrowsAsync<NpsFrameException>(
+                () => server.AcceptConnectionAsync(cts.Token));
+        }, cts.Token);
+
+        using var tcp = new TcpClient();
+        await tcp.ConnectAsync("127.0.0.1", port, cts.Token);
+
+        await serverTask;
+    }
+
+    [Fact]
+    public async Task Server_HelloPayloadOverConfiguredLimit_ThrowsBeforeAllocatingPayload()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var codec = MakeCodec();
+        int port = GetFreePort();
+
+        await using var server = new NcpServer(port, codec, new NcpServerOptions
+        {
+            MaxHelloPayload = 16,
+        });
+        server.Start();
+
+        var serverTask = Task.Run(async () =>
+        {
+            var ex = await Assert.ThrowsAsync<NpsFrameException>(
+                () => server.AcceptConnectionAsync(cts.Token));
+            Assert.Contains("HelloFrame payload length", ex.Message);
+        }, cts.Token);
+
+        using var tcp = new TcpClient();
+        await tcp.ConnectAsync("127.0.0.1", port, cts.Token);
+        var stream = tcp.GetStream();
+        await NcpPreamble.WriteAsync(stream, cts.Token);
+        var helloWire = codec.Encode(MakeHello(), EncodingTier.Json);
+        await stream.WriteAsync(helloWire, cts.Token);
+        await stream.FlushAsync(cts.Token);
+
+        await serverTask;
+    }
 }

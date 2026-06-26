@@ -28,19 +28,21 @@ public sealed class NcpServer : IAsyncDisposable
 
     private readonly TcpListener   _listener;
     private readonly NpsFrameCodec _codec;
+    private readonly NcpServerOptions _options;
 
     /// <param name="endpoint">Local endpoint to listen on.</param>
     /// <param name="codec">Codec instance shared with accepted connections.</param>
-    public NcpServer(IPEndPoint endpoint, NpsFrameCodec codec)
+    public NcpServer(IPEndPoint endpoint, NpsFrameCodec codec, NcpServerOptions? options = null)
     {
         _listener = new TcpListener(endpoint);
         _codec    = codec;
+        _options  = options ?? new NcpServerOptions();
     }
 
     /// <param name="port">Port to listen on (all interfaces).</param>
     /// <param name="codec">Codec instance shared with accepted connections.</param>
-    public NcpServer(int port, NpsFrameCodec codec)
-        : this(new IPEndPoint(IPAddress.Any, port), codec) { }
+    public NcpServer(int port, NpsFrameCodec codec, NcpServerOptions? options = null)
+        : this(new IPEndPoint(IPAddress.Any, port), codec, options) { }
 
     /// <summary>Starts the listener so <see cref="AcceptConnectionAsync"/> can be called.</summary>
     public void Start() => _listener.Start();
@@ -56,30 +58,40 @@ public sealed class NcpServer : IAsyncDisposable
     /// <exception cref="NpsFrameException">First frame was not a <see cref="HelloFrame"/>.</exception>
     public async Task<NcpServerConnection> AcceptConnectionAsync(CancellationToken ct = default)
     {
-        TcpClient     tcp    = await _listener.AcceptTcpClientAsync(ct).ConfigureAwait(false);
-        NetworkStream stream = tcp.GetStream();
+        TcpClient tcp = await _listener.AcceptTcpClientAsync(ct).ConfigureAwait(false);
+        Stream    stream = tcp.GetStream();
 
         try
         {
-            // 1 — read & validate preamble (with per-spec 10-second timeout)
-            stream.ReadTimeout = (int)NcpPreamble.ReadTimeout.TotalMilliseconds;
+            stream = await AuthenticateAsync(tcp, stream, ct).ConfigureAwait(false);
+
+            using var handshakeCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            if (_options.HandshakeReadTimeout > TimeSpan.Zero)
+                handshakeCts.CancelAfter(_options.HandshakeReadTimeout);
+            var handshakeCt = handshakeCts.Token;
+
+            // 1 — read & validate preamble within the handshake timeout.
             var preambleBuf = new byte[NcpPreamble.Length];
-            await stream.ReadExactlyAsync(preambleBuf, ct).ConfigureAwait(false);
-            stream.ReadTimeout = Timeout.Infinite;      // restore for subsequent reads
+            await stream.ReadExactlyAsync(preambleBuf, handshakeCt).ConfigureAwait(false);
 
             NcpPreamble.Validate(preambleBuf);          // throws NcpPreambleInvalidException on mismatch
 
             // 2 — read frame header
-            var (header, _) = await NcpNativeClient.ReadFrameHeaderAsync(stream, ct).ConfigureAwait(false);
+            var (header, _) = await NcpNativeClient.ReadFrameHeaderAsync(stream, handshakeCt).ConfigureAwait(false);
 
             if (header.FrameType != FrameType.Hello)
                 throw new NpsFrameException(
                     $"Expected HelloFrame (0x{(byte)FrameType.Hello:X2}) as first frame after preamble, " +
                     $"got 0x{(byte)header.FrameType:X2}.");
 
+            if (header.PayloadLength > _options.MaxHelloPayload)
+                throw new NpsFrameException(
+                    $"HelloFrame payload length {header.PayloadLength} exceeds configured maximum " +
+                    $"{_options.MaxHelloPayload} bytes.");
+
             // 3 — read payload and deserialise HelloFrame
             var payload = new byte[header.PayloadLength];
-            await stream.ReadExactlyAsync(payload, ct).ConfigureAwait(false);
+            await stream.ReadExactlyAsync(payload, handshakeCt).ConfigureAwait(false);
 
             var hello = JsonSerializer.Deserialize<HelloFrame>(payload, JsonOpts)
                         ?? throw new NpsFrameException("HelloFrame payload deserialised to null.");
@@ -92,6 +104,30 @@ public sealed class NcpServer : IAsyncDisposable
             tcp.Dispose();
             throw;
         }
+    }
+
+    private async ValueTask<Stream> AuthenticateAsync(
+        TcpClient tcp,
+        Stream stream,
+        CancellationToken ct)
+    {
+        if (_options.AuthenticateStreamAsync is null)
+        {
+            if (_options.RequireAuthenticatedStream)
+                throw new NpsFrameException(
+                    "NcpServerOptions.RequireAuthenticatedStream is true, but no AuthenticateStreamAsync hook is configured.");
+            return stream;
+        }
+
+        var authenticated = await _options.AuthenticateStreamAsync(tcp, stream, ct).ConfigureAwait(false);
+        if (authenticated is null)
+            throw new NpsFrameException("NCP stream authentication hook returned null.");
+
+        if (_options.RequireAuthenticatedStream && ReferenceEquals(authenticated, stream))
+            throw new NpsFrameException(
+                "NCP stream authentication hook returned the original stream while RequireAuthenticatedStream is true.");
+
+        return authenticated;
     }
 
     public ValueTask DisposeAsync()

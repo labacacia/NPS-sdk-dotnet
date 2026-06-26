@@ -34,11 +34,14 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\NPS.Core\NPS.Core.csproj" />
     <ProjectReference Include="..\..\src\NPS.NWP\NPS.NWP.csproj" />
+    <ProjectReference Include="..\..\src\NPS.NWP.Bridge\NPS.NWP.Bridge.csproj" />
     <ProjectReference Include="..\..\src\NPS.NWP.Anchor\NPS.NWP.Anchor.csproj" />
     <ProjectReference Include="..\..\src\NPS.NOP\NPS.NOP.csproj" />
     <ProjectReference Include="..\..\src\NPS.NIP\NPS.NIP.csproj" />
     <ProjectReference Include="..\..\src\NPS.NIP.Storage.Sqlite\NPS.NIP.Storage.Sqlite.csproj" />
     <ProjectReference Include="..\..\src\NPS.NDP\NPS.NDP.csproj" />
+    <ProjectReference Include="..\..\src\NPS.Conformance\NPS.Conformance.csproj" />
+    <ProjectReference Include="..\..\src\NPS.Daemon.Observability\NPS.Daemon.Observability.csproj" />
     <ProjectReference Include="..\..\benchmarks\NPS.Benchmarks.TokenSavings\NPS.Benchmarks.TokenSavings.csproj" />
     <ProjectReference Include="..\..\benchmarks\NPS.Benchmarks.WireSize\NPS.Benchmarks.WireSize.csproj" />
     <ProjectReference Include="..\..\samples\NPS.Samples.NopDag\NPS.Samples.NopDag.csproj" />

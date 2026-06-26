@@ -133,6 +133,21 @@ public sealed class SqliteNipCaStore : INipCaStore
     }
 
     /// <inheritdoc/>
+    public async Task<IReadOnlyList<NipCertRecord>> ListAsync(CancellationToken ct = default)
+    {
+        const string sql = "SELECT * FROM nip_certs ORDER BY issued_at DESC";
+        await using var conn = new SqliteConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = sql;
+        var results = new List<NipCertRecord>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+            results.Add(ReadRecord(reader));
+        return results;
+    }
+
+    /// <inheritdoc/>
     public async Task<IReadOnlyList<NipCertRecord>> GetRevokedAsync(CancellationToken ct = default)
     {
         const string sql =

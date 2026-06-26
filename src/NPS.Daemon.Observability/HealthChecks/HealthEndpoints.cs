@@ -1,7 +1,6 @@
 // Copyright 2026 INNO LOTUS PTY LTD
 // SPDX-License-Identifier: Apache-2.0
 
-using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -46,12 +45,6 @@ public sealed class DelegateReadinessProbe : IReadinessProbe
 /// </summary>
 public static class HealthEndpoints
 {
-    private static readonly JsonSerializerOptions s_json = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-        WriteIndented        = false,
-    };
-
     /// <summary>
     /// Liveness probe. Always returns 200 unless the host is unable to run
     /// the route handler at all, in which case Kestrel won't accept the
@@ -59,7 +52,11 @@ public static class HealthEndpoints
     /// </summary>
     public static IEndpointRouteBuilder MapHealthz(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/healthz", () => Results.Json(new { status = "ok" }, s_json));
+        app.MapGet("/healthz", () =>
+        {
+            var response = HealthProbeRenderer.RenderHealthz();
+            return Results.Text(response.Body, response.ContentType, statusCode: response.StatusCode);
+        });
         return app;
     }
 
@@ -73,21 +70,8 @@ public static class HealthEndpoints
         app.MapGet("/readyz", async (HttpContext ctx) =>
         {
             var probes = ctx.RequestServices.GetServices<IReadinessProbe>();
-            foreach (var probe in probes)
-            {
-                string? reason;
-                try
-                {
-                    reason = await probe.CheckAsync(ctx.RequestAborted);
-                }
-                catch (Exception ex)
-                {
-                    reason = $"{probe.Name}: {ex.Message}";
-                }
-                if (reason is not null)
-                    return Results.Json(new { status = "error", reason }, s_json, statusCode: 503);
-            }
-            return Results.Json(new { status = "ok" }, s_json);
+            var response = await HealthProbeRenderer.RenderReadyzAsync(probes, ctx.RequestAborted);
+            return Results.Text(response.Body, response.ContentType, statusCode: response.StatusCode);
         });
         return app;
     }

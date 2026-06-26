@@ -5,9 +5,10 @@ namespace NPS.NWP.Bridge;
 
 /// <summary>
 /// NWP Bridge Node — stateless translator between NPS frames and non-NPS
-/// protocols (NPS-2 §2A, NPS-CR-0001). This file is the Phase 1
-/// surface: type definitions only. Concrete per-protocol adapters
-/// (HTTP / gRPC / MCP / A2A) ship in follow-up CRs.
+/// protocols (NPS-2 §2A, NPS-CR-0001). The package includes the common
+/// dispatcher surface plus the built-in HTTP/HTTPS, gRPC JSON unary, MCP
+/// JSON-RPC, and A2A JSON-RPC adapters. Additional
+/// protocols can be registered through <see cref="IBridgeDispatcher"/>.
 /// <para>
 /// Direction note: Bridge Node carries the <b>NPS → external</b>
 /// direction. The legacy <c>compat/{mcp,a2a,grpc}-bridge</c> packages
@@ -40,8 +41,11 @@ public static class BridgeProtocols
     /// <summary>Agent-to-Agent (Google A2A v0.2).</summary>
     public const string A2a  = "a2a";
 
-    /// <summary>The full set of standard targets at v1.0-alpha.3.</summary>
+    /// <summary>The full set of standard targets at v1.0-alpha.13.</summary>
     public static readonly IReadOnlyList<string> Standard = new[] { Http, Grpc, Mcp, A2a };
+
+    /// <summary>Protocols with built-in dispatchers in this package.</summary>
+    public static readonly IReadOnlyList<string> BuiltIn = new[] { Http, Grpc, Mcp, A2a };
 }
 
 /// <summary>
@@ -64,8 +68,7 @@ public sealed record BridgeNodeDescriptor(
 /// Inbound parameter object — surfaces the <c>bridge_target</c> that
 /// every Bridge invocation MUST carry. Concrete schema beyond
 /// <see cref="Protocol"/> + <see cref="Endpoint"/> is per-protocol and
-/// travels in <see cref="Extras"/> until follow-up CRs standardise
-/// each adapter.
+/// travels in <see cref="Extras"/> for adapter-specific options.
 /// </summary>
 /// <param name="Protocol">
 /// One of <see cref="BridgeProtocols.Http"/>, <see cref="BridgeProtocols.Grpc"/>,
@@ -80,7 +83,7 @@ public sealed record BridgeNodeDescriptor(
 /// <param name="Extras">
 /// Additional protocol-specific knobs (HTTP method, headers,
 /// gRPC metadata, MCP tool name, etc.). Implementation-defined for
-/// Phase 1.
+/// the selected adapter.
 /// </param>
 public sealed record BridgeTarget(
     string                                          Protocol,

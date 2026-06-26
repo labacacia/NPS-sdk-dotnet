@@ -26,6 +26,25 @@ public sealed class NpsFrameCodec
         FrameRegistry     registry)
         : this(json, msgpack, registry, FrameHeader.DefaultMaxPayload) { }
 
+    /// <summary>
+    /// Creates a codec with the default JSON codec, MsgPack codec, and NCP frame registry.
+    /// Use this for manual construction when only core NCP frames are needed; hosts that use
+    /// NWP/NIP/NDP/NOP should build a registry with the corresponding protocol extensions.
+    /// </summary>
+    public static NpsFrameCodec CreateDefault(uint maxPayload = FrameHeader.DefaultMaxPayload) =>
+        new(new Tier1JsonCodec(), new Tier2MsgPackCodec(), FrameRegistry.CreateDefault(), maxPayload);
+
+    /// <summary>
+    /// Creates a codec with the default JSON and MsgPack codecs and a caller-provided registry.
+    /// </summary>
+    public static NpsFrameCodec Create(FrameRegistry registry, uint maxPayload = FrameHeader.DefaultMaxPayload) =>
+        new(new Tier1JsonCodec(), new Tier2MsgPackCodec(), registry, maxPayload);
+
+    /// <summary>
+    /// Constructs a codec from its concrete codec tiers and frame registry.
+    /// Prefer <see cref="CreateDefault(uint)"/> for simple manual use or <c>AddNpsCore()</c>
+    /// for dependency-injected hosts.
+    /// </summary>
     public NpsFrameCodec(
         Tier1JsonCodec    json,
         Tier2MsgPackCodec msgpack,
@@ -85,6 +104,12 @@ public sealed class NpsFrameCodec
 
     /// <summary>Decodes only the header without deserialising the payload. Useful for routing.</summary>
     public static FrameHeader PeekHeader(ReadOnlySpan<byte> wire) => FrameHeader.Parse(wire);
+
+    /// <summary>
+    /// Instance-friendly wrapper for <see cref="PeekHeader(ReadOnlySpan{byte})"/>.
+    /// This keeps call sites consistent with <see cref="Encode"/> and <see cref="Decode"/>.
+    /// </summary>
+    public FrameHeader Peek(ReadOnlySpan<byte> wire) => PeekHeader(wire);
 
     // ── Private helpers ──────────────────────────────────────────────────────
 

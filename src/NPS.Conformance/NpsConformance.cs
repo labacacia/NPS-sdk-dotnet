@@ -1,0 +1,201 @@
+// Copyright 2026 INNO LOTUS PTY LTD
+// SPDX-License-Identifier: Apache-2.0
+
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+namespace NPS.Conformance;
+
+public static class NpsConformanceProfiles
+{
+    public const string NodeL1 = "NPS-Node-L1";
+    public const string NodeL2 = "NPS-Node-L2";
+}
+
+public enum NpsConformanceResult
+{
+    Pass,
+    Fail,
+    Skip,
+    NotApplicable,
+}
+
+public sealed record NpsConformanceCase(
+    string Id,
+    string Profile,
+    string Requirement,
+    string Title,
+    bool Optional = false);
+
+public sealed record NpsConformanceCaseResult
+{
+    [JsonPropertyName("id")] public required string Id { get; init; }
+    [JsonPropertyName("result")] public required string Result { get; init; }
+    [JsonPropertyName("message")] public string? Message { get; init; }
+}
+
+public sealed record NpsConformanceActor
+{
+    [JsonPropertyName("name")] public required string Name { get; init; }
+    [JsonPropertyName("version")] public required string Version { get; init; }
+    [JsonPropertyName("nid")] public string? Nid { get; init; }
+}
+
+public sealed record NpsConformanceRun
+{
+    [JsonPropertyName("date")] public required string Date { get; init; }
+    [JsonPropertyName("environment")] public required string Environment { get; init; }
+}
+
+public sealed record NpsConformanceSummary
+{
+    [JsonPropertyName("pass")] public required int Pass { get; init; }
+    [JsonPropertyName("fail")] public required int Fail { get; init; }
+    [JsonPropertyName("skip")] public required int Skip { get; init; }
+    [JsonPropertyName("na")] public required int NotApplicable { get; init; }
+}
+
+public sealed record NpsConformanceManifest
+{
+    private static readonly JsonSerializerOptions JsonOpts = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        WriteIndented = true,
+    };
+
+    [JsonPropertyName("profile")] public required string Profile { get; init; }
+    [JsonPropertyName("profile_version")] public required string ProfileVersion { get; init; }
+    [JsonPropertyName("iut")] public required NpsConformanceActor Iut { get; init; }
+    [JsonPropertyName("peer")] public required NpsConformanceActor Peer { get; init; }
+    [JsonPropertyName("run")] public required NpsConformanceRun Run { get; init; }
+    [JsonPropertyName("cases")] public required IReadOnlyList<NpsConformanceCaseResult> Cases { get; init; }
+    [JsonPropertyName("summary")] public required NpsConformanceSummary Summary { get; init; }
+
+    public string ToJson() => JsonSerializer.Serialize(this, JsonOpts);
+
+    public static NpsConformanceManifest FromJson(string json) =>
+        JsonSerializer.Deserialize<NpsConformanceManifest>(json, JsonOpts)
+        ?? throw new JsonException("Conformance manifest deserialized to null.");
+
+    public static NpsConformanceManifest Create(
+        string profile,
+        string iutName,
+        string iutVersion,
+        string iutNid,
+        string peerName,
+        string peerVersion,
+        IEnumerable<NpsConformanceCaseResult> results,
+        string environment = "unspecified")
+    {
+        var cases = results.ToList();
+        return new NpsConformanceManifest
+        {
+            Profile = profile,
+            ProfileVersion = profile == NpsConformanceProfiles.NodeL2 ? "0.3" : "0.1",
+            Iut = new NpsConformanceActor { Name = iutName, Version = iutVersion, Nid = iutNid },
+            Peer = new NpsConformanceActor { Name = peerName, Version = peerVersion },
+            Run = new NpsConformanceRun { Date = DateTime.UtcNow.ToString("O"), Environment = environment },
+            Cases = cases,
+            Summary = new NpsConformanceSummary
+            {
+                Pass = cases.Count(c => c.Result == "pass"),
+                Fail = cases.Count(c => c.Result == "fail"),
+                Skip = cases.Count(c => c.Result == "skip"),
+                NotApplicable = cases.Count(c => c.Result == "na"),
+            },
+        };
+    }
+}
+
+public sealed record NpsConformanceValidation(bool Valid, string Message);
+
+public static class NpsConformanceCatalog
+{
+    public static IReadOnlyList<NpsConformanceCase> NodeL1 { get; } =
+    [
+        C("TC-N1-NCP-01", NpsConformanceProfiles.NodeL1, "N1-NCP-01", "Tier-1 JSON frame round-trip"),
+        C("TC-N1-NCP-02", NpsConformanceProfiles.NodeL1, "N1-NCP-02", "Hello + Anchor handshake"),
+        C("TC-N1-NCP-03", NpsConformanceProfiles.NodeL1, "N1-NCP-03", "Loopback listener default"),
+        C("TC-N1-NCP-04", NpsConformanceProfiles.NodeL1, "N1-NCP-04", "Tier-2 negotiation hygiene"),
+        C("TC-N1-NIP-01", NpsConformanceProfiles.NodeL1, "N1-NIP-01", "Root keypair generation and permission"),
+        C("TC-N1-NIP-02", NpsConformanceProfiles.NodeL1, "N1-NIP-02", "IdentFrame sign and verify"),
+        C("TC-N1-NIP-03", NpsConformanceProfiles.NodeL1, "N1-NIP-03", "NID format"),
+        C("TC-N1-NIP-04", NpsConformanceProfiles.NodeL1, "N1-NIP-04", "Sub-NID issuance", optional: true),
+        C("TC-N1-NDP-01", NpsConformanceProfiles.NodeL1, "N1-NDP-01", "AnnounceFrame carries activation_mode"),
+        C("TC-N1-NDP-02", NpsConformanceProfiles.NodeL1, "N1-NDP-02", "AnnounceFrame signature"),
+        C("TC-N1-NDP-03", NpsConformanceProfiles.NodeL1, "N1-NDP-03", "ResolveFrame response"),
+        C("TC-N1-NDP-04", NpsConformanceProfiles.NodeL1, "N1-NDP-04", "GraphFrame subscription", optional: true),
+        C("TC-N1-NWP-01", NpsConformanceProfiles.NodeL1, "N1-NWP-01", "Inbox accepts ActionFrame"),
+        C("TC-N1-NWP-02", NpsConformanceProfiles.NodeL1, "N1-NWP-02", "Inbox persists across restart"),
+        C("TC-N1-NWP-03", NpsConformanceProfiles.NodeL1, "N1-NWP-03", "NWP pull serves inbox"),
+        C("TC-N1-NWP-04", NpsConformanceProfiles.NodeL1, "N1-NWP-04", "100 QPS baseline"),
+        C("TC-N1-NWP-05", NpsConformanceProfiles.NodeL1, "N1-NWP-05", "Push path", optional: true),
+        C("TC-N1-OBS-01", NpsConformanceProfiles.NodeL1, "N1-OBS-01", "Frame log entry per direction"),
+        C("TC-N1-OBS-02", NpsConformanceProfiles.NodeL1, "N1-OBS-02", "Log entry fields"),
+        C("TC-N1-OBS-03", NpsConformanceProfiles.NodeL1, "N1-OBS-03", "Log destination flexibility"),
+    ];
+
+    public static IReadOnlyList<NpsConformanceCase> NodeL2 { get; } =
+    [
+        C("TC-N2-AnchorTopo-01", NpsConformanceProfiles.NodeL2, "L2-08", "Snapshot of a 3-member cluster"),
+        C("TC-N2-AnchorTopo-02", NpsConformanceProfiles.NodeL2, "L2-08", "Version monotonicity across joins"),
+        C("TC-N2-AnchorTopo-03", NpsConformanceProfiles.NodeL2, "L2-08", "Sub-Anchor member surfaces"),
+        C("TC-N2-AnchorStream-01", NpsConformanceProfiles.NodeL2, "L2-08", "member_joined on NDP Announce"),
+        C("TC-N2-AnchorStream-02", NpsConformanceProfiles.NodeL2, "L2-08", "member_left on NDP TTL expiry"),
+        C("TC-N2-AnchorStream-03", NpsConformanceProfiles.NodeL2, "L2-08", "Resume from topology.since_version"),
+        C("TC-N2-AnchorTopo-04", NpsConformanceProfiles.NodeL2, "L2-08", "Unauthorized topology access"),
+        C("TC-N2-AnchorTopo-05", NpsConformanceProfiles.NodeL2, "L2-08", "Depth cap exceeded"),
+        C("TC-N2-AnchorTopo-06", NpsConformanceProfiles.NodeL2, "L2-08", "Unsupported topology scope"),
+        C("TC-N2-AnchorTopo-07", NpsConformanceProfiles.NodeL2, "L2-08", "Unsupported topology filter"),
+        C("TC-N2-AnchorTopo-08", NpsConformanceProfiles.NodeL2, "L2-08", "Unsupported reserved topology type"),
+        C("TC-N2-AnchorStream-04", NpsConformanceProfiles.NodeL2, "L2-08", "resync_required when version is too old"),
+        C("TC-N2-Tls-01", NpsConformanceProfiles.NodeL2, "NPS-RFC-0006", "ALPN nps/1.0 negotiated over TLS 1.3"),
+        C("TC-N2-Tls-02", NpsConformanceProfiles.NodeL2, "NPS-RFC-0006", "Mutual TLS required"),
+        C("TC-N2-Tls-03", NpsConformanceProfiles.NodeL2, "NPS-RFC-0006", "Client cert trust anchor and NID binding"),
+        C("TC-N2-Tls-04", NpsConformanceProfiles.NodeL2, "NPS-RFC-0006", "IdentFrame/certificate NID mismatch"),
+    ];
+
+    public static IReadOnlyList<NpsConformanceCase> ForProfile(string profile) => profile switch
+    {
+        NpsConformanceProfiles.NodeL1 => NodeL1,
+        NpsConformanceProfiles.NodeL2 => NodeL2,
+        _ => throw new ArgumentOutOfRangeException(nameof(profile), profile, "Unknown NPS conformance profile."),
+    };
+
+    private static NpsConformanceCase C(string id, string profile, string requirement, string title, bool optional = false) =>
+        new(id, profile, requirement, title, optional);
+}
+
+public static class NpsConformanceValidator
+{
+    private static readonly HashSet<string> ValidResults = ["pass", "fail", "skip", "na"];
+
+    public static NpsConformanceValidation Validate(NpsConformanceManifest manifest)
+    {
+        var catalog = NpsConformanceCatalog.ForProfile(manifest.Profile);
+        var known = catalog.ToDictionary(c => c.Id, StringComparer.Ordinal);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var result in manifest.Cases)
+        {
+            if (!known.ContainsKey(result.Id))
+                return new(false, $"Unknown conformance case id '{result.Id}'.");
+            if (!seen.Add(result.Id))
+                return new(false, $"Duplicate conformance case id '{result.Id}'.");
+            if (!ValidResults.Contains(result.Result))
+                return new(false, $"Case '{result.Id}' has invalid result '{result.Result}'.");
+            if (result.Result == "na" && !known[result.Id].Optional)
+                return new(false, $"Case '{result.Id}' is required and cannot be marked na.");
+        }
+
+        var missing = catalog.Where(c => !seen.Contains(c.Id)).Select(c => c.Id).ToList();
+        if (missing.Count > 0)
+            return new(false, $"Missing conformance case results: {string.Join(", ", missing)}.");
+
+        if (manifest.Cases.Any(c => c.Result is "fail" or "skip"))
+            return new(false, "Conformance manifest contains fail or skip results.");
+
+        return new(true, "Conformance manifest is valid.");
+    }
+}

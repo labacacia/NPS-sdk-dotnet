@@ -72,7 +72,8 @@ public static class NipCaRouter
                 {
                     register = $"{opts.BaseUrl}{pfx}/v1/agents/register",
                     verify   = $"{opts.BaseUrl}{pfx}/v1/agents/{{nid}}/verify",
-                    ocsp     = $"{opts.BaseUrl}{pfx}/ocsp",
+                    ocsp     = $"{opts.BaseUrl}{pfx}/v1/agents/{{nid}}/verify",
+                    node_ocsp = $"{opts.BaseUrl}{pfx}/v1/nodes/{{nid}}/verify",
                     crl      = $"{opts.BaseUrl}{pfx}/v1/crl",
                 },
                 capabilities          = new[] { "agent", "node", "orchestrator-group",
@@ -98,8 +99,20 @@ public static class NipCaRouter
                 serial      = r.Serial,
                 revoked_at  = r.RevokedAt?.ToString("O"),
                 reason      = r.RevokeReason,
-            });
-            return Results.Json(new { issued_by = opts.CaNid, entries }, s_json);
+            }).ToList();
+            var body = new
+            {
+                issued_by = opts.CaNid,
+                issued_at = DateTime.UtcNow.ToString("O"),
+                entries,
+            };
+            return Results.Json(new
+            {
+                body.issued_by,
+                body.issued_at,
+                body.entries,
+                signature = ca.SignArtifact(body),
+            }, s_json);
         });
 
         // ── Agent registration ────────────────────────────────────────────────

@@ -162,13 +162,13 @@ public sealed class NdpRegistryTests
     // ── Thread safety (smoke) ─────────────────────────────────────────────────
 
     [Fact]
-    public void ConcurrentAnnounce_DoesNotThrow()
+    public async Task ConcurrentAnnounce_DoesNotThrow()
     {
         var reg = new InMemoryNdpRegistry();
         var tasks = Enumerable.Range(0, 50).Select(i =>
             Task.Run(() => reg.Announce(
                 MakeAnnounce($"urn:nps:node:api.test:node-{i % 5}")))).ToArray();
-        Task.WaitAll(tasks);
+        await Task.WhenAll(tasks);
         Assert.True(reg.GetAll().Count <= 5);
     }
 

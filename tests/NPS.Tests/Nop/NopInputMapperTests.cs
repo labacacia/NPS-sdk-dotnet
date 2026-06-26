@@ -88,7 +88,7 @@ public class NopInputMapperTests
         var ctx    = new Dictionary<string, JsonElement>();
         var result = NopInputMapper.BuildParams(null, ctx);
         Assert.Equal(JsonValueKind.Object, result.ValueKind);
-        Assert.Equal(0, result.EnumerateObject().Count());
+        Assert.Empty(result.EnumerateObject());
     }
 
     [Fact]

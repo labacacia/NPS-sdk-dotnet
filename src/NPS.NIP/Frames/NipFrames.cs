@@ -242,9 +242,9 @@ public static class IdentLineageRole
 /// <summary>
 /// Cross-CA trust chain and capability grant frame (NPS-3 §5.2).
 /// <para>
-/// ⚠️ Business logic for trust chain validation is a commercial NPS Cloud feature.
-/// This record provides the frame definition for codec use; trust chain enforcement
-/// is not implemented in the OSS library.
+/// The open package includes the wire frame and basic local policy validation helpers.
+/// Managed multi-CA federation, revocation feeds, and hosted trust-anchor operations are
+/// NPS Cloud capabilities.
 /// </para>
 /// </summary>
 public sealed record TrustFrame : IFrame

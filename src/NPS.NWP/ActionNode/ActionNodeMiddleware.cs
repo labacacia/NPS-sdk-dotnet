@@ -542,7 +542,7 @@ public sealed class ActionNodeMiddleware
 
         var caps = new CapsFrame
         {
-            AnchorRef = anchorRef,
+            AnchorRef = anchorRef ?? string.Empty,
             Count     = (uint)dataList.Length,
             Data      = dataList,
             TokenEst  = tokenEst,
