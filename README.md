@@ -2,9 +2,8 @@ English | [中文版](./README.cn.md)
 
 # NPS .NET Reference Implementation
 
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v1.0.0--alpha.13-orange.svg)](CHANGELOG.md)
-[![Next](https://img.shields.io/badge/next-v1.0.0--alpha.14--candidate-yellow.svg)](CHANGELOG.md#100-alpha14--unreleased)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](../../LICENSE)
+[![Release](https://img.shields.io/badge/release-v1.0.0--alpha.14-orange.svg)](../../CHANGELOG.md)
 [![NCP](https://img.shields.io/badge/NCP-v0.8-5b8cff.svg)]()
 [![NWP](https://img.shields.io/badge/NWP-v0.14-4af0b0.svg)]()
 [![NIP](https://img.shields.io/badge/NIP-v0.10-7b61ff.svg)]()
@@ -17,17 +16,17 @@ C# / .NET 10 reference implementation for the Neural Protocol Suite.
 
 | Package | Version | Description |
 |---------|---------|-------------|
-| `LabAcacia.NPS.Core` | 1.0.0-alpha.13 | Shared frame types (AnchorFrame, DiffFrame, StreamFrame, CapsFrame, HelloFrame, ErrorFrame), JSON/MsgPack codecs, AnchorFrame cache, frame registry |
-| `LabAcacia.NPS.NWP` | 1.0.0-alpha.13 | Neural Web Protocol — NWM manifest, Query/Action/Subscribe/Diff frames, Memory/Action/Complex/Anchor/Bridge Node middleware plus native-mode serving |
-| `LabAcacia.NPS.NWP.Anchor` | 1.0.0-alpha.13 | NWP Anchor Node: stateless AaaS entry point translating ActionFrames to NOP TaskFrames; `AnchorNodeClient` for `topology.snapshot` / `topology.stream` queries |
-| `LabAcacia.NPS.NWP.Bridge` | 1.0.0-alpha.13 | NWP Bridge Node: stateless dispatcher from NPS frames to non-NPS protocols, with built-in HTTP/HTTPS, gRPC JSON unary, MCP JSON-RPC, and A2A JSON-RPC adapters |
-| `LabAcacia.NPS.NIP` | 1.0.0-alpha.13 | Neural Identity Protocol — CA, Ed25519 key generation, IdentFrame issuance/revocation, typed remote CA client, OCSP, CRL; X.509 + ACME `agent-01` challenge (RFC-0002 prototype) |
-| `LabAcacia.NPS.NIP.Storage.Sqlite` | 1.0.0-alpha.13 | SQLite storage backend for embedded/self-hosted NIP CA deployments |
-| `LabAcacia.NPS.NIP.Storage.Postgres` | 1.0.0-alpha.13 | PostgreSQL storage backend for service NIP CA deployments |
-| `LabAcacia.NPS.NDP` | 1.0.0-alpha.13 | Neural Discovery Protocol — announce/resolve frames, in-memory registry, Ed25519 validation |
-| `LabAcacia.NPS.NOP` | 1.0.0-alpha.13 | Neural Orchestration Protocol — Task/Delegate/Sync/AlignStream frames, DAG validator, orchestration engine |
-| `LabAcacia.NPS.Daemon.Observability` | 1.0.0-alpha.13 | JSON logging, transport-neutral health/readiness renderers, ASP.NET endpoint helpers, Prometheus metrics, graceful shutdown |
-| `LabAcacia.NPS.Conformance` | 1.0.0-alpha.13 | Node L1/L2 conformance case catalog, run manifest model, and CI validation helpers |
+| `LabAcacia.NPS.Core` | 1.0.0-alpha.14 | Shared frame types (AnchorFrame, DiffFrame, StreamFrame, CapsFrame, HelloFrame, ErrorFrame), JSON/MsgPack codecs, AnchorFrame cache, frame registry |
+| `LabAcacia.NPS.NWP` | 1.0.0-alpha.14 | Neural Web Protocol — NWM manifest, Query/Action/Subscribe/Diff frames, Memory/Action/Complex/Anchor/Bridge Node middleware plus native-mode serving |
+| `LabAcacia.NPS.NWP.Anchor` | 1.0.0-alpha.14 | NWP Anchor Node: stateless AaaS entry point translating ActionFrames to NOP TaskFrames; `AnchorNodeClient` for `topology.snapshot` / `topology.stream` queries |
+| `LabAcacia.NPS.NWP.Bridge` | 1.0.0-alpha.14 | NWP Bridge Node: stateless dispatcher from NPS frames to non-NPS protocols, with built-in HTTP/HTTPS, gRPC JSON unary, MCP JSON-RPC, and A2A JSON-RPC adapters |
+| `LabAcacia.NPS.NIP` | 1.0.0-alpha.14 | Neural Identity Protocol — CA, Ed25519 key generation, IdentFrame issuance/revocation, typed remote CA client, OCSP, CRL; X.509 + ACME `agent-01` challenge (RFC-0002 prototype) |
+| `LabAcacia.NPS.NIP.Storage.Sqlite` | 1.0.0-alpha.14 | SQLite storage backend for embedded/self-hosted NIP CA deployments |
+| `LabAcacia.NPS.NIP.Storage.Postgres` | 1.0.0-alpha.14 | PostgreSQL storage backend for service NIP CA deployments |
+| `LabAcacia.NPS.NDP` | 1.0.0-alpha.14 | Neural Discovery Protocol — announce/resolve frames, in-memory registry, Ed25519 validation |
+| `LabAcacia.NPS.NOP` | 1.0.0-alpha.14 | Neural Orchestration Protocol — Task/Delegate/Sync/AlignStream frames, DAG validator, orchestration engine |
+| `LabAcacia.NPS.Daemon.Observability` | 1.0.0-alpha.14 | JSON logging, transport-neutral health/readiness renderers, ASP.NET endpoint helpers, Prometheus metrics, graceful shutdown |
+| `LabAcacia.NPS.Conformance` | 1.0.0-alpha.14 | Node L1/L2 conformance case catalog, run manifest model, and CI validation helpers |
 
 ## Open vs NPS Cloud
 
