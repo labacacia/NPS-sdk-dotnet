@@ -4,6 +4,7 @@
 using System.Net.Sockets;
 using System.IO;
 using NPS.Core.Codecs;
+using NPS.Core.Exceptions;
 using NPS.Core.Frames;
 using NPS.Core.Frames.Ncp;
 
@@ -37,17 +38,22 @@ public sealed class NcpServerConnection : IAsyncDisposable
 
     /// <summary>
     /// Sends <paramref name="serverCaps"/> to the client and returns a live <see cref="NcpSession"/>.
-    /// The encoding tier is negotiated from the client's <c>SupportedEncodings</c> list.
+    /// The encoding policy is negotiated from the client's <c>SupportedEncodings</c> list.
     /// </summary>
     public async Task<NcpSession> AcceptAsync(
         NcpHandshakeCapsFrame serverCaps,
         CancellationToken     ct = default)
     {
-        var tier = NegotiateEncoding(ClientHello);
-        var wire = _codec.Encode(serverCaps, tier);
+        var policy = NegotiateEncodingPolicy(ClientHello);
+        var caps = serverCaps with
+        {
+            NegotiatedEncoding = NcpEncodingPolicy.EncodingToken(policy.DefaultTier),
+            EnabledEncodings   = policy.EnabledEncodings,
+        };
+        var wire = _codec.Encode(caps, policy.DefaultTier);
         await _stream.WriteAsync(wire, ct).ConfigureAwait(false);
         await _stream.FlushAsync(ct).ConfigureAwait(false);
-        return new NcpSession(_tcp, _stream, serverCaps, tier);
+        return new NcpSession(_tcp, _stream, caps, policy);
     }
 
     /// <summary>
@@ -68,17 +74,23 @@ public sealed class NcpServerConnection : IAsyncDisposable
     }
 
     /// <summary>
-    /// Selects the best encoding tier from the client's <c>SupportedEncodings</c> list.
-    /// Prefers MsgPack; falls back to JSON.
+    /// Selects a stable default encoding from the client's <c>SupportedEncodings</c> list.
+    /// Optional encodings such as BinaryVector are recorded as extensions, not defaults.
     /// </summary>
-    private static EncodingTier NegotiateEncoding(HelloFrame hello)
+    private static NcpEncodingPolicy NegotiateEncodingPolicy(HelloFrame hello)
     {
+        var binaryVectorEnabled = hello.SupportedEncodings.Contains("binary_vector.v1");
+
         foreach (var enc in hello.SupportedEncodings)
         {
-            if (enc is "msgpack") return EncodingTier.MsgPack;
-            if (enc is "json")    return EncodingTier.Json;
+            if (enc is "msgpack")
+                return new NcpEncodingPolicy(EncodingTier.MsgPack, binaryVectorEnabled);
+            if (enc is "json")
+                return new NcpEncodingPolicy(EncodingTier.Json, binaryVectorEnabled);
         }
-        return EncodingTier.Json;
+
+        throw new NpsEncodingUnsupportedException(
+            "Client did not offer a supported stable default encoding (expected msgpack or json).");
     }
 
     public async ValueTask DisposeAsync()

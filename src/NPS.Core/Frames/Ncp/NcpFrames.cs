@@ -318,8 +318,8 @@ public sealed record AlignFrame : IFrame
 /// <summary>
 /// Server's capability response to <see cref="HelloFrame"/> in native mode (NPS-1 §4.6).
 /// Carries the server NID and its capability list. Uses frame type 0x04 (Caps) on the wire.
-/// The encoding tier of the response frame header determines the negotiated encoding —
-/// not a field in this payload.
+/// The response frame header determines the stable default encoding; optional payload
+/// fields echo the full enabled encoding policy for extensions such as BinaryVector.
 /// </summary>
 public sealed record NcpHandshakeCapsFrame : IFrame
 {
@@ -333,6 +333,14 @@ public sealed record NcpHandshakeCapsFrame : IFrame
     /// <summary>Protocols and capabilities the server supports, e.g. <c>["ncp","nwp","nip"]</c>.</summary>
     [JsonPropertyName("caps")]
     public required IReadOnlyList<string> Caps { get; init; }
+
+    /// <summary>Stable default encoding selected for ordinary session frames.</summary>
+    [JsonPropertyName("negotiated_encoding")]
+    public string? NegotiatedEncoding { get; init; }
+
+    /// <summary>All encodings enabled by the negotiated policy, including optional extensions.</summary>
+    [JsonPropertyName("enabled_encodings")]
+    public IReadOnlyList<string>? EnabledEncodings { get; init; }
 
     /// <summary>Optional anchor reference for the server's first offered schema.</summary>
     [JsonPropertyName("anchor_ref")]

@@ -21,6 +21,13 @@ public class NpsException : Exception
         NpsStatusCode = npsStatusCode;
         ProtocolErrorCode = protocolErrorCode;
     }
+
+    public NpsException(string message, Exception inner, string npsStatusCode, string protocolErrorCode)
+        : base(message, inner)
+    {
+        NpsStatusCode = npsStatusCode;
+        ProtocolErrorCode = protocolErrorCode;
+    }
 }
 
 /// <summary>Thrown when a frame cannot be parsed or its structure is invalid.</summary>
@@ -28,6 +35,8 @@ public sealed class NpsFrameException : NpsException
 {
     public NpsFrameException(string message) : base(message) { }
     public NpsFrameException(string message, Exception inner) : base(message, inner) { }
+    public NpsFrameException(string message, string npsStatusCode, string protocolErrorCode)
+        : base(message, npsStatusCode, protocolErrorCode) { }
 }
 
 /// <summary>Thrown when encoding or decoding fails at the codec layer.</summary>
@@ -35,6 +44,22 @@ public sealed class NpsCodecException : NpsException
 {
     public NpsCodecException(string message) : base(message) { }
     public NpsCodecException(string message, Exception inner) : base(message, inner) { }
+    public NpsCodecException(string message, string npsStatusCode, string protocolErrorCode)
+        : base(message, npsStatusCode, protocolErrorCode) { }
+    public NpsCodecException(string message, Exception inner, string npsStatusCode, string protocolErrorCode)
+        : base(message, inner, npsStatusCode, protocolErrorCode) { }
+}
+
+/// <summary>
+/// Thrown when a frame uses an encoding tier outside the negotiated session policy.
+/// Error code: <c>NCP-ENCODING-UNSUPPORTED</c>.
+/// </summary>
+public sealed class NpsEncodingUnsupportedException : NpsException
+{
+    public NpsEncodingUnsupportedException(string message)
+        : base(message, NpsStatusCodes.ServerEncodingUnsupported, NcpErrorCodes.EncodingUnsupported)
+    {
+    }
 }
 
 /// <summary>

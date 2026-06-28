@@ -17,6 +17,7 @@ public sealed class NpsFrameCodec
 {
     private readonly Tier1JsonCodec    _json;
     private readonly Tier2MsgPackCodec _msgpack;
+    private readonly Tier3BinaryVectorCodec _binaryVector;
     private readonly FrameRegistry     _registry;
     private readonly uint              _maxPayload;
 
@@ -24,7 +25,7 @@ public sealed class NpsFrameCodec
         Tier1JsonCodec    json,
         Tier2MsgPackCodec msgpack,
         FrameRegistry     registry)
-        : this(json, msgpack, registry, FrameHeader.DefaultMaxPayload) { }
+        : this(json, msgpack, new Tier3BinaryVectorCodec(), registry, FrameHeader.DefaultMaxPayload) { }
 
     /// <summary>
     /// Creates a codec with the default JSON codec, MsgPack codec, and NCP frame registry.
@@ -32,13 +33,13 @@ public sealed class NpsFrameCodec
     /// NWP/NIP/NDP/NOP should build a registry with the corresponding protocol extensions.
     /// </summary>
     public static NpsFrameCodec CreateDefault(uint maxPayload = FrameHeader.DefaultMaxPayload) =>
-        new(new Tier1JsonCodec(), new Tier2MsgPackCodec(), FrameRegistry.CreateDefault(), maxPayload);
+        new(new Tier1JsonCodec(), new Tier2MsgPackCodec(), new Tier3BinaryVectorCodec(), FrameRegistry.CreateDefault(), maxPayload);
 
     /// <summary>
     /// Creates a codec with the default JSON and MsgPack codecs and a caller-provided registry.
     /// </summary>
     public static NpsFrameCodec Create(FrameRegistry registry, uint maxPayload = FrameHeader.DefaultMaxPayload) =>
-        new(new Tier1JsonCodec(), new Tier2MsgPackCodec(), registry, maxPayload);
+        new(new Tier1JsonCodec(), new Tier2MsgPackCodec(), new Tier3BinaryVectorCodec(), registry, maxPayload);
 
     /// <summary>
     /// Constructs a codec from its concrete codec tiers and frame registry.
@@ -50,11 +51,25 @@ public sealed class NpsFrameCodec
         Tier2MsgPackCodec msgpack,
         FrameRegistry     registry,
         uint              maxPayload)
+        : this(json, msgpack, new Tier3BinaryVectorCodec(), registry, maxPayload) { }
+
+    /// <summary>
+    /// Constructs a codec from its concrete codec tiers and frame registry.
+    /// Prefer <see cref="CreateDefault(uint)"/> for simple manual use or <c>AddNpsCore()</c>
+    /// for dependency-injected hosts.
+    /// </summary>
+    public NpsFrameCodec(
+        Tier1JsonCodec    json,
+        Tier2MsgPackCodec msgpack,
+        Tier3BinaryVectorCodec binaryVector,
+        FrameRegistry     registry,
+        uint              maxPayload)
     {
-        _json       = json;
-        _msgpack    = msgpack;
-        _registry   = registry;
-        _maxPayload = maxPayload;
+        _json         = json;
+        _msgpack      = msgpack;
+        _binaryVector = binaryVector;
+        _registry     = registry;
+        _maxPayload   = maxPayload;
     }
 
     /// <summary>
@@ -115,7 +130,16 @@ public sealed class NpsFrameCodec
 
     private static FrameFlags BuildFlags(IFrame frame, EncodingTier tier)
     {
-        var flags = tier == EncodingTier.Json ? FrameFlags.Tier1Json : FrameFlags.Tier2MsgPack;
+        var flags = tier switch
+        {
+            EncodingTier.Json => FrameFlags.Tier1Json,
+            EncodingTier.MsgPack => FrameFlags.Tier2MsgPack,
+            EncodingTier.BinaryVector => FrameFlags.Tier3BinaryVector,
+            _ => throw new NpsCodecException(
+                $"Unsupported encoding tier: {tier} (0x{(byte)tier:X2}).",
+                NpsStatusCodes.ClientBadFrame,
+                NcpErrorCodes.FrameFlagsInvalid)
+        };
 
         bool isFinal = frame is not StreamFrame sf || sf.IsLast;
         if (isFinal)
@@ -126,8 +150,12 @@ public sealed class NpsFrameCodec
 
     private IFrameCodec SelectCodec(EncodingTier tier) => tier switch
     {
-        EncodingTier.Json    => _json,
-        EncodingTier.MsgPack => _msgpack,
-        _ => throw new NpsCodecException($"Unsupported encoding tier: {tier} (0x{(byte)tier:X2}).")
+        EncodingTier.Json         => _json,
+        EncodingTier.MsgPack      => _msgpack,
+        EncodingTier.BinaryVector => _binaryVector,
+        _ => throw new NpsCodecException(
+            $"Unsupported encoding tier: {tier} (0x{(byte)tier:X2}).",
+            NpsStatusCodes.ClientBadFrame,
+            NcpErrorCodes.FrameFlagsInvalid)
     };
 }

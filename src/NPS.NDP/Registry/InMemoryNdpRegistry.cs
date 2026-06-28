@@ -14,7 +14,7 @@ namespace NPS.NDP.Registry;
 /// Evicted entries are removed during <see cref="GetAll"/> and <see cref="Resolve"/> calls.</para>
 ///
 /// <para>Security profile enforcement (NPS-4 §7.2) and activation_mode TTL capping
-/// (NPS-4 §3.1.7.1) are applied in <see cref="Announce"/>.</para>
+/// (NPS-4 §3.1.1) are applied in <see cref="Announce"/>.</para>
 /// </summary>
 public sealed class InMemoryNdpRegistry : INdpRegistry
 {
@@ -52,7 +52,7 @@ public sealed class InMemoryNdpRegistry : INdpRegistry
     /// </list>
     ///
     /// <para><see cref="Models.ActivationMode.Ephemeral"/> frames have their effective TTL
-    /// capped at <see cref="NdpConstants.EphemeralMaxTtlSeconds"/> (NPS-4 §3.1.7.1).</para>
+    /// capped at <see cref="NdpConstants.EphemeralMaxTtlSeconds"/> (NPS-4 §3.1.1).</para>
     /// </summary>
     /// <exception cref="NdpAnnounceRejectedException">
     /// Thrown when the frame violates the configured security profile.
@@ -71,7 +71,7 @@ public sealed class InMemoryNdpRegistry : INdpRegistry
             // Security profile enforcement (NPS-4 §7.2)
             EnforceSecurityProfile(frame);
 
-            // Activation-mode TTL cap (NPS-4 §3.1.7.1)
+            // Activation-mode TTL cap (NPS-4 §3.1.1)
             uint effectiveTtl = frame.ActivationMode == ActivationMode.Ephemeral
                 ? Math.Min(frame.Ttl, NdpConstants.EphemeralMaxTtlSeconds)
                 : frame.Ttl;

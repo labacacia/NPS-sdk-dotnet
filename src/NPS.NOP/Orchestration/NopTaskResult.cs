@@ -35,7 +35,7 @@ public sealed class NopTaskResult
 
     /// <summary>
     /// Saga compensation outcome, populated when <c>TaskFrame.compensation_policy</c>
-    /// is <c>"on_failure"</c> or <c>"always"</c> and at least one node had a
+    /// is <c>"best_effort"</c>, <c>"strict"</c>, or a legacy alias and at least one node had a
     /// <c>compensate_action</c>. Null when no compensation was attempted.
     /// </summary>
     public SagaCompensationResult? Compensation { get; init; }

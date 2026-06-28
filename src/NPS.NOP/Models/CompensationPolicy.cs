@@ -8,12 +8,28 @@ namespace NPS.NOP.Models;
 /// </summary>
 public static class CompensationPolicy
 {
-    /// <summary>No saga rollback (default).</summary>
-    public const string None      = "none";
+    /// <summary>Run compensation for completed predecessors when the task fails; compensation failures are reported but do not stop remaining compensation.</summary>
+    public const string BestEffort = "best_effort";
 
-    /// <summary>Run compensation for all completed nodes when the task fails.</summary>
+    /// <summary>Run compensation for completed predecessors when the task fails; missing or failed compensation is terminal.</summary>
+    public const string Strict = "strict";
+
+    /// <summary>Legacy alias: no saga rollback. Not a NPS-5 wire value.</summary>
+    public const string None = "none";
+
+    /// <summary>Legacy alias for <see cref="BestEffort"/>.</summary>
     public const string OnFailure = "on_failure";
 
-    /// <summary>Run compensation after both success and failure.</summary>
+    /// <summary>Non-standard extension: run compensation after both success and failure.</summary>
     public const string Always    = "always";
+
+    /// <summary>Returns true when the policy runs compensation after a task failure.</summary>
+    public static bool RunsOnFailure(string? policy) =>
+        policy is BestEffort or Strict or OnFailure or Always;
+
+    /// <summary>Returns true when the policy runs compensation after a successful task.</summary>
+    public static bool RunsOnSuccess(string? policy) => policy == Always;
+
+    /// <summary>Returns true when any missing or failed compensation step is terminal.</summary>
+    public static bool IsStrict(string? policy) => policy == Strict;
 }

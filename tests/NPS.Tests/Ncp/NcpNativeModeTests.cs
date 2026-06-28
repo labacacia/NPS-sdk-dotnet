@@ -174,6 +174,43 @@ public sealed class NcpNativeModeTests
     }
 
     [Fact]
+    public async Task Handshake_BinaryVectorClient_NegotiatesMsgPackWithBinaryVectorExtension()
+    {
+        using var cts  = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var codec = MakeCodec();
+        int port  = GetFreePort();
+        NcpEncodingPolicy? serverPolicy = null;
+
+        await using var server = new NcpServer(port, codec);
+        server.Start();
+
+        var serverTask = Task.Run(async () =>
+        {
+            var conn = await server.AcceptConnectionAsync(cts.Token);
+            await using var session = await conn.AcceptAsync(MakeCaps(), cts.Token);
+            serverPolicy = session.EncodingPolicy;
+        }, cts.Token);
+
+        var hello = MakeHello() with
+        {
+            SupportedEncodings = ["binary_vector.v1", "msgpack", "json"],
+        };
+
+        var client = new NcpNativeClient(codec);
+        await using var session = await client.ConnectAsync("127.0.0.1", port, hello, cts.Token);
+
+        Assert.Equal(EncodingTier.MsgPack, session.NegotiatedTier);
+        Assert.True(session.EncodingPolicy.BinaryVectorEnabled);
+        Assert.Equal("msgpack", session.ServerCaps.NegotiatedEncoding);
+        Assert.Contains("binary_vector.v1", session.ServerCaps.EnabledEncodings!);
+
+        await serverTask;
+        Assert.NotNull(serverPolicy);
+        Assert.Equal(EncodingTier.MsgPack, serverPolicy.DefaultTier);
+        Assert.True(serverPolicy.BinaryVectorEnabled);
+    }
+
+    [Fact]
     public async Task Server_AuthenticateStreamHook_RunsBeforeHandshake()
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));

@@ -117,7 +117,9 @@ public sealed class NipCaServiceTests : IDisposable
         var frame = await _svc.RevokeAsync(nid, "key_compromise");
 
         Assert.Equal(nid, frame.TargetNid);
+        Assert.NotNull(frame.Serial);
         Assert.Equal("key_compromise", frame.Reason);
+        Assert.Equal("urn:nps:org:ca.test.example", frame.SignerNid);
         Assert.StartsWith("ed25519:", frame.Signature);
     }
 

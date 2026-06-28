@@ -99,7 +99,7 @@ public class SubNidIssuanceTests
         });
         Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
         var body = await second.Content.ReadFromJsonAsync<JsonElement>(s_json);
-        Assert.Equal("NIP-NID-ALREADY-EXISTS", body.GetProperty("error").GetString());
+        Assert.Equal("NIP-CA-NID-ALREADY-EXISTS", body.GetProperty("error").GetString());
     }
 
     [Fact]
@@ -179,11 +179,14 @@ public class SubNidIssuanceTests
             new { reason = "key_compromise" });
         Assert.Equal(HttpStatusCode.NoContent, revoke.StatusCode);
 
-        // Subsequent inbox deposit is forbidden.
+        // Subsequent inbox deposit is rejected as an invalid credential.
         var post = await fx.Client.PostAsync(
             $"/v1/inbox/{Uri.EscapeDataString(nid)}",
             new ByteArrayContent(new byte[] { 4, 5, 6 }));
-        Assert.Equal(HttpStatusCode.Forbidden, post.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, post.StatusCode);
+        var error = await post.Content.ReadFromJsonAsync<JsonElement>(s_json);
+        Assert.Equal("NIP-CERT-REVOKED", error.GetProperty("error").GetString());
+        Assert.Equal("NPS-AUTH-UNAUTHENTICATED", error.GetProperty("status").GetString());
     }
 
     [Fact]

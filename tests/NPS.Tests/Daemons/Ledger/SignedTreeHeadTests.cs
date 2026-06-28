@@ -35,7 +35,7 @@ public sealed class SignedTreeHeadTests
         var (priv, pub) = lease;
         var sth = new SignedTreeHead
         {
-            LogId          = "urn:nps:log:operator-test",
+            LogId          = "urn:nps:node:log.local:operator-test",
             TreeSize       = 7,
             Timestamp      = "2026-04-30T00:00:00Z",
             Sha256RootHash = "abc123def456",
@@ -55,7 +55,7 @@ public sealed class SignedTreeHeadTests
         var (priv, pub) = lease;
         var sth = new SignedTreeHead
         {
-            LogId          = "urn:nps:log:operator-test",
+            LogId          = "urn:nps:node:log.local:operator-test",
             TreeSize       = 7,
             Timestamp      = "2026-04-30T00:00:00Z",
             Sha256RootHash = "abc123def456",
@@ -76,7 +76,7 @@ public sealed class SignedTreeHeadTests
         var (priv, pub) = lease;
         var sth = new SignedTreeHead
         {
-            LogId          = "urn:nps:log:operator-test",
+            LogId          = "urn:nps:node:log.local:operator-test",
             TreeSize       = 7,
             Timestamp      = "2026-04-30T00:00:00Z",
             Sha256RootHash = "abc123def456",
@@ -99,7 +99,7 @@ public sealed class SignedTreeHeadTests
         var (priv, pub) = lease;
         var sthA = new SignedTreeHead
         {
-            LogId          = "urn:nps:log:operator-A",
+            LogId          = "urn:nps:node:log.local:operator-A",
             TreeSize       = 1,
             Timestamp      = "2026-04-30T00:00:00Z",
             Sha256RootHash = "abc",
@@ -108,7 +108,7 @@ public sealed class SignedTreeHeadTests
 
         var signed = Sign(priv, sthA);
 
-        var asLogB = signed with { LogId = "urn:nps:log:operator-B" };
+        var asLogB = signed with { LogId = "urn:nps:node:log.local:operator-B" };
         Assert.False(NipSigner.Verify(
             pub, asLogB with { Signature = string.Empty }, asLogB.Signature));
     }

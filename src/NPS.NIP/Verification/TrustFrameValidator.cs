@@ -19,13 +19,25 @@ public static class TrustFrameValidator
     {
         if (string.IsNullOrWhiteSpace(frame.GrantorNid)
             || string.IsNullOrWhiteSpace(frame.GranteeCa)
+            || string.IsNullOrWhiteSpace(frame.IssuedAt)
+            || string.IsNullOrWhiteSpace(frame.ExpiresAt)
+            || string.IsNullOrWhiteSpace(frame.Serial)
+            || string.IsNullOrWhiteSpace(frame.SignerNid)
             || string.IsNullOrWhiteSpace(frame.Signature)
             || frame.TrustScope.Count == 0
             || frame.Nodes.Count == 0)
         {
             return NipIdentVerifyResult.Fail(3,
                 NipErrorCodes.TrustInvalid,
-                "TrustFrame is missing grantor, grantee, signature, trust_scope, or nodes.");
+                "TrustFrame is missing grantor, grantee, issued_at, expires_at, serial, signer_nid, signature, trust_scope, or nodes.");
+        }
+
+        if (!DateTime.TryParse(frame.IssuedAt, null,
+                System.Globalization.DateTimeStyles.RoundtripKind, out _))
+        {
+            return NipIdentVerifyResult.Fail(3,
+                NipErrorCodes.TrustInvalid,
+                $"TrustFrame issued_at is not a valid timestamp: {frame.IssuedAt}.");
         }
 
         if (!DateTime.TryParse(frame.ExpiresAt, null,

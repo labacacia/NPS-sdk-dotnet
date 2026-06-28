@@ -101,6 +101,7 @@ public static class NipSigner
     /// IdentFrame signature is computed.
     /// <list type="bullet">
     ///   <item><c>signature</c> — the signature itself, by definition.</item>
+    ///   <item><c>frame</c> — transport/core discriminant, not part of the NDP/NIP signed body.</item>
     ///   <item><c>metadata</c> — informational, not signed (NPS-3 §5.1).</item>
     ///   <item><c>cert_format</c> + <c>cert_chain</c> — NPS-RFC-0002 v2 X.509
     ///     fields. Trust on the v2 path comes from the X.509 chain itself,
@@ -114,7 +115,7 @@ public static class NipSigner
     ///     other five SDKs (which exclude them from the signed canonical form).</item>
     /// </list>
     /// </summary>
-    private static readonly HashSet<string> s_excluded = ["signature", "metadata", "cert_format", "cert_chain", "health", "last_seen"];
+    private static readonly HashSet<string> s_excluded = ["signature", "frame", "metadata", "cert_format", "cert_chain", "health", "last_seen"];
 
     private static void WriteCanonical(JsonElement el, StringBuilder sb)
     {

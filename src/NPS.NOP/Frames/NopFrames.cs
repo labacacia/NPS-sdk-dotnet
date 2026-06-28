@@ -73,13 +73,13 @@ public sealed record TaskFrame : IFrame
     public int DelegateDepth { get; init; }
 
     /// <summary>
-    /// Saga compensation policy (NPS-5 §3.5): <c>"none"</c> (default — no rollback),
-    /// <c>"on_failure"</c> (compensate completed nodes when the task fails),
-    /// or <c>"always"</c> (compensate after both success and failure).
-    /// Only nodes with a <c>compensate_action</c> are rolled back.
+    /// Saga compensation policy (NPS-5 §3.1.6): <c>"best_effort"</c> (default)
+    /// or <c>"strict"</c>. Legacy aliases <c>"on_failure"</c>, <c>"none"</c>,
+    /// and the non-standard extension <c>"always"</c> remain accepted by the .NET
+    /// implementation for alpha compatibility.
     /// </summary>
     [JsonPropertyName("compensation_policy")]
-    public string CompensationPolicy { get; init; } = Models.CompensationPolicy.None;
+    public string CompensationPolicy { get; init; } = Models.CompensationPolicy.BestEffort;
 }
 
 // ── DelegateFrame (0x41) ────────────────────────────────────────────────────

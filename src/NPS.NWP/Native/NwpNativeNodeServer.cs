@@ -40,22 +40,38 @@ public sealed class NwpNativeNodeServer
 
     /// <summary>Serves frames until EOF, cancellation, or a fatal write error.</summary>
     public async Task ServeAsync(NcpSession session, CancellationToken ct = default) =>
-        await ServeAsync(session.GetStream(), session.NegotiatedTier, ct).ConfigureAwait(false);
+        await ServeAsync(session.GetStream(), session.EncodingPolicy, ct).ConfigureAwait(false);
 
     /// <summary>Serves frames from an already authenticated stream.</summary>
     public async Task ServeAsync(Stream stream, EncodingTier tier = EncodingTier.Json, CancellationToken ct = default)
+        => await ServeAsync(stream, new NcpEncodingPolicy(tier), ct).ConfigureAwait(false);
+
+    /// <summary>Serves frames from an already authenticated stream under a negotiated encoding policy.</summary>
+    public async Task ServeAsync(Stream stream, NcpEncodingPolicy encodingPolicy, CancellationToken ct = default)
     {
         while (!ct.IsCancellationRequested)
         {
             IFrame? response;
             try
             {
-                var frame = await ReadFrameAsync(stream, ct).ConfigureAwait(false);
+                var frame = await ReadFrameAsync(stream, encodingPolicy, ct).ConfigureAwait(false);
                 response = await DispatchAsync(frame, ct).ConfigureAwait(false);
             }
             catch (EndOfStreamException)
             {
                 return;
+            }
+            catch (NpsFrameException ex)
+            {
+                response = ToDecodeErrorFrame(ex, NcpErrorCodes.FrameFlagsInvalid);
+            }
+            catch (NpsCodecException ex)
+            {
+                response = ToDecodeErrorFrame(ex, NcpErrorCodes.BinaryVectorMalformed);
+            }
+            catch (NpsException ex) when (ex.NpsStatusCode is not null || ex.ProtocolErrorCode is not null)
+            {
+                response = ToErrorFrame(ex);
             }
             catch (Exception ex) when (ex is NpsException or JsonException or InvalidOperationException)
             {
@@ -68,7 +84,7 @@ public sealed class NwpNativeNodeServer
             }
 
             if (response is not null)
-                await WriteFrameAsync(stream, response, tier, ct).ConfigureAwait(false);
+                await WriteFrameAsync(stream, response, encodingPolicy.DefaultTier, ct).ConfigureAwait(false);
         }
     }
 
@@ -143,9 +159,10 @@ public sealed class NwpNativeNodeServer
         };
     }
 
-    private async Task<IFrame> ReadFrameAsync(Stream stream, CancellationToken ct)
+    private async Task<IFrame> ReadFrameAsync(Stream stream, NcpEncodingPolicy encodingPolicy, CancellationToken ct)
     {
         var (header, rawHeader) = await ReadFrameHeaderAsync(stream, ct).ConfigureAwait(false);
+        encodingPolicy.EnsureAllows(header);
         var payload = new byte[header.PayloadLength];
         await stream.ReadExactlyAsync(payload, ct).ConfigureAwait(false);
         var wire = new byte[rawHeader.Length + payload.Length];
@@ -160,6 +177,20 @@ public sealed class NwpNativeNodeServer
         await stream.WriteAsync(wire, ct).ConfigureAwait(false);
         await stream.FlushAsync(ct).ConfigureAwait(false);
     }
+
+    private static ErrorFrame ToErrorFrame(NpsException ex) => new()
+    {
+        Status = ex.NpsStatusCode ?? NpsStatusCodes.ClientBadFrame,
+        Error = ex.ProtocolErrorCode ?? "NWP-NATIVE-DISPATCH-FAILED",
+        Message = ex.Message,
+    };
+
+    private static ErrorFrame ToDecodeErrorFrame(NpsException ex, string defaultError) => new()
+    {
+        Status = ex.NpsStatusCode ?? NpsStatusCodes.ClientBadFrame,
+        Error = ex.ProtocolErrorCode ?? defaultError,
+        Message = "Malformed NPS frame.",
+    };
 
     private static JsonElement ToJsonElement(object value) =>
         JsonSerializer.SerializeToElement(value);

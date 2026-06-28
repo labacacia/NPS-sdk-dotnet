@@ -172,6 +172,20 @@ file static class OrchestratorFixture
             };
         }
     }
+
+    public static async IAsyncEnumerable<AlignStreamFrame> CompleteAsync(
+        string nodeId,
+        string json,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+    {
+        await Task.CompletedTask;
+        yield return new AlignStreamFrame
+        {
+            StreamId = Guid.NewGuid().ToString("D"), TaskId = "t", SubtaskId = Guid.NewGuid().ToString("D"),
+            Seq = 0, IsFinal = true, SenderNid = nodeId,
+            Data = JsonDocument.Parse(json).RootElement,
+        };
+    }
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -370,6 +384,97 @@ public class NopOrchestratorTests
         var result = await orch.ExecuteAsync(TaskFrameBuilder.Linear("fetch", "analyze"));
 
         Assert.Equal(TaskState.Failed, result.FinalState);
+    }
+
+    [Fact]
+    public async Task Saga_DefaultBestEffort_CompensatesCompletedPredecessorOnFailure()
+    {
+        var (orch, worker) = OrchestratorFixture.Build();
+        var refundCalls = 0;
+        JsonElement? refundParams = null;
+        worker.SetupHandler("charge", frame =>
+        {
+            if (frame.Action == "nwp://payments/refund")
+            {
+                refundCalls++;
+                refundParams = frame.Params?.Clone();
+                return OrchestratorFixture.CompleteAsync("charge", """{"refunded": true}""");
+            }
+
+            return OrchestratorFixture.CompleteAsync("charge", """{"charge_id": "ch_1", "amount": 25}""");
+        });
+        worker.SetupFailure("ship", "SHIP-FAILED");
+
+        var task = new TaskFrame
+        {
+            TaskId = Guid.NewGuid().ToString("D"),
+            Dag = new TaskDag
+            {
+                Nodes =
+                [
+                    new DagNode
+                    {
+                        Id = "charge",
+                        Action = "nwp://payments/charge",
+                        Agent = "charge",
+                        CompensateAction = "nwp://payments/refund",
+                        CompensateParamsMapping = new Dictionary<string, JsonElement>
+                        {
+                            ["charge_id"] = JsonSerializer.SerializeToElement("$.charge.charge_id"),
+                        },
+                    },
+                    new DagNode
+                    {
+                        Id = "ship",
+                        Action = "nwp://shipping/ship",
+                        Agent = "ship",
+                        InputFrom = ["charge"],
+                    },
+                ],
+                Edges = [new DagEdge { From = "charge", To = "ship" }],
+            },
+        };
+
+        var result = await orch.ExecuteAsync(task);
+
+        Assert.Equal(TaskState.Failed, result.FinalState);
+        Assert.Equal(1, refundCalls);
+        Assert.NotNull(result.Compensation);
+        Assert.Equal(1, result.Compensation!.Attempted);
+        Assert.Equal(1, result.Compensation.Succeeded);
+        Assert.Equal("ch_1", refundParams!.Value.GetProperty("charge_id").GetString());
+    }
+
+    [Fact]
+    public async Task Saga_StrictPolicy_MissingCompensateAction_ReturnsNotSupported()
+    {
+        var (orch, worker) = OrchestratorFixture.Build();
+        worker.SetupSuccess("charge", """{"charge_id": "ch_1"}""");
+        worker.SetupFailure("ship", "SHIP-FAILED");
+
+        var task = new TaskFrame
+        {
+            TaskId = Guid.NewGuid().ToString("D"),
+            CompensationPolicy = CompensationPolicy.Strict,
+            Dag = new TaskDag
+            {
+                Nodes =
+                [
+                    new DagNode { Id = "charge", Action = "nwp://payments/charge", Agent = "charge" },
+                    new DagNode { Id = "ship", Action = "nwp://shipping/ship", Agent = "ship", InputFrom = ["charge"] },
+                ],
+                Edges = [new DagEdge { From = "charge", To = "ship" }],
+            },
+        };
+
+        var result = await orch.ExecuteAsync(task);
+
+        Assert.Equal(TaskState.Failed, result.FinalState);
+        Assert.Equal(NopErrorCodes.CompensationNotSupported, result.ErrorCode);
+        Assert.NotNull(result.Compensation);
+        Assert.Equal(0, result.Compensation!.Attempted);
+        Assert.Equal(1, result.Compensation.Failed);
+        Assert.Equal("charge", Assert.Single(result.Compensation.FailedNodeIds));
     }
 
     // ── Retry ─────────────────────────────────────────────────────────────────

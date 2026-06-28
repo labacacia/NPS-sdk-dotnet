@@ -107,6 +107,7 @@ public sealed class NwpFrameCodecTests
     [Theory]
     [InlineData(EncodingTier.Json)]
     [InlineData(EncodingTier.MsgPack)]
+    [InlineData(EncodingTier.BinaryVector)]
     public void QueryFrame_WithVectorSearch_RoundTrip(EncodingTier tier)
     {
         var frame = new QueryFrame
@@ -127,8 +128,36 @@ public sealed class NwpFrameCodecTests
 
         Assert.NotNull(result.VectorSearch);
         Assert.Equal("embedding", result.VectorSearch.Field);
+        Assert.Equal(frame.VectorSearch.Vector, result.VectorSearch.Vector);
         Assert.Equal(5u,          result.VectorSearch.TopK);
         Assert.Equal(0.85,        result.VectorSearch.Threshold);
+    }
+
+    [Fact]
+    public void QueryFrame_BinaryVectorTier_UsesTier3HeaderAndPayloadMagic()
+    {
+        var frame = new QueryFrame
+        {
+            VectorSearch = new VectorSearchOptions
+            {
+                Field  = "embedding",
+                Vector = [1.0f, -2.5f, 3.25f, 0.0f],
+                TopK   = 4,
+            },
+        };
+
+        var codec = MakeCodec();
+        var wire  = codec.Encode(frame, EncodingTier.BinaryVector);
+        var header = NpsFrameCodec.PeekHeader(wire);
+
+        Assert.Equal(EncodingTier.BinaryVector, header.EncodingTier);
+        Assert.Equal((byte)'N', wire[header.HeaderSize]);
+        Assert.Equal((byte)'P', wire[header.HeaderSize + 1]);
+        Assert.Equal((byte)'B', wire[header.HeaderSize + 2]);
+        Assert.Equal((byte)'V', wire[header.HeaderSize + 3]);
+
+        var result = (QueryFrame)codec.Decode(wire);
+        Assert.Equal(frame.VectorSearch.Vector, result.VectorSearch!.Vector);
     }
 
     [Fact]

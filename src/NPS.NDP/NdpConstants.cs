@@ -12,7 +12,7 @@ public static class NdpConstants
     public const int DefaultPort = 17433;
 
     /// <summary>
-    /// Maximum effective TTL (seconds) applied to ephemeral nodes (NPS-4 §3.1.7.1).
+    /// Maximum effective TTL (seconds) applied to ephemeral nodes (NPS-4 §3.1.1).
     /// Even if the AnnounceFrame declares a longer TTL, the registry caps it here.
     /// </summary>
     public const uint EphemeralMaxTtlSeconds = 60;

@@ -14,7 +14,10 @@ public sealed class TrustFrameValidatorTests
         GranteeCa  = "urn:nps:org-b:ca",
         TrustScope = ["nwp:query"],
         Nodes      = ["nwp://api.example.com/*"],
+        IssuedAt   = "2026-06-25T00:00:00Z",
         ExpiresAt  = expiresAt ?? "2030-01-01T00:00:00Z",
+        Serial     = "00000000000A3F9C",
+        SignerNid  = "urn:nps:org-a:ca",
         Signature  = "ed25519:test",
     };
 

@@ -125,7 +125,7 @@ public static class NpsConformanceCatalog
         C("TC-N1-NDP-01", NpsConformanceProfiles.NodeL1, "N1-NDP-01", "AnnounceFrame carries activation_mode"),
         C("TC-N1-NDP-02", NpsConformanceProfiles.NodeL1, "N1-NDP-02", "AnnounceFrame signature"),
         C("TC-N1-NDP-03", NpsConformanceProfiles.NodeL1, "N1-NDP-03", "ResolveFrame response"),
-        C("TC-N1-NDP-04", NpsConformanceProfiles.NodeL1, "N1-NDP-04", "GraphFrame subscription", optional: true),
+        C("TC-N1-NDP-04", NpsConformanceProfiles.NodeL1, "N1-NDP-04", "GraphFrame topology snapshot", optional: true),
         C("TC-N1-NWP-01", NpsConformanceProfiles.NodeL1, "N1-NWP-01", "Inbox accepts ActionFrame"),
         C("TC-N1-NWP-02", NpsConformanceProfiles.NodeL1, "N1-NWP-02", "Inbox persists across restart"),
         C("TC-N1-NWP-03", NpsConformanceProfiles.NodeL1, "N1-NWP-03", "NWP pull serves inbox"),

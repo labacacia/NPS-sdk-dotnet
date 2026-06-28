@@ -1,7 +1,7 @@
 <Project>
 
   <PropertyGroup>
-    <Version>1.0.0-alpha.14</Version>
+    <Version>1.0.0-alpha.15</Version>
     <!-- XML documentation files are generated, but the alpha SDK still has broad
          public-surface doc gaps; keep compile output clean until the doc sweep. -->
     <NoWarn>$(NoWarn);CS1591;CS1573;CS1574;CS1734</NoWarn>

@@ -12,7 +12,8 @@ public enum EncodingTier : byte
     Json    = 0x00,
     /// <summary>Tier-2: MessagePack binary. ~60 % size reduction vs JSON; default for production.</summary>
     MsgPack = 0x01,
-    // 0x02 = Reserved (formerly Tier-3 MatrixTensor, NPS-1 §3.2)
+    /// <summary>Tier-3: BinaryVector v1. MessagePack metadata plus little-endian float32 vector segments.</summary>
+    BinaryVector = 0x02,
     // 0x03 = Reserved
 }
 
@@ -27,7 +28,7 @@ public enum EncodingTier : byte
 /// • Bit 2 (FINAL): StreamFrame last-chunk sentinel. Non-stream frames MUST set this to 1.
 /// • Bit 3 (ENC): Payload is encrypted. MUST be 1 in production; 0 in dev/plaintext mode.
 /// • Bit 7 (EXT): Extended header — 8-byte header with 4-byte payload length.
-/// • Bits 4–6 (RSV): Reserved. Sender MUST write 0; receiver MUST ignore.
+/// • Bits 4–6 (RSV): Reserved. Sender MUST write 0; receiver MUST reject non-zero values.
 /// </summary>
 [Flags]
 public enum FrameFlags : byte
@@ -39,6 +40,8 @@ public enum FrameFlags : byte
     Tier1Json    = 0x00,
     /// <summary>Tier-2 MessagePack binary.</summary>
     Tier2MsgPack = 0x01,
+    /// <summary>Tier-3 BinaryVector v1.</summary>
+    Tier3BinaryVector = 0x02,
 
     // ── Feature flags (bits 2–3) ─────────────────────────────────────────────
     /// <summary>

@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using NPS.Core.Frames;
 using NPS.Core.Frames.Ncp;
 using NPS.NWP.Bridge;
 using NPS.NWP.Frames;
@@ -98,6 +99,363 @@ public sealed class BridgeNodeTests
         Assert.Equal(
             new[] { BridgeProtocols.A2a, BridgeProtocols.Grpc, BridgeProtocols.Http, BridgeProtocols.Mcp },
             registry.Protocols.Order(StringComparer.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void AddBridgeServer_RegistersInboundAdapters()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddBridgeServer(options =>
+        {
+            options.PathPrefix = "/bridge";
+            options.AddAction("orders.lookup", "Lookup an order.");
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        Assert.NotNull(provider.GetRequiredService<McpServerBridge>());
+        Assert.NotNull(provider.GetRequiredService<A2aServerBridge>());
+        Assert.NotNull(provider.GetRequiredService<IBridgeServerActionInvoker>());
+        Assert.True(provider.GetRequiredService<BridgeServerOptions>().RequireAuth);
+    }
+
+    [Fact]
+    public async Task McpServerBridge_ListsToolsAndDispatchesToolCall()
+    {
+        ActionFrame? captured = null;
+        var options = BuildInboundOptions(frame =>
+        {
+            captured = frame;
+            return new CapsFrame
+            {
+                AnchorRef = "nps://orders/result/v1",
+                Count = 1,
+                Data = new[]
+                {
+                    JsonSerializer.SerializeToElement(new { order_id = "42", ok = true }),
+                },
+            };
+        });
+        var bridge = new McpServerBridge(options, new DelegateBridgeInvoker(options));
+
+        var list = await bridge.DispatchAsync(new BridgeJsonRpcRequest
+        {
+            Id = JsonSerializer.SerializeToElement("list-1"),
+            Method = "tools/list",
+        });
+
+        Assert.Null(list.Error);
+        Assert.True(list.Result.HasValue);
+        Assert.Equal("orders_lookup", list.Result.Value.GetProperty("tools")[0].GetProperty("name").GetString());
+
+        var call = await bridge.DispatchAsync(new BridgeJsonRpcRequest
+        {
+            Id = JsonSerializer.SerializeToElement("call-1"),
+            Method = "tools/call",
+            Params = JsonSerializer.SerializeToElement(new
+            {
+                name = "orders_lookup",
+                arguments = new { order_id = "42" },
+            }),
+        });
+
+        Assert.Null(call.Error);
+        Assert.NotNull(captured);
+        Assert.Equal("orders.lookup", captured.ActionId);
+        Assert.Equal("42", captured.Params!.Value.GetProperty("order_id").GetString());
+        Assert.True(call.Result.HasValue);
+        Assert.False(call.Result.Value.GetProperty("isError").GetBoolean());
+        using var returned = JsonDocument.Parse(call.Result.Value.GetProperty("content")[0].GetProperty("text").GetString()!);
+        Assert.Equal("nps://orders/result/v1", returned.RootElement.GetProperty("anchor_ref").GetString());
+    }
+
+    [Fact]
+    public async Task McpServerBridge_StdioHandlesLineDelimitedJsonRpc()
+    {
+        var options = BuildInboundOptions(_ => new CapsFrame
+        {
+            AnchorRef = "nps://orders/result/v1",
+            Count = 0,
+            Data = Array.Empty<JsonElement>(),
+        });
+        var bridge = new McpServerBridge(options, new DelegateBridgeInvoker(options));
+        using var input = new StringReader("""
+        {"jsonrpc":"2.0","id":"list-stdio","method":"tools/list"}
+        """);
+        using var output = new StringWriter();
+
+        await bridge.RunStdioAsync(input, output);
+
+        using var doc = JsonDocument.Parse(output.ToString());
+        Assert.Equal("list-stdio", doc.RootElement.GetProperty("id").GetString());
+        Assert.Equal("orders_lookup", doc.RootElement.GetProperty("result")
+            .GetProperty("tools")[0]
+            .GetProperty("name")
+            .GetString());
+    }
+
+    [Fact]
+    public async Task A2aServerBridge_TasksSendDispatchesActionFrame()
+    {
+        ActionFrame? captured = null;
+        var options = BuildInboundOptions(frame =>
+        {
+            captured = frame;
+            return new CapsFrame
+            {
+                AnchorRef = "nps://orders/result/v1",
+                Count = 1,
+                Data = new[]
+                {
+                    JsonSerializer.SerializeToElement(new { ok = true }),
+                },
+            };
+        });
+        var bridge = new A2aServerBridge(options, new DelegateBridgeInvoker(options));
+
+        var response = await bridge.DispatchAsync(new BridgeJsonRpcRequest
+        {
+            Id = JsonSerializer.SerializeToElement("task-rpc-1"),
+            Method = "tasks/send",
+            Params = JsonSerializer.SerializeToElement(new
+            {
+                id = "task-1",
+                metadata = new
+                {
+                    skillId = "orders.lookup",
+                    @params = new { order_id = "42" },
+                },
+                message = new
+                {
+                    role = "user",
+                    parts = new[] { new { type = "text", text = "lookup 42" } },
+                },
+            }),
+        });
+
+        Assert.Null(response.Error);
+        Assert.NotNull(captured);
+        Assert.Equal("orders.lookup", captured.ActionId);
+        Assert.Equal("42", captured.Params!.Value.GetProperty("order_id").GetString());
+        Assert.True(response.Result.HasValue);
+        Assert.Equal("completed", response.Result.Value.GetProperty("status").GetProperty("state").GetString());
+        Assert.Equal("nps://orders/result/v1", response.Result.Value.GetProperty("artifacts")[0]
+            .GetProperty("parts")[0]
+            .GetProperty("data")
+            .GetProperty("anchor_ref")
+            .GetString());
+    }
+
+    [Fact]
+    public async Task BridgeServerMiddleware_HandlesMcpHttpAndSse()
+    {
+        using var server = await BuildInboundBridgeServer(AllowBridgeAgent);
+        using var client = server.GetTestClient();
+
+        using var jsonRequest = new HttpRequestMessage(HttpMethod.Post, "/bridge/mcp")
+        {
+            Content = new StringContent("""
+            {
+              "jsonrpc": "2.0",
+              "id": "mcp-http-1",
+              "method": "tools/call",
+              "params": {
+                "name": "orders_lookup",
+                "arguments": { "order_id": "42" }
+              }
+            }
+            """, Encoding.UTF8, "application/json"),
+        };
+        AddAgentHeader(jsonRequest);
+
+        var jsonResponse = await client.SendAsync(jsonRequest);
+        Assert.Equal(HttpStatusCode.OK, jsonResponse.StatusCode);
+        using (var doc = JsonDocument.Parse(await jsonResponse.Content.ReadAsStringAsync()))
+        {
+            Assert.Equal("mcp-http-1", doc.RootElement.GetProperty("id").GetString());
+            Assert.False(doc.RootElement.GetProperty("result").GetProperty("isError").GetBoolean());
+        }
+
+        using var sseRequest = new HttpRequestMessage(HttpMethod.Post, "/bridge/mcp")
+        {
+            Content = new StringContent("""
+            {"jsonrpc":"2.0","id":"mcp-sse-1","method":"tools/list"}
+            """, Encoding.UTF8, "application/json"),
+        };
+        AddAgentHeader(sseRequest);
+        sseRequest.Headers.TryAddWithoutValidation("accept", "text/event-stream");
+
+        var sseResponse = await client.SendAsync(sseRequest);
+        Assert.Equal(HttpStatusCode.OK, sseResponse.StatusCode);
+        Assert.Equal("text/event-stream", sseResponse.Content.Headers.ContentType!.MediaType);
+        var sse = await sseResponse.Content.ReadAsStringAsync();
+        Assert.Contains("event: message", sse, StringComparison.Ordinal);
+        Assert.Contains("\"id\":\"mcp-sse-1\"", sse, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task BridgeServerMiddleware_DefaultAuthRejectsMissingAgentHeader()
+    {
+        using var server = await BuildInboundBridgeServer();
+        using var client = server.GetTestClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/bridge/mcp")
+        {
+            Content = new StringContent("""
+            {"jsonrpc":"2.0","id":"auth-1","method":"tools/list"}
+            """, Encoding.UTF8, "application/json"),
+        };
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(BridgeJsonRpcErrorCodes.InvalidRequest, doc.RootElement.GetProperty("error").GetProperty("code").GetInt32());
+    }
+
+    [Fact]
+    public async Task BridgeServerMiddleware_DefaultAuthRejectsInvalidAgentNid()
+    {
+        using var server = await BuildInboundBridgeServer();
+        using var client = server.GetTestClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/bridge/mcp")
+        {
+            Content = new StringContent("""
+            {"jsonrpc":"2.0","id":"auth-2","method":"tools/list"}
+            """, Encoding.UTF8, "application/json"),
+        };
+        request.Headers.Add(NwpHttpHeaders.Agent, "present-but-not-a-nid");
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Contains("valid X-NWP-Agent", doc.RootElement.GetProperty("error").GetProperty("message").GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task BridgeServerMiddleware_DefaultAuthRejectsMissingVerifier()
+    {
+        using var server = await BuildInboundBridgeServer();
+        using var client = server.GetTestClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/bridge/mcp")
+        {
+            Content = new StringContent("""
+            {"jsonrpc":"2.0","id":"auth-3","method":"tools/list"}
+            """, Encoding.UTF8, "application/json"),
+        };
+        AddAgentHeader(request);
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Contains("verifier", doc.RootElement.GetProperty("error").GetProperty("message").GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task BridgeServerMiddleware_CustomAgentVerifierCanRejectValidNid()
+    {
+        using var server = await BuildInboundBridgeServer(options =>
+        {
+            options.VerifyAgentAsync = (_, _, _) => ValueTask.FromResult(false);
+        });
+        using var client = server.GetTestClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/bridge/mcp")
+        {
+            Content = new StringContent("""
+            {"jsonrpc":"2.0","id":"auth-3","method":"tools/list"}
+            """, Encoding.UTF8, "application/json"),
+        };
+        AddAgentHeader(request);
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Contains("rejected", doc.RootElement.GetProperty("error").GetProperty("message").GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task BridgeServerMiddleware_RejectsRequestBodyOverConfiguredLimit()
+    {
+        using var server = await BuildInboundBridgeServer(options =>
+        {
+            AllowBridgeAgent(options);
+            options.MaxRequestBodyBytes = 64;
+        });
+        using var client = server.GetTestClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/bridge/mcp")
+        {
+            Content = new StringContent("""
+            {
+              "jsonrpc": "2.0",
+              "id": "too-large",
+              "method": "tools/list",
+              "params": { "padding": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" }
+            }
+            """, Encoding.UTF8, "application/json"),
+        };
+        AddAgentHeader(request);
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(BridgeJsonRpcErrorCodes.InvalidRequest, doc.RootElement.GetProperty("error").GetProperty("code").GetInt32());
+    }
+
+    [Fact]
+    public async Task BridgeServerMiddleware_DispatchTimeoutReturns504()
+    {
+        using var server = await BuildInboundBridgeServer(options =>
+        {
+            AllowBridgeAgent(options);
+            options.DispatchTimeoutMs = 25;
+            options.DispatchAsync = async (_, ct) =>
+            {
+                await Task.Delay(TimeSpan.FromSeconds(5), ct);
+                return new CapsFrame
+                {
+                    AnchorRef = "nps://orders/result/v1",
+                    Count = 0,
+                    Data = Array.Empty<JsonElement>(),
+                };
+            };
+        });
+        using var client = server.GetTestClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/bridge/mcp")
+        {
+            Content = new StringContent("""
+            {
+              "jsonrpc": "2.0",
+              "id": "timeout-1",
+              "method": "tools/call",
+              "params": { "name": "orders_lookup", "arguments": { "order_id": "42" } }
+            }
+            """, Encoding.UTF8, "application/json"),
+        };
+        AddAgentHeader(request);
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.GatewayTimeout, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(BridgeJsonRpcErrorCodes.UpstreamError, doc.RootElement.GetProperty("error").GetProperty("code").GetInt32());
+    }
+
+    [Fact]
+    public async Task BridgeServerMiddleware_ExposesA2aAgentCard()
+    {
+        using var server = await BuildInboundBridgeServer();
+        using var client = server.GetTestClient();
+
+        var response = await client.GetAsync("/bridge/.well-known/agent.json");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("bridge-inbound-test", doc.RootElement.GetProperty("name").GetString());
+        Assert.Equal("orders.lookup", doc.RootElement.GetProperty("skills")[0].GetProperty("id").GetString());
     }
 
     [Fact]
@@ -548,6 +906,19 @@ public sealed class BridgeNodeTests
             _handler(request);
     }
 
+    private sealed class DelegateBridgeInvoker : IBridgeServerActionInvoker
+    {
+        private readonly BridgeServerOptions _options;
+
+        public DelegateBridgeInvoker(BridgeServerOptions options)
+        {
+            _options = options;
+        }
+
+        public Task<IFrame> InvokeAsync(ActionFrame frame, CancellationToken cancellationToken = default) =>
+            _options.DispatchAsync!(frame, cancellationToken);
+    }
+
     private static byte[] GrpcFrame(string json)
     {
         var payload = Encoding.UTF8.GetBytes(json);
@@ -591,5 +962,63 @@ public sealed class BridgeNodeTests
 
         await host.StartAsync();
         return host;
+    }
+
+    private static async Task<IHost> BuildInboundBridgeServer(Action<BridgeServerOptions>? configure = null)
+    {
+        var host = new HostBuilder()
+            .ConfigureWebHost(web =>
+            {
+                web.UseTestServer();
+                web.ConfigureServices(services =>
+                {
+                    services.AddLogging();
+                    services.AddBridgeServer(options =>
+                    {
+                        options.NodeId = "bridge-inbound-test";
+                        options.ServerName = "bridge-inbound-test";
+                        options.PathPrefix = "/bridge";
+                        options.AddAction("orders.lookup", "Lookup an order.");
+                        options.DispatchAsync = (frame, _) => Task.FromResult<IFrame>(new CapsFrame
+                        {
+                            AnchorRef = "nps://orders/result/v1",
+                            Count = 1,
+                            Data = new[]
+                            {
+                                JsonSerializer.SerializeToElement(new
+                                {
+                                    action_id = frame.ActionId,
+                                    order_id = frame.Params?.GetProperty("order_id").GetString(),
+                                }),
+                            },
+                        });
+                        configure?.Invoke(options);
+                    });
+                });
+                web.Configure(app => app.UseBridgeServer());
+            })
+            .Build();
+
+        await host.StartAsync();
+        return host;
+    }
+
+    private static void AddAgentHeader(HttpRequestMessage request) =>
+        request.Headers.Add(NwpHttpHeaders.Agent, "urn:nps:agent:ca.example.com:caller");
+
+    private static void AllowBridgeAgent(BridgeServerOptions options) =>
+        options.VerifyAgentAsync = (nid, _, _) =>
+            ValueTask.FromResult(nid == "urn:nps:agent:ca.example.com:caller");
+
+    private static BridgeServerOptions BuildInboundOptions(Func<ActionFrame, IFrame> dispatch)
+    {
+        var options = new BridgeServerOptions
+        {
+            NodeId = "bridge-inbound-test",
+            ServerName = "bridge-inbound-test",
+        };
+        options.AddAction("orders.lookup", "Lookup an order.");
+        options.DispatchAsync = (frame, _) => Task.FromResult(dispatch(frame));
+        return options;
     }
 }

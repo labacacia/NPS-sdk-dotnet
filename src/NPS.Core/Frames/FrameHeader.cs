@@ -72,11 +72,29 @@ public readonly record struct FrameHeader(
         var flags = (FrameFlags)buffer[1];
         bool ext = (flags & FrameFlags.Ext) != 0;
 
+        if (((byte)flags & 0x70) != 0)
+            throw new NpsFrameException(
+                "Reserved frame flag bits must be zero.",
+                NpsStatusCodes.ClientBadFrame,
+                NcpErrorCodes.FrameFlagsInvalid);
+
+        if (((byte)flags & 0x03) == 0x03)
+            throw new NpsFrameException(
+                "Reserved encoding tier 0b11 is not valid.",
+                NpsStatusCodes.ClientBadFrame,
+                NcpErrorCodes.FrameFlagsInvalid);
+
         if (ext)
         {
             if (buffer.Length < ExtendedSize)
                 throw new NpsFrameException(
                     $"Buffer too small for extended frame header: need {ExtendedSize} bytes, got {buffer.Length}.");
+
+            if (BinaryPrimitives.ReadUInt16BigEndian(buffer[6..]) != 0)
+                throw new NpsFrameException(
+                    "Extended frame header reserved bytes must be zero.",
+                    NpsStatusCodes.ClientBadFrame,
+                    NcpErrorCodes.FrameFlagsInvalid);
 
             return new FrameHeader(
                 FrameType:     (FrameType)buffer[0],

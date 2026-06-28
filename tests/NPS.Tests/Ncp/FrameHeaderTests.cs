@@ -39,6 +39,18 @@ public sealed class FrameHeaderTests
     }
 
     [Fact]
+    public void Parse_DefaultHeader_BinaryVectorTier_ReturnsBinaryVector()
+    {
+        byte[] wire = [0x10, 0x06, 0x00, 0x10]; // Query, Tier3BinaryVector|Final, length=16
+        var h = FrameHeader.Parse(wire);
+
+        Assert.Equal(FrameType.Query,         h.FrameType);
+        Assert.Equal(EncodingTier.BinaryVector, h.EncodingTier);
+        Assert.Equal(16u,                    h.PayloadLength);
+        Assert.True(h.IsFinal);
+    }
+
+    [Fact]
     public void Parse_MaxDefaultPayload_Accepted()
     {
         byte[] wire = [0x01, 0x05, 0xFF, 0xFF];

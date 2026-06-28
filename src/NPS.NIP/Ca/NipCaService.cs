@@ -591,6 +591,7 @@ public sealed class NipCaService
             serial     = record.Serial,
             reason,
             revoked_at = now.ToString("O"),
+            signer_nid = _opts.CaNid,
         };
         var signature = NipSigner.Sign(_keys.PrivateKey, payload);
 
@@ -600,6 +601,7 @@ public sealed class NipCaService
             Serial    = record.Serial,
             Reason    = reason,
             RevokedAt = now.ToString("O"),
+            SignerNid = _opts.CaNid,
             Signature = signature,
         };
     }
@@ -866,6 +868,7 @@ public static class NipErrorCodes
     public const string ScopeExpansion   = "NIP-CA-SCOPE-EXPANSION-DENIED";
     public const string OcspUnavailable  = "NIP-OCSP-UNAVAILABLE";
     public const string TrustInvalid     = "NIP-TRUST-FRAME-INVALID";
+    public const string RevokeInvalid    = "NIP-REVOKE-FRAME-INVALID";
 
     /// <summary>
     /// IdentFrame.assurance_level disagrees with the X.509 cert extension

@@ -5,15 +5,16 @@ namespace NPS.NWP.Bridge;
 
 /// <summary>
 /// NWP Bridge Node — stateless translator between NPS frames and non-NPS
-/// protocols (NPS-2 §2A, NPS-CR-0001). The package includes the common
-/// dispatcher surface plus the built-in HTTP/HTTPS, gRPC JSON unary, MCP
-/// JSON-RPC, and A2A JSON-RPC adapters. Additional
-/// protocols can be registered through <see cref="IBridgeDispatcher"/>.
+/// protocols (NPS-2 §2A, NPS-CR-0001). The package includes outbound
+/// dispatchers for HTTP/HTTPS, gRPC JSON unary, MCP JSON-RPC, and A2A
+/// JSON-RPC, plus inbound server adapters for exposing local NPS actions
+/// to MCP and A2A clients. Additional outbound protocols can be registered
+/// through <see cref="IBridgeDispatcher"/>.
 /// <para>
-/// Direction note: Bridge Node carries the <b>NPS → external</b>
-/// direction. The legacy <c>compat/{mcp,a2a,grpc}-bridge</c> packages
-/// — renamed <c>compat/*-ingress</c> in v1.0-alpha.3 — carry the
-/// inverse direction (external → NPS) and are unrelated to this type.
+/// Direction note: <see cref="BridgeNode"/> and <see cref="IBridgeDispatcher"/>
+/// carry the <b>NPS → external</b> direction. <see cref="McpServerBridge"/>,
+/// <see cref="A2aServerBridge"/>, and <see cref="BridgeServerMiddleware"/>
+/// carry the inverse <b>external → NPS</b> direction.
 /// </para>
 /// </summary>
 public static class BridgeNodeMetadata

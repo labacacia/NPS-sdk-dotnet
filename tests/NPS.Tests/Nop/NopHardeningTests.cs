@@ -3,6 +3,8 @@
 
 using System.Net;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using NPS.NOP;
 using NPS.NOP.Frames;
@@ -254,6 +256,43 @@ public sealed class NopHardeningTests
         Assert.Equal(1, callCount); // only one call — no unnecessary retries
     }
 
+    [Fact]
+    public async Task ExecuteAsync_CallbackSecret_AddsHmacSignatureHeader()
+    {
+        HttpRequestMessage? captured = null;
+        string? capturedBody = null;
+        var key = Enumerable.Range(0, 32).Select(i => (byte)i).ToArray();
+        var secret = Base64Url(key);
+        var factory = new StubHttpClientFactory(req =>
+        {
+            captured = req;
+            capturedBody = req.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        });
+
+        var worker = new SimpleWorkerClient();
+        worker.SetupSuccess("n1", """{"ok":true}""");
+        var orch = BuildOrchestrator(worker, opts => opts.EnableCallback = true, factory);
+        var task = SingleNodeTask() with
+        {
+            CallbackUrl = "https://callback.example.com/hook",
+            CallbackSecret = secret,
+        };
+
+        var result = await orch.ExecuteAsync(task);
+        Assert.Equal(TaskState.Completed, result.FinalState);
+
+        await Task.Delay(200);
+        Assert.NotNull(captured);
+        Assert.NotNull(capturedBody);
+        Assert.True(captured!.Headers.TryGetValues("X-NPS-Signature", out var values));
+
+        using var hmac = new HMACSHA256(key);
+        var expected = "sha256=" + Convert.ToHexString(
+            hmac.ComputeHash(Encoding.UTF8.GetBytes(capturedBody!))).ToLowerInvariant();
+        Assert.Equal(expected, Assert.Single(values));
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static TaskFrame SingleNodeTask() => new()
@@ -280,6 +319,9 @@ public sealed class NopHardeningTests
         return new NopOrchestrator(worker, new InMemoryNopTaskStore(), opts,
             httpFactory: factory);
     }
+
+    private static string Base64Url(byte[] bytes) =>
+        Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
     private static async IAsyncEnumerable<AlignStreamFrame> SingleFinalFrameAsync(
         string nodeId,

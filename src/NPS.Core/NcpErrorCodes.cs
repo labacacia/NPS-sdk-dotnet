@@ -35,6 +35,21 @@ public static class NcpErrorCodes
     /// <summary>Reserved bits in Flags are non-zero. → NPS-CLIENT-BAD-FRAME</summary>
     public const string FrameFlagsInvalid     = "NCP-FRAME-FLAGS-INVALID";
 
+    /// <summary>Tier-3 BinaryVector payload is malformed. → NPS-CLIENT-BAD-FRAME</summary>
+    public const string BinaryVectorMalformed = "NCP-BINARY-VECTOR-MALFORMED";
+
+    /// <summary>Tier-3 BinaryVector marker dimension does not match its segment. → NPS-CLIENT-BAD-FRAME</summary>
+    public const string BinaryVectorDimMismatch = "NCP-BINARY-VECTOR-DIM-MISMATCH";
+
+    /// <summary>Tier-3 BinaryVector marker references a missing segment. → NPS-CLIENT-BAD-FRAME</summary>
+    public const string BinaryVectorIndexInvalid = "NCP-BINARY-VECTOR-INDEX-INVALID";
+
+    /// <summary>Tier-3 BinaryVector marker uses an unsupported dtype. → NPS-CLIENT-BAD-FRAME</summary>
+    public const string BinaryVectorDtypeUnsupported = "NCP-BINARY-VECTOR-DTYPE-UNSUPPORTED";
+
+    /// <summary>Tier-3 BinaryVector vector segment is truncated. → NPS-CLIENT-BAD-FRAME</summary>
+    public const string BinaryVectorTruncated = "NCP-BINARY-VECTOR-TRUNCATED";
+
     // ── Stream errors ─────────────────────────────────────────────────────────
     /// <summary>StreamFrame sequence number is non-contiguous. → NPS-STREAM-SEQ-GAP</summary>
     public const string StreamSeqGap          = "NCP-STREAM-SEQ-GAP";

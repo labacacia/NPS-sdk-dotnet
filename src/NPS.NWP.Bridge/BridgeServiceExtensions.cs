@@ -3,11 +3,12 @@
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 
 namespace NPS.NWP.Bridge;
 
-/// <summary>DI and ASP.NET pipeline extensions for Bridge Node hosting.</summary>
+/// <summary>DI and ASP.NET pipeline extensions for Bridge hosting.</summary>
 public static class BridgeServiceExtensions
 {
     /// <summary>Named <see cref="HttpClient"/> used by built-in Bridge dispatchers.</summary>
@@ -46,6 +47,32 @@ public static class BridgeServiceExtensions
             var options = ctx.RequestServices.GetRequiredService<BridgeNodeOptions>();
             var logger = ctx.RequestServices.GetRequiredService<ILogger<BridgeNodeMiddleware>>();
             var middleware = new BridgeNodeMiddleware(next, bridge, registry, options, logger);
+            return middleware.InvokeAsync(ctx);
+        });
+
+    /// <summary>Register inbound Bridge server services for MCP and A2A clients.</summary>
+    public static IServiceCollection AddBridgeServer(
+        this IServiceCollection services,
+        Action<BridgeServerOptions>? configure = null)
+    {
+        var options = new BridgeServerOptions();
+        configure?.Invoke(options);
+        services.AddSingleton(options);
+        services.TryAddSingleton<IBridgeServerActionInvoker, BridgeServerActionInvoker>();
+        services.AddSingleton<McpServerBridge>();
+        services.AddSingleton<A2aServerBridge>();
+        return services;
+    }
+
+    /// <summary>Attach inbound MCP/A2A Bridge server middleware to the ASP.NET pipeline.</summary>
+    public static IApplicationBuilder UseBridgeServer(this IApplicationBuilder app) =>
+        app.Use(next => ctx =>
+        {
+            var mcp = ctx.RequestServices.GetRequiredService<McpServerBridge>();
+            var a2a = ctx.RequestServices.GetRequiredService<A2aServerBridge>();
+            var options = ctx.RequestServices.GetRequiredService<BridgeServerOptions>();
+            var logger = ctx.RequestServices.GetRequiredService<ILogger<BridgeServerMiddleware>>();
+            var middleware = new BridgeServerMiddleware(next, mcp, a2a, options, logger);
             return middleware.InvokeAsync(ctx);
         });
 }

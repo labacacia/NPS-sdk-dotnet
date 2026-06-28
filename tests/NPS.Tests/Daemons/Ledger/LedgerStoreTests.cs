@@ -21,7 +21,7 @@ public sealed class LedgerStoreTests
         new()
         {
             Version     = 1,
-            LogId       = "urn:nps:log:operator-test",
+            LogId       = "urn:nps:node:log.local:operator-test",
             Seq         = 0,
             Timestamp   = "1970-01-01T00:00:00Z",
             SubjectNid  = subject,

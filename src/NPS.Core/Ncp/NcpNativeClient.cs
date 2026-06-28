@@ -2,14 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Net.Sockets;
-using System.Text.Json;
-using System.Text.Json.Serialization;
-using MessagePack;
-using MessagePack.Resolvers;
 using NPS.Core.Codecs;
 using NPS.Core.Exceptions;
 using NPS.Core.Frames;
 using NPS.Core.Frames.Ncp;
+using NPS.Core.Registry;
 
 namespace NPS.Core.Ncp;
 
@@ -20,18 +17,15 @@ namespace NPS.Core.Ncp;
 /// </summary>
 public sealed class NcpNativeClient
 {
-    private static readonly JsonSerializerOptions JsonOpts = new()
-    {
-        PropertyNamingPolicy        = JsonNamingPolicy.SnakeCaseLower,
-        DefaultIgnoreCondition      = JsonIgnoreCondition.WhenWritingNull,
-        PropertyNameCaseInsensitive = true,
-    };
+    private static readonly FrameRegistry HandshakeRegistry =
+        new FrameRegistryBuilder()
+            .Register<NcpHandshakeCapsFrame>(FrameType.Caps)
+            .Register<ErrorFrame>(FrameType.Error)
+            .Build();
 
-    // Mirrors Tier2MsgPackCodec's options so a MsgPack-negotiated CapsFrame decodes symmetrically.
-    private static readonly MessagePackSerializerOptions MsgPackOpts =
-        MessagePackSerializerOptions.Standard
-            .WithResolver(ContractlessStandardResolver.Instance)
-            .WithCompression(MessagePackCompression.None);
+    private static readonly Tier1JsonCodec JsonCodec = new();
+    private static readonly Tier2MsgPackCodec MsgPackCodec = new();
+    private static readonly Tier3BinaryVectorCodec BinaryVectorCodec = new();
 
     private readonly NpsFrameCodec _codec;
 
@@ -81,8 +75,7 @@ public sealed class NcpNativeClient
             // 5 — ErrorFrame → throw
             if (header.FrameType == FrameType.Error)
             {
-                var err = JsonSerializer.Deserialize<ErrorFrame>(payload, JsonOpts)
-                          ?? throw new NcpHandshakeException("NCP-HANDSHAKE-FAILED", "Server sent an empty ErrorFrame.");
+                var err = (ErrorFrame)DecodeHandshakeFrame(header, payload);
                 throw new NcpHandshakeException(err.Error, err.Message);
             }
 
@@ -91,16 +84,13 @@ public sealed class NcpNativeClient
                     "NCP-HANDSHAKE-UNEXPECTED-FRAME",
                     $"Expected CapsFrame (0x{(byte)FrameType.Caps:X2}), got 0x{(byte)header.FrameType:X2}.");
 
-            // 6 — decode NcpHandshakeCapsFrame (manually — not via registry) using the negotiated
-            // tier the server signalled in the response header flags. The server encodes the
-            // CapsFrame in that tier (JSON or MsgPack), so the client must decode symmetrically.
+            // 6 — decode NcpHandshakeCapsFrame using the negotiated tier the server
+            // signalled as the stable default in the response header flags.
             var negotiatedTier = header.EncodingTier;
-            var caps = (negotiatedTier == EncodingTier.MsgPack
-                           ? MessagePackSerializer.Deserialize<NcpHandshakeCapsFrame>(payload, MsgPackOpts)
-                           : JsonSerializer.Deserialize<NcpHandshakeCapsFrame>(payload, JsonOpts))
-                       ?? throw new NcpHandshakeException("NCP-HANDSHAKE-FAILED", "Server sent an empty CapsFrame.");
+            var caps = (NcpHandshakeCapsFrame)DecodeHandshakeFrame(header, payload);
+            var policy = NcpEncodingPolicy.FromEnabledEncodings(negotiatedTier, caps.EnabledEncodings);
 
-            return new NcpSession(tcp, stream, caps, negotiatedTier);
+            return new NcpSession(tcp, stream, caps, policy);
         }
         catch
         {
@@ -109,6 +99,15 @@ public sealed class NcpNativeClient
             throw;
         }
     }
+
+    private static IFrame DecodeHandshakeFrame(FrameHeader header, ReadOnlySpan<byte> payload) =>
+        header.EncodingTier switch
+        {
+            EncodingTier.Json => JsonCodec.Decode(header.FrameType, payload, HandshakeRegistry),
+            EncodingTier.MsgPack => MsgPackCodec.Decode(header.FrameType, payload, HandshakeRegistry),
+            EncodingTier.BinaryVector => BinaryVectorCodec.Decode(header.FrameType, payload, HandshakeRegistry),
+            _ => throw new NpsCodecException($"Unsupported handshake encoding tier: {header.EncodingTier} (0x{(byte)header.EncodingTier:X2}).")
+        };
 
     /// <summary>
     /// Reads a frame header from <paramref name="stream"/>, peeking the EXT flag

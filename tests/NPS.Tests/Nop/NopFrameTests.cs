@@ -29,6 +29,7 @@ public class NopFrameTests
         Assert.Null(frame.CallbackUrl);
         Assert.Null(frame.Context);
         Assert.Null(frame.RequestId);
+        Assert.Equal(CompensationPolicy.BestEffort, frame.CompensationPolicy);
     }
 
     [Fact]

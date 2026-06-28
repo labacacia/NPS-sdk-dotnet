@@ -55,6 +55,7 @@ public static class NpsCoreServiceExtensions
     ///   <item><see cref="FrameRegistry"/> (singleton) — NCP frames pre-registered.</item>
     ///   <item><see cref="Tier1JsonCodec"/> (singleton)</item>
     ///   <item><see cref="Tier2MsgPackCodec"/> (singleton)</item>
+    ///   <item><see cref="Tier3BinaryVectorCodec"/> (singleton)</item>
     ///   <item><see cref="NpsFrameCodec"/> (singleton)</item>
     ///   <item><see cref="AnchorFrameCache"/> (scoped — per connection/session)</item>
     /// </list>
@@ -71,6 +72,7 @@ public static class NpsCoreServiceExtensions
         services.AddSingleton<FrameRegistry>(_ => FrameRegistry.CreateDefault());
         services.AddSingleton<Tier1JsonCodec>();
         services.AddSingleton<Tier2MsgPackCodec>();
+        services.AddSingleton<Tier3BinaryVectorCodec>();
 
         var maxPayload = options.EnableExtendedFrameHeader
             ? options.MaxFramePayload
@@ -79,6 +81,7 @@ public static class NpsCoreServiceExtensions
         services.AddSingleton(sp => new NpsFrameCodec(
             sp.GetRequiredService<Tier1JsonCodec>(),
             sp.GetRequiredService<Tier2MsgPackCodec>(),
+            sp.GetRequiredService<Tier3BinaryVectorCodec>(),
             sp.GetRequiredService<FrameRegistry>(),
             maxPayload));
 

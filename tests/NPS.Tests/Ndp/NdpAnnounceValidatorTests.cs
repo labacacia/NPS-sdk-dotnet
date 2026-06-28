@@ -49,6 +49,7 @@ public sealed class NdpAnnounceValidatorTests : IDisposable
             addresses,
             capabilities = capsList,
             frame        = "0x30",
+            heartbeat_interval_ms = 60_000u,
             nid          = actualNid,
             node_type    = "memory",
             timestamp,

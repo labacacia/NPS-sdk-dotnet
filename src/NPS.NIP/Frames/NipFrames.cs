@@ -273,9 +273,20 @@ public sealed record TrustFrame : IFrame
     /// <summary>Node paths the grant covers, e.g. <c>["nwp://api.org-a.com/public/*"]</c>.</summary>
     public required IReadOnlyList<string> Nodes { get; init; }
 
+    /// <summary>Grant issuance timestamp (ISO 8601 UTC).</summary>
+    [JsonPropertyName("issued_at")]
+    public required string IssuedAt { get; init; }
+
     /// <summary>Grant expiry (ISO 8601 UTC).</summary>
     [JsonPropertyName("expires_at")]
     public required string ExpiresAt { get; init; }
+
+    /// <summary>Trust grant serial number used for revocation and audit traceability.</summary>
+    public required string Serial { get; init; }
+
+    /// <summary>NID whose private key signs this frame.</summary>
+    [JsonPropertyName("signer_nid")]
+    public required string SignerNid { get; init; }
 
     /// <summary>Grantor CA signature (<c>ed25519:{base64url}</c>).</summary>
     public required string Signature { get; init; }
@@ -302,8 +313,9 @@ public sealed record RevokeFrame : IFrame
     [JsonPropertyName("target_nid")]
     public required string TargetNid { get; init; }
 
-    /// <summary>Serial number of the certificate being revoked.</summary>
-    public required string Serial { get; init; }
+    /// <summary>Serial number of the certificate being revoked. Omit to revoke all current certs for <see cref="TargetNid"/>.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Serial { get; init; }
 
     /// <summary>
     /// Revocation reason. One of: <c>key_compromise</c>, <c>ca_compromise</c>,
@@ -317,6 +329,31 @@ public sealed record RevokeFrame : IFrame
     [JsonPropertyName("revoked_at")]
     public required string RevokedAt { get; init; }
 
+    /// <summary>Parent/group NID when <see cref="Reason"/> is <c>parent_revoked</c>.</summary>
+    [JsonPropertyName("parent_nid")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ParentNid { get; init; }
+
+    /// <summary>NID whose private key signs this revocation frame.</summary>
+    [JsonPropertyName("signer_nid")]
+    public required string SignerNid { get; init; }
+
     /// <summary>CA signature over the canonical JSON of this frame (minus <c>signature</c>).</summary>
     public required string Signature { get; init; }
+
+    /// <summary>Validate the conditional <c>parent_nid</c> rule from NPS-3 §5.3.</summary>
+    public void Validate()
+    {
+        if (Reason == "parent_revoked")
+        {
+            if (string.IsNullOrEmpty(ParentNid))
+                throw new ArgumentException(
+                    $"{NPS.NIP.Ca.NipErrorCodes.RevokeInvalid}: parent_nid is required when reason=parent_revoked");
+        }
+        else if (ParentNid is not null)
+        {
+            throw new ArgumentException(
+                $"{NPS.NIP.Ca.NipErrorCodes.RevokeInvalid}: parent_nid must be omitted unless reason=parent_revoked");
+        }
+    }
 }

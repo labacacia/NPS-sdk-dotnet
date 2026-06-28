@@ -28,4 +28,6 @@ public static class NopErrorCodes
     public const string InputMappingError         = "NOP-INPUT-MAPPING-ERROR";
     public const string CompensationFailed        = "NOP-COMPENSATION-FAILED";
     public const string CompensationPartialFailed = "NOP-COMPENSATION-PARTIAL-FAILED";
+    public const string CompensationNotSupported  = "NOP-COMPENSATION-NOT-SUPPORTED";
+    public const string CallbackHmacMissing       = "NOP-CALLBACK-HMAC-MISSING";
 }

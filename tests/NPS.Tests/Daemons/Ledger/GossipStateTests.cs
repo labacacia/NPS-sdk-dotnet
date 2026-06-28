@@ -60,7 +60,7 @@ public sealed class GossipStateTests
     public void LastAcceptedTreeSize_UnknownPeer_ReturnsZero()
     {
         var state = new GossipState([], 30);
-        Assert.Equal(0UL, state.LastAcceptedTreeSize("urn:nps:log:operator-unknown"));
+        Assert.Equal(0UL, state.LastAcceptedTreeSize("urn:nps:node:log.local:operator-unknown"));
     }
 
     // ── AcceptPeerSth ────────────────────────────────────────────────────────
@@ -69,14 +69,14 @@ public sealed class GossipStateTests
     public void AcceptPeerSth_StoredAndRetrievable()
     {
         var state = new GossipState([], 30);
-        var sth   = MakeSth("urn:nps:log:operator-A", 5);
+        var sth   = MakeSth("urn:nps:node:log.local:operator-A", 5);
 
-        state.AcceptPeerSth("urn:nps:log:operator-A", sth);
+        state.AcceptPeerSth("urn:nps:node:log.local:operator-A", sth);
 
-        Assert.Equal(5UL, state.LastAcceptedTreeSize("urn:nps:log:operator-A"));
+        Assert.Equal(5UL, state.LastAcceptedTreeSize("urn:nps:node:log.local:operator-A"));
         var cached = state.CurrentPeerSths();
         Assert.Single(cached);
-        Assert.Equal("urn:nps:log:operator-A", cached[0].LogId);
+        Assert.Equal("urn:nps:node:log.local:operator-A", cached[0].LogId);
         Assert.Equal(5UL, cached[0].Sth.TreeSize);
     }
 
@@ -84,10 +84,10 @@ public sealed class GossipStateTests
     public void AcceptPeerSth_LaterAcceptance_OverwritesPrevious()
     {
         var state = new GossipState([], 30);
-        state.AcceptPeerSth("urn:nps:log:operator-A", MakeSth("urn:nps:log:operator-A", 3));
-        state.AcceptPeerSth("urn:nps:log:operator-A", MakeSth("urn:nps:log:operator-A", 7));
+        state.AcceptPeerSth("urn:nps:node:log.local:operator-A", MakeSth("urn:nps:node:log.local:operator-A", 3));
+        state.AcceptPeerSth("urn:nps:node:log.local:operator-A", MakeSth("urn:nps:node:log.local:operator-A", 7));
 
-        Assert.Equal(7UL, state.LastAcceptedTreeSize("urn:nps:log:operator-A"));
+        Assert.Equal(7UL, state.LastAcceptedTreeSize("urn:nps:node:log.local:operator-A"));
         Assert.Single(state.CurrentPeerSths());
         Assert.Equal(7UL, state.CurrentPeerSths()[0].Sth.TreeSize);
     }
@@ -96,15 +96,15 @@ public sealed class GossipStateTests
     public void CurrentPeerSths_IncludesAllDistinctPeers()
     {
         var state = new GossipState([], 30);
-        state.AcceptPeerSth("urn:nps:log:operator-A", MakeSth("urn:nps:log:operator-A", 1));
-        state.AcceptPeerSth("urn:nps:log:operator-B", MakeSth("urn:nps:log:operator-B", 2));
-        state.AcceptPeerSth("urn:nps:log:operator-C", MakeSth("urn:nps:log:operator-C", 3));
+        state.AcceptPeerSth("urn:nps:node:log.local:operator-A", MakeSth("urn:nps:node:log.local:operator-A", 1));
+        state.AcceptPeerSth("urn:nps:node:log.local:operator-B", MakeSth("urn:nps:node:log.local:operator-B", 2));
+        state.AcceptPeerSth("urn:nps:node:log.local:operator-C", MakeSth("urn:nps:node:log.local:operator-C", 3));
 
         var all = state.CurrentPeerSths();
         Assert.Equal(3, all.Count);
-        Assert.Contains(all, r => r.LogId == "urn:nps:log:operator-A");
-        Assert.Contains(all, r => r.LogId == "urn:nps:log:operator-B");
-        Assert.Contains(all, r => r.LogId == "urn:nps:log:operator-C");
+        Assert.Contains(all, r => r.LogId == "urn:nps:node:log.local:operator-A");
+        Assert.Contains(all, r => r.LogId == "urn:nps:node:log.local:operator-B");
+        Assert.Contains(all, r => r.LogId == "urn:nps:node:log.local:operator-C");
     }
 
     // ── ReceivedAt timestamp ─────────────────────────────────────────────────
@@ -114,7 +114,7 @@ public sealed class GossipStateTests
     {
         var before = DateTimeOffset.UtcNow;
         var state  = new GossipState([], 30);
-        state.AcceptPeerSth("urn:nps:log:operator-A", MakeSth("urn:nps:log:operator-A", 1));
+        state.AcceptPeerSth("urn:nps:node:log.local:operator-A", MakeSth("urn:nps:node:log.local:operator-A", 1));
         var after  = DateTimeOffset.UtcNow;
 
         var record = state.CurrentPeerSths()[0];
@@ -148,7 +148,7 @@ public sealed class GossipStateTests
     public void FromEnvironment_ParsesPeersJson()
     {
         const string json = """
-            [{"log_id":"urn:nps:log:operator-X","endpoint":"http://localhost:17440"}]
+            [{"log_id":"urn:nps:node:log.local:operator-X","endpoint":"http://localhost:17440"}]
             """;
         var prevPeers    = Environment.GetEnvironmentVariable("NPSLEDGER_PEERS");
         var prevInterval = Environment.GetEnvironmentVariable("NPSLEDGER_GOSSIP_INTERVAL_S");
@@ -158,7 +158,7 @@ public sealed class GossipStateTests
         {
             var state = GossipState.FromEnvironment();
             Assert.Single(state.Peers);
-            Assert.Equal("urn:nps:log:operator-X", state.Peers[0].LogId);
+            Assert.Equal("urn:nps:node:log.local:operator-X", state.Peers[0].LogId);
             Assert.Equal("http://localhost:17440",  state.Peers[0].Endpoint);
             Assert.Null(state.Peers[0].PubKey);
             Assert.Equal(60, state.IntervalSeconds);
@@ -174,7 +174,7 @@ public sealed class GossipStateTests
     public void FromEnvironment_ParsesPeerWithPubKey()
     {
         const string json = """
-            [{"log_id":"urn:nps:log:operator-Y","endpoint":"http://peer:17440","pub_key":"ed25519:abc123"}]
+            [{"log_id":"urn:nps:node:log.local:operator-Y","endpoint":"http://peer:17440","pub_key":"ed25519:abc123"}]
             """;
         var prev = Environment.GetEnvironmentVariable("NPSLEDGER_PEERS");
         Environment.SetEnvironmentVariable("NPSLEDGER_PEERS", json);
@@ -219,7 +219,7 @@ public sealed class GossipStateTests
 
         var unsigned = new SignedTreeHead
         {
-            LogId          = "urn:nps:log:operator-remote",
+            LogId          = "urn:nps:node:log.local:operator-remote",
             TreeSize       = 42,
             Timestamp      = "2026-05-01T00:00:00Z",
             Sha256RootHash = "deadbeef",
@@ -229,7 +229,7 @@ public sealed class GossipStateTests
         var signed = unsigned with { Signature = sig };
 
         var state = new GossipState([], 30);
-        state.AcceptPeerSth("urn:nps:log:operator-remote", signed);
+        state.AcceptPeerSth("urn:nps:node:log.local:operator-remote", signed);
 
         var cached = state.CurrentPeerSths()[0].Sth;
         Assert.True(NipSigner.Verify(

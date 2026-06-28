@@ -24,7 +24,7 @@ public sealed class NpsConformanceTests
             "0.1",
             "urn:nps:node:test:iut",
             "peer",
-            "1.0.0-alpha.14",
+            "1.0.0-alpha.15",
             NpsConformanceCatalog.NodeL1.Select(c => new NpsConformanceCaseResult
             {
                 Id = c.Id,
@@ -48,7 +48,7 @@ public sealed class NpsConformanceTests
             "0.1",
             "urn:nps:node:test:iut",
             "peer",
-            "1.0.0-alpha.14",
+            "1.0.0-alpha.15",
             NpsConformanceCatalog.NodeL1.Skip(1).Select(c => new NpsConformanceCaseResult
             {
                 Id = c.Id,

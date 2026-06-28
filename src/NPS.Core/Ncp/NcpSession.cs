@@ -21,8 +21,11 @@ public sealed class NcpSession : IAsyncDisposable
     /// <summary>Capabilities the server advertised during the handshake.</summary>
     public NcpHandshakeCapsFrame ServerCaps { get; }
 
-    /// <summary>Encoding tier negotiated during the handshake (read from the server's response header flags).</summary>
-    public EncodingTier NegotiatedTier { get; }
+    /// <summary>Encoding policy negotiated during the handshake.</summary>
+    public NcpEncodingPolicy EncodingPolicy { get; }
+
+    /// <summary>Stable default encoding tier negotiated during the handshake.</summary>
+    public EncodingTier NegotiatedTier => EncodingPolicy.DefaultTier;
 
     /// <summary><c>true</c> while the underlying TCP connection is still open.</summary>
     public bool IsConnected => _tcp.Connected;
@@ -31,12 +34,12 @@ public sealed class NcpSession : IAsyncDisposable
         TcpClient             tcp,
         Stream                stream,
         NcpHandshakeCapsFrame serverCaps,
-        EncodingTier          negotiatedTier)
+        NcpEncodingPolicy     encodingPolicy)
     {
-        _tcp           = tcp;
-        _stream        = stream;
-        ServerCaps     = serverCaps;
-        NegotiatedTier = negotiatedTier;
+        _tcp            = tcp;
+        _stream         = stream;
+        ServerCaps      = serverCaps;
+        EncodingPolicy  = encodingPolicy;
     }
 
     /// <summary>

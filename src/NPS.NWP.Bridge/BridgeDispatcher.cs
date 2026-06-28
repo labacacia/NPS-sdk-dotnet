@@ -120,4 +120,13 @@ public static class BridgeErrorCodes
 
     /// <summary>The external call failed or returned an unusable response.</summary>
     public const string UpstreamFailed = "NWP-BRIDGE-UPSTREAM-FAILED";
+
+    /// <summary>An inbound Bridge server request named a tool/action that is not exposed.</summary>
+    public const string ServerToolNotFound = "NWP-BRIDGE-SERVER-TOOL-NOT-FOUND";
+
+    /// <summary>An inbound Bridge server was not configured with a local action dispatcher.</summary>
+    public const string ServerDispatcherMissing = "NWP-BRIDGE-SERVER-DISPATCHER-MISSING";
+
+    /// <summary>An inbound Bridge server local action dispatch failed unexpectedly.</summary>
+    public const string ServerDispatchFailed = "NWP-BRIDGE-SERVER-DISPATCH-FAILED";
 }

@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using NPS.NOP.Frames;
@@ -135,7 +137,7 @@ public sealed class NopOrchestrator : INopOrchestrator
 
             // 8. Fire callback (fire-and-forget)
             if (_opts.EnableCallback && !string.IsNullOrEmpty(task.CallbackUrl))
-                _ = FireCallbackAsync(task.CallbackUrl, result);
+                _ = FireCallbackAsync(task.CallbackUrl, task.CallbackSecret, result);
 
             sw.Stop();
             _log.LogInformation("Task {TaskId} finished as {State}", task.TaskId, finalState);
@@ -285,12 +287,13 @@ public sealed class NopOrchestrator : INopOrchestrator
                     _log.LogWarning("Node {NodeId} failed; end node(s) cannot recover — aborting task {TaskId}",
                         finishedNodeId, task.TaskId);
                     await WaitAndAbortInFlightAsync(inFlight);
-                    var compensation = task.CompensationPolicy is CompensationPolicy.OnFailure or CompensationPolicy.Always
+                    var compensation = CompensationPolicy.RunsOnFailure(task.CompensationPolicy)
                         ? await RunSagaCompensationAsync(task, allNodes, topoOrder, nodeResults, nodeStates, ct)
                         : null;
+                    var errorCode = CompensationFailureErrorCode(task, compensation) ?? NopErrorCodes.SyncDependencyFailed;
                     return NopTaskResult.Failure(
                         task.TaskId,
-                        NopErrorCodes.SyncDependencyFailed,
+                        errorCode,
                         $"Node '{finishedNodeId}' failed: {outcome.ErrorCode}",
                         compensation);
                 }
@@ -301,10 +304,11 @@ public sealed class NopOrchestrator : INopOrchestrator
         var failedNodes = nodeStates.Where(kv => kv.Value == TaskState.Failed).ToList();
         if (failedNodes.Count > 0 && endNodeIds.Any(e => nodeStates.GetValueOrDefault(e) == TaskState.Failed))
         {
-            var compensation = task.CompensationPolicy is CompensationPolicy.OnFailure or CompensationPolicy.Always
+            var compensation = CompensationPolicy.RunsOnFailure(task.CompensationPolicy)
                 ? await RunSagaCompensationAsync(task, allNodes, topoOrder, nodeResults, nodeStates, ct)
                 : null;
-            return NopTaskResult.Failure(task.TaskId, NopErrorCodes.SyncDependencyFailed,
+            var errorCode = CompensationFailureErrorCode(task, compensation) ?? NopErrorCodes.SyncDependencyFailed;
+            return NopTaskResult.Failure(task.TaskId, errorCode,
                 $"End node(s) failed: {string.Join(", ", failedNodes.Select(kv => kv.Key))}",
                 compensation);
         }
@@ -313,7 +317,7 @@ public sealed class NopOrchestrator : INopOrchestrator
         var aggregated = NopResultAggregator.AggregateEndNodes(
             endNodeIds, nodeResults, _opts.DefaultAggregateStrategy);
 
-        var successCompensation = task.CompensationPolicy == CompensationPolicy.Always
+        var successCompensation = CompensationPolicy.RunsOnSuccess(task.CompensationPolicy)
             ? await RunSagaCompensationAsync(task, allNodes, topoOrder, nodeResults, nodeStates, ct)
             : null;
 
@@ -659,9 +663,14 @@ public sealed class NopOrchestrator : INopOrchestrator
     /// Retries up to <see cref="NopConstants.CallbackMaxRetries"/> times (NPS-5 §8.4).
     /// Failures are non-fatal — logged and swallowed.
     /// </summary>
-    private async Task FireCallbackAsync(string callbackUrl, NopTaskResult result)
+    private async Task FireCallbackAsync(string callbackUrl, string? callbackSecret, NopTaskResult result)
     {
         var payload = JsonSerializer.Serialize(result, s_callbackSerializerOpts);
+        var signature = BuildCallbackSignature(callbackSecret, payload);
+        if (!string.IsNullOrWhiteSpace(callbackSecret) && signature is null)
+        {
+            _log.LogWarning("callback_secret is not a valid base64url-encoded 32-byte HMAC key; callback will be sent without X-NPS-Signature.");
+        }
 
         for (int attempt = 1; attempt <= NopConstants.CallbackMaxRetries; attempt++)
         {
@@ -670,7 +679,14 @@ public sealed class NopOrchestrator : INopOrchestrator
                 using var http    = _httpFactory?.CreateClient("NopCallback")
                                     ?? new HttpClient { Timeout = TimeSpan.FromMilliseconds(_opts.CallbackTimeoutMs) };
                 using var content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json");
-                var response      = await http.PostAsync(callbackUrl, content);
+                using var request = new HttpRequestMessage(HttpMethod.Post, callbackUrl)
+                {
+                    Content = content,
+                };
+                if (signature is not null)
+                    request.Headers.TryAddWithoutValidation("X-NPS-Signature", signature);
+
+                var response = await http.SendAsync(request);
 
                 if (response.IsSuccessStatusCode)
                 {
@@ -700,6 +716,35 @@ public sealed class NopOrchestrator : INopOrchestrator
             callbackUrl, NopConstants.CallbackMaxRetries);
     }
 
+    private static string? BuildCallbackSignature(string? callbackSecret, string payload)
+    {
+        if (string.IsNullOrWhiteSpace(callbackSecret))
+            return null;
+
+        if (!TryDecodeBase64Url(callbackSecret, out var key) || key.Length != 32)
+            return null;
+
+        using var hmac = new HMACSHA256(key);
+        var hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(payload));
+        return "sha256=" + Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    private static bool TryDecodeBase64Url(string value, out byte[] bytes)
+    {
+        bytes = Array.Empty<byte>();
+        try
+        {
+            var normalized = value.Trim().Replace('-', '+').Replace('_', '/');
+            normalized = normalized.PadRight(normalized.Length + (4 - normalized.Length % 4) % 4, '=');
+            bytes = Convert.FromBase64String(normalized);
+            return true;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+
     private static readonly JsonSerializerOptions s_callbackSerializerOpts = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
@@ -710,7 +755,7 @@ public sealed class NopOrchestrator : INopOrchestrator
     /// <summary>
     /// Dispatches compensation actions for all completed nodes that declared a
     /// <c>compensate_action</c>, in reverse topological order (NPS-5 §3.5).
-    /// Compensation failures are non-fatal — the overall task result is unchanged.
+    /// Compensation failures are non-fatal unless <c>compensation_policy</c> is <c>"strict"</c>.
     /// </summary>
     private async Task<SagaCompensationResult> RunSagaCompensationAsync(
         TaskFrame                                task,
@@ -720,11 +765,29 @@ public sealed class NopOrchestrator : INopOrchestrator
         Dictionary<string, TaskState>            nodeStates,
         CancellationToken                        ct)
     {
-        // Collect nodes that completed AND have a compensate_action, reverse topo order.
-        var toCompensate = topoOrder
+        // Collect completed nodes in reverse topo order.
+        var completed = topoOrder
             .Where(id => nodeStates.TryGetValue(id, out var s) && s == TaskState.Completed
-                      && allNodes.TryGetValue(id, out var n) && n.CompensateAction is not null)
+                      && allNodes.ContainsKey(id))
             .Reverse()
+            .ToList();
+
+        if (CompensationPolicy.IsStrict(task.CompensationPolicy))
+        {
+            var missing = completed
+                .Where(id => string.IsNullOrWhiteSpace(allNodes[id].CompensateAction))
+                .ToList();
+            if (missing.Count > 0)
+            {
+                _log.LogWarning(
+                    "Strict saga compensation for task {TaskId} cannot proceed; node(s) lack compensate_action: {Nodes}",
+                    task.TaskId, string.Join(", ", missing));
+                return new SagaCompensationResult(0, 0, missing.Count, missing);
+            }
+        }
+
+        var toCompensate = completed
+            .Where(id => !string.IsNullOrWhiteSpace(allNodes[id].CompensateAction))
             .ToList();
 
         if (toCompensate.Count == 0)
@@ -775,6 +838,16 @@ public sealed class NopOrchestrator : INopOrchestrator
             _log.LogWarning("Saga compensation for task {TaskId}: {Failed}/{Total} failed", task.TaskId, failed, toCompensate.Count);
 
         return new SagaCompensationResult(toCompensate.Count, succeeded, failed, failedIds);
+    }
+
+    private static string? CompensationFailureErrorCode(TaskFrame task, SagaCompensationResult? compensation)
+    {
+        if (!CompensationPolicy.IsStrict(task.CompensationPolicy) || compensation is not { Failed: > 0 })
+            return null;
+
+        return compensation.Attempted == 0
+            ? NopErrorCodes.CompensationNotSupported
+            : NopErrorCodes.CompensationFailed;
     }
 
     // ── Telemetry helpers ─────────────────────────────────────────────────────
