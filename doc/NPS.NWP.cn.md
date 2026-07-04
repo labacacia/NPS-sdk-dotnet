@@ -4,7 +4,7 @@
 
 > 根命名空间：`NPS.NWP`
 > NuGet：`LabAcacia.NPS.NWP`
-> 规范：[NPS-2 NWP v0.13](https://github.com/labacacia/NPS-Release/blob/main/NPS-2-NWP.md)
+> 规范：[NPS-2 NWP v0.15](https://github.com/labacacia/NPS-Release/blob/main/NPS-2-NWP.md)
 
 NWP 是 NPS 的 HTTP 覆盖层。本包提供：
 
@@ -12,9 +12,10 @@ NWP 是 NPS 的 HTTP 覆盖层。本包提供：
 2. **Memory Node middleware** —— 一个即插即用的 ASP.NET Core 管道组件,
    将数据源暴露为符合 NPS 的 Memory Node,位于 `/.nwm`、`/.schema`、
    `/query` 和 `/stream`。
-3. `/.nwm` 使用的 Neural Web Manifest 对象模型。
-4. HTTP 头 / MIME 类型 / 错误码常量。
-5. DI 扩展：`AddNwp`、`AddMemoryNode<T>`、`UseMemoryNode<T>`。
+3. typed Action/frame payload helper，以及标准 `llm.complete` DTO contract。
+4. `/.nwm` 使用的 Neural Web Manifest 对象模型。
+5. HTTP 头 / MIME 类型 / 错误码常量。
+6. DI 扩展：`AddNwp`、`AddMemoryNode<T>`、`UseMemoryNode<T>`。
 
 ---
 
@@ -26,6 +27,10 @@ NWP 是 NPS 的 HTTP 覆盖层。本包提供：
   - [`VectorSearchOptions`](#vectorsearchoptions)
   - [`ActionFrame`](#actionframe)
   - [`AsyncActionResponse`](#asyncactionresponse)
+- [Typed payload helper](#typed-payload-helper)
+  - [`NwpActionPayloadCodec`](#nwpactionpayloadcodec)
+  - [`NwpFramePayloadCodec`](#nwpframepayloadcodec)
+  - [`llm.complete`](#llmcomplete)
 - [Neural Web Manifest](#neural-web-manifest)
   - [`NeuralWebManifest`](#neuralwebmanifest)
   - [`NodeCapabilities` / `NodeAuth` / `NodeEndpoints`](#nodecapabilities--nodeauth--nodeendpoints)
@@ -92,27 +97,159 @@ public sealed record VectorSearchOptions
 ```csharp
 public sealed record ActionFrame : IFrame
 {
-    public required string      ActionId  { get; init; }
-    public          JsonElement? Params   { get; init; }
-    public          bool        Async     { get; init; }
-    public          long?       Budget    { get; init; }
+    public required string ActionId { get; init; }
+    public JsonElement? Params { get; init; }
+    public string? IdempotencyKey { get; init; }
+    public uint TimeoutMs { get; init; } = 5000;
+    public bool Async { get; init; }
+    public string? CallbackUrl { get; init; }
+    public string? Priority { get; init; }
+    public string? RequestId { get; init; }
 }
 ```
 
 使用 `Content-Type: application/nwp-frame` 通过 `POST /invoke` 提交。
 若 `Async = true` 服务端以 `AsyncActionResponse` 回应；否则返回
-`ActionFrame` 结果信封。
+`CapsFrame`，其首个 `data[]` 元素为 action-specific success payload。
 
 ### `AsyncActionResponse`
 
 ```csharp
 public sealed record AsyncActionResponse
 {
-    public required string ActionId   { get; init; }
-    public required string StatusUrl  { get; init; }
-    public          string? ResultUrl { get; init; }
+    public required string TaskId { get; init; }
+    public required string Status { get; init; }
+    public required string PollUrl { get; init; }
+    public uint? EstimatedMs { get; init; }
+    public string? RequestId { get; init; }
 }
 ```
+
+---
+
+## Typed payload helper
+
+### `NwpActionPayloadCodec`
+
+`NwpActionPayloadCodec` 将 typed DTO 映射到 `ActionFrame.Params`，也可从
+`ActionFrame.Params` 读回 DTO：
+
+```csharp
+var frame = NwpActionPayloadCodec.ToActionFrame(
+    "llm.complete",
+    payload,
+    new NwpActionFrameOptions { RequestId = requestId });
+
+var payload = NwpActionPayloadCodec.ReadPayload<LlmCompleteActionRequest>(frame);
+```
+
+同时提供 JSON 与 MessagePack payload helper：
+
+```csharp
+byte[] json = NwpActionPayloadCodec.EncodeJson(payload);
+byte[] msgpack = NwpActionPayloadCodec.EncodeMsgPack(payload);
+```
+
+规范 JSON 与 MessagePack map key 均为 snake_case。JSON decoder 对大小写不敏感，
+并兼容 PascalCase DTO 属性名，作为迁移期 fallback。
+
+### `NwpFramePayloadCodec`
+
+`NwpFramePayloadCodec` 将 typed DTO 映射到常见响应 payload 槽位：
+
+```csharp
+var caps = NwpFramePayloadCodec.ToCapsFrame(anchorRef, result);
+var result = NwpFramePayloadCodec.ReadCapsPayload<MyResultDto>(caps);
+
+var stream = NwpFramePayloadCodec.ToStreamFrame(
+    streamId,
+    seq: 0,
+    isLast: false,
+    payloads: chunks,
+    anchorRef: anchorRef);
+
+var chunks = NwpFramePayloadCodec.ReadStreamPayloads<MyChunkDto>(stream);
+
+var taskResult = NwpFramePayloadCodec.ReadTaskResult<MyResultDto>(taskStatus);
+var errorDetails = NwpFramePayloadCodec.ReadErrorDetails<MyErrorDetailsDto>(errorFrame);
+```
+
+当某个 operation 的语义 contract 已经说明 `CapsFrame.Data[]` 或
+`StreamFrame.Data[]`、`ActionTaskStatus.Result`、`ErrorFrame.Details` 里是什么
+DTO 时，使用这个 helper。它不会给所有 frame 强行定义统一语义，只是避免
+typed payload 槽位继续散落私有 JSON mapping。
+
+### `llm.complete`
+
+标准 LLM completion action 使用 `ActionFrame.ActionId = "llm.complete"`，
+且 `ActionFrame.Params = LlmCompleteActionRequest`。
+
+```csharp
+var frame = LlmCompleteAction.ToActionFrame(new LlmCompleteActionRequest
+{
+    Model = "llama3.1:8b",
+    MaxTokens = 4096,
+    Stream = false,
+    Messages =
+    [
+        new LlmMessageDto { Role = "system", Content = "Answer tersely." },
+        new LlmMessageDto { Role = "user", Content = "Explain NPS anchors." },
+    ],
+    Tools =
+    [
+        new LlmToolDefinitionDto
+        {
+            Name = "memory.search",
+            Description = "Search agent memory.",
+            Parameters =
+            [
+                new ToolParameterDto
+                {
+                    Name = "query",
+                    Type = "string",
+                    Required = true,
+                },
+            ],
+        },
+    ],
+});
+
+var request = LlmCompleteAction.ReadRequest(frame);
+
+var syncResponse = LlmCompleteAction.ToCapsFrame(new LlmCompleteActionResponse
+{
+    StopReason = LlmStopReason.EndTurn,
+    Content = "Anchors let a client send a schema once, then reference it.",
+});
+var result = LlmCompleteAction.ReadResponse(syncResponse);
+
+var asyncResult = LlmCompleteAction.ReadAsyncResult(taskStatus);
+
+var streamFrame = LlmCompleteAction.ToStreamFrame(
+    "stream-1",
+    seq: 0,
+    isLast: false,
+    [new LlmCompleteStreamChunkDto { ContentDelta = "Anchors " }],
+    includeAnchorRef: true);
+var streamChunks = LlmCompleteAction.ReadStreamChunks(streamFrame);
+```
+
+`LlmCompleteActionResponse` 字段为 `stop_reason`、`content`、`tool_calls`
+和 `error`。`stop_reason` 取值为 `end_turn`、`tool_use`、`tool_calls`、
+`max_tokens`、`length`、`error`；tool call 使用 `call_id`、`tool_name`、
+`arguments_json`。
+
+成功响应模式：
+
+| 请求模式 | 响应 |
+|---------|------|
+| `Async=false`，请求 payload `stream=false` | `CapsFrame.Data[0]` 为 `LlmCompleteActionResponse` |
+| `Async=true`，请求 payload `stream=false` | `AsyncActionResponse`；之后 `system.task.status.result` 为 `LlmCompleteActionResponse` |
+| 请求 payload `stream=true` | `StreamFrame` 序列；`Data[]` 为 `LlmCompleteStreamChunkDto` |
+
+协议、校验、鉴权、超时和 provider dispatch 失败应使用 `ErrorFrame`。
+`LlmCompleteActionResponse.Error` 仅保留给“模型/提供商层 error 本身是一次
+成功 action result”的情况。
 
 ---
 

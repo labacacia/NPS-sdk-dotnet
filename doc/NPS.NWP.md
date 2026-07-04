@@ -4,16 +4,17 @@ English | [中文版](./NPS.NWP.cn.md)
 
 > Root namespace: `NPS.NWP`
 > NuGet: `LabAcacia.NPS.NWP`
-> Spec: [NPS-2 NWP v0.13](https://github.com/labacacia/NPS-Release/blob/main/NPS-2-NWP.md)
+> Spec: [NPS-2 NWP v0.15](https://github.com/labacacia/NPS-Release/blob/main/NPS-2-NWP.md)
 
 NWP is the HTTP overlay for NPS. This package provides:
 
 1. Strongly-typed `QueryFrame` / `ActionFrame` / `AsyncActionResponse` request frames.
 2. The **Memory Node middleware** — a drop-in ASP.NET Core pipeline component that exposes a
    data source as an NPS-compliant Memory Node at `/.nwm`, `/.schema`, `/query`, and `/stream`.
-3. The Neural Web Manifest object model used by `/.nwm`.
-4. HTTP header / MIME-type / error-code constants.
-5. DI extensions: `AddNwp`, `AddMemoryNode<T>`, `UseMemoryNode<T>`.
+3. Typed Action/frame payload helpers plus the standard `llm.complete` DTO contract.
+4. The Neural Web Manifest object model used by `/.nwm`.
+5. HTTP header / MIME-type / error-code constants.
+6. DI extensions: `AddNwp`, `AddMemoryNode<T>`, `UseMemoryNode<T>`.
 
 ---
 
@@ -25,6 +26,10 @@ NWP is the HTTP overlay for NPS. This package provides:
   - [`VectorSearchOptions`](#vectorsearchoptions)
   - [`ActionFrame`](#actionframe)
   - [`AsyncActionResponse`](#asyncactionresponse)
+- [Typed payload helpers](#typed-payload-helpers)
+  - [`NwpActionPayloadCodec`](#nwpactionpayloadcodec)
+  - [`NwpFramePayloadCodec`](#nwpframepayloadcodec)
+  - [`llm.complete`](#llmcomplete)
 - [Neural Web Manifest](#neural-web-manifest)
   - [`NeuralWebManifest`](#neuralwebmanifest)
   - [`NodeCapabilities` / `NodeAuth` / `NodeEndpoints`](#nodecapabilities--nodeauth--nodeendpoints)
@@ -91,26 +96,159 @@ public sealed record VectorSearchOptions
 ```csharp
 public sealed record ActionFrame : IFrame
 {
-    public required string      ActionId  { get; init; }
-    public          JsonElement? Params   { get; init; }
-    public          bool        Async     { get; init; }
-    public          long?       Budget    { get; init; }
+    public required string ActionId { get; init; }
+    public JsonElement? Params { get; init; }
+    public string? IdempotencyKey { get; init; }
+    public uint TimeoutMs { get; init; } = 5000;
+    public bool Async { get; init; }
+    public string? CallbackUrl { get; init; }
+    public string? Priority { get; init; }
+    public string? RequestId { get; init; }
 }
 ```
 
 Submit via `POST /invoke` with `Content-Type: application/nwp-frame`. If `Async = true` the server
-answers with an `AsyncActionResponse`; otherwise it returns an `ActionFrame` result envelope.
+answers with an `AsyncActionResponse`; otherwise it returns a `CapsFrame` whose first `data[]`
+item contains the action-specific success payload.
 
 ### `AsyncActionResponse`
 
 ```csharp
 public sealed record AsyncActionResponse
 {
-    public required string ActionId   { get; init; }
-    public required string StatusUrl  { get; init; }
-    public          string? ResultUrl { get; init; }
+    public required string TaskId { get; init; }
+    public required string Status { get; init; }
+    public required string PollUrl { get; init; }
+    public uint? EstimatedMs { get; init; }
+    public string? RequestId { get; init; }
 }
 ```
+
+---
+
+## Typed payload helpers
+
+### `NwpActionPayloadCodec`
+
+`NwpActionPayloadCodec` maps typed DTOs to `ActionFrame.Params` and back:
+
+```csharp
+var frame = NwpActionPayloadCodec.ToActionFrame(
+    "llm.complete",
+    payload,
+    new NwpActionFrameOptions { RequestId = requestId });
+
+var payload = NwpActionPayloadCodec.ReadPayload<LlmCompleteActionRequest>(frame);
+```
+
+Helpers are available for JSON and MessagePack payloads:
+
+```csharp
+byte[] json = NwpActionPayloadCodec.EncodeJson(payload);
+byte[] msgpack = NwpActionPayloadCodec.EncodeMsgPack(payload);
+```
+
+Canonical JSON and MessagePack map keys are snake_case. Decoders are
+case-insensitive for JSON and tolerate PascalCase DTO property names as a
+compatibility fallback.
+
+### `NwpFramePayloadCodec`
+
+`NwpFramePayloadCodec` maps typed DTOs to common response payload slots:
+
+```csharp
+var caps = NwpFramePayloadCodec.ToCapsFrame(anchorRef, result);
+var result = NwpFramePayloadCodec.ReadCapsPayload<MyResultDto>(caps);
+
+var stream = NwpFramePayloadCodec.ToStreamFrame(
+    streamId,
+    seq: 0,
+    isLast: false,
+    payloads: chunks,
+    anchorRef: anchorRef);
+
+var chunks = NwpFramePayloadCodec.ReadStreamPayloads<MyChunkDto>(stream);
+
+var taskResult = NwpFramePayloadCodec.ReadTaskResult<MyResultDto>(taskStatus);
+var errorDetails = NwpFramePayloadCodec.ReadErrorDetails<MyErrorDetailsDto>(errorFrame);
+```
+
+Use this helper when an operation's semantic contract already says what
+`CapsFrame.Data[]`, `StreamFrame.Data[]`, `ActionTaskStatus.Result`, or
+`ErrorFrame.Details` contains. It does not define a generic meaning for every
+frame; it only avoids private JSON mapping code for typed payload slots.
+
+### `llm.complete`
+
+The standard LLM completion action uses `ActionFrame.ActionId = "llm.complete"`
+and `ActionFrame.Params = LlmCompleteActionRequest`.
+
+```csharp
+var frame = LlmCompleteAction.ToActionFrame(new LlmCompleteActionRequest
+{
+    Model = "llama3.1:8b",
+    MaxTokens = 4096,
+    Stream = false,
+    Messages =
+    [
+        new LlmMessageDto { Role = "system", Content = "Answer tersely." },
+        new LlmMessageDto { Role = "user", Content = "Explain NPS anchors." },
+    ],
+    Tools =
+    [
+        new LlmToolDefinitionDto
+        {
+            Name = "memory.search",
+            Description = "Search agent memory.",
+            Parameters =
+            [
+                new ToolParameterDto
+                {
+                    Name = "query",
+                    Type = "string",
+                    Required = true,
+                },
+            ],
+        },
+    ],
+});
+
+var request = LlmCompleteAction.ReadRequest(frame);
+
+var syncResponse = LlmCompleteAction.ToCapsFrame(new LlmCompleteActionResponse
+{
+    StopReason = LlmStopReason.EndTurn,
+    Content = "Anchors let a client send a schema once, then reference it.",
+});
+var result = LlmCompleteAction.ReadResponse(syncResponse);
+
+var asyncResult = LlmCompleteAction.ReadAsyncResult(taskStatus);
+
+var streamFrame = LlmCompleteAction.ToStreamFrame(
+    "stream-1",
+    seq: 0,
+    isLast: false,
+    [new LlmCompleteStreamChunkDto { ContentDelta = "Anchors " }],
+    includeAnchorRef: true);
+var streamChunks = LlmCompleteAction.ReadStreamChunks(streamFrame);
+```
+
+`LlmCompleteActionResponse` fields are `stop_reason`, `content`, `tool_calls`,
+and `error`. `stop_reason` is one of `end_turn`, `tool_use`, `tool_calls`,
+`max_tokens`, `length`, or `error`; tool calls use `call_id`, `tool_name`, and
+`arguments_json`.
+
+Success response modes:
+
+| Request mode | Response |
+|--------------|----------|
+| `Async=false`, request payload `stream=false` | `CapsFrame.Data[0]` is `LlmCompleteActionResponse` |
+| `Async=true`, request payload `stream=false` | `AsyncActionResponse`; later `system.task.status.result` is `LlmCompleteActionResponse` |
+| request payload `stream=true` | `StreamFrame` sequence; `Data[]` contains `LlmCompleteStreamChunkDto` |
+
+Protocol, validation, auth, timeout, and provider dispatch failures should use
+`ErrorFrame`. `LlmCompleteActionResponse.Error` is reserved for model/provider
+errors that are themselves successful action results.
 
 ---
 

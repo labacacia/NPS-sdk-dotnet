@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](../../LICENSE)
 [![Release](https://img.shields.io/badge/release-v1.0.0--alpha.15-orange.svg)](../../CHANGELOG.cn.md)
 [![NCP](https://img.shields.io/badge/NCP-v0.9-5b8cff.svg)]()
-[![NWP](https://img.shields.io/badge/NWP-v0.14-4af0b0.svg)]()
+[![NWP](https://img.shields.io/badge/NWP-v0.15-4af0b0.svg)]()
 [![NIP](https://img.shields.io/badge/NIP-v0.10-7b61ff.svg)]()
 [![NDP](https://img.shields.io/badge/NDP-v0.9-f0a050.svg)]()
 [![NOP](https://img.shields.io/badge/NOP-v0.7-ff8c42.svg)]()
@@ -17,7 +17,7 @@ C# / .NET 10 Neural Protocol Suite 参考实现。
 | 包名 | 版本 | 说明 |
 |------|------|------|
 | `LabAcacia.NPS.Core` | 1.0.0-alpha.15 | 共享帧类型（AnchorFrame、DiffFrame、StreamFrame、CapsFrame、HelloFrame、ErrorFrame）、JSON/MsgPack 编解码、AnchorFrame 缓存、帧注册表 |
-| `LabAcacia.NPS.NWP` | 1.0.0-alpha.15 | Neural Web Protocol — NWM 清单、Query / Action / Subscribe / Diff 帧、Memory / Action / Complex / Anchor / Bridge Node 中间件，以及 native-mode serving |
+| `LabAcacia.NPS.NWP` | 1.0.0-alpha.15 | Neural Web Protocol — NWM 清单、Query / Action / Subscribe / Diff 帧、包含 `llm.complete` 的 typed Action/frame payload helper、Memory / Action / Complex / Anchor / Bridge Node 中间件，以及 native-mode serving |
 | `LabAcacia.NPS.NWP.Anchor` | 1.0.0-alpha.15 | NWP Anchor Node：把 ActionFrame 无状态翻译到 NOP TaskFrame 的 AaaS 入口；`AnchorNodeClient` 支持 `topology.snapshot` / `topology.stream` 拓扑查询 |
 | `LabAcacia.NPS.NWP.Bridge` | 1.0.0-alpha.15 | NWP Bridge Node：NPS 帧到非 NPS 协议的无状态 dispatcher，内置 HTTP/HTTPS、gRPC JSON unary、MCP JSON-RPC、A2A JSON-RPC adapter |
 | `LabAcacia.NPS.NIP` | 1.0.0-alpha.15 | Neural Identity Protocol — CA、Ed25519 密钥生成、IdentFrame 签发 / 吊销、类型化远程 CA client、OCSP、CRL；X.509 + ACME `agent-01` challenge（RFC-0002 原型） |
@@ -116,7 +116,7 @@ services.AddNipCaWithPostgres(options =>
 
 ### Bridge 与 Ingress 包
 
-`LabAcacia.NPS.NWP.Bridge` 描述 NPS 到外部协议的 Bridge Node 路径，并内置 HTTP/HTTPS、gRPC JSON unary、MCP JSON-RPC、A2A JSON-RPC dispatcher。外部协议进入 NPS 的适配器单独发布：`LabAcacia.McpIngress`、`LabAcacia.A2aIngress`、`LabAcacia.GrpcIngress`。
+`LabAcacia.NPS.NWP.Bridge` 描述 NPS 到外部协议的 Bridge Node 路径，并内置 HTTP/HTTPS、gRPC JSON unary、MCP JSON-RPC、A2A JSON-RPC dispatcher。外部协议进入 NPS 的适配器单独打包为 `LabAcacia.McpIngress`、`LabAcacia.A2aIngress`、`LabAcacia.GrpcIngress`；完成该版本 NuGet publish 后即可消费。
 
 ```csharp
 using System.Text.Json;
@@ -131,9 +131,11 @@ using var parameters = JsonDocument.Parse("""
   "bridge_target": {
     "protocol": "http",
     "endpoint": "https://api.example.test/run",
-    "method": "POST",
-    "allowed_prefixes": [ "https://api.example.test/" ],
-    "headers": { "x-agent": "nps" }
+    "extras": {
+      "method": "POST",
+      "allowed_prefixes": [ "https://api.example.test/" ],
+      "headers": { "x-agent": "nps" }
+    }
   },
   "body": { "task": "sync" }
 }
@@ -277,4 +279,4 @@ dotnet test
 
 积极开发中（v1.0.0-alpha.15）。696 个测试全部通过。
 
-Alpha.14 主要内容：warning-clean .NET 包族与 SourceLink symbol；native NCP TLS hook 与有界 Hello 读取；live NIP revocation check 与 signed CRL artifact；`NipCaClient`；`NwpNativeNodeServer`；内置 HTTP/HTTPS、gRPC JSON unary、MCP JSON-RPC、A2A JSON-RPC Bridge dispatcher；transport-neutral observability renderer；`LabAcacia.NPS.Conformance`；loopback dev stack。
+Alpha.15 主要内容：官方 `llm.complete` Action/Caps/Stream DTO contract；面向 `CapsFrame`、`StreamFrame`、异步 task result、`ErrorFrame.Details` 的 typed frame payload helper；Bridge `bridge_target` 规范 wire shape 统一到 `extras`；warning-clean .NET 包族与 SourceLink symbol；native NCP TLS hook 与有界 Hello 读取；live NIP revocation check 与 signed CRL artifact；`NipCaClient`；`NwpNativeNodeServer`；内置 HTTP/HTTPS、gRPC JSON unary、MCP JSON-RPC、A2A JSON-RPC Bridge dispatcher；transport-neutral observability renderer；`LabAcacia.NPS.Conformance`；loopback dev stack。

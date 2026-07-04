@@ -5,7 +5,7 @@ English | [中文版](./README.cn.md)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](../../LICENSE)
 [![Release](https://img.shields.io/badge/release-v1.0.0--alpha.15-orange.svg)](../../CHANGELOG.md)
 [![NCP](https://img.shields.io/badge/NCP-v0.9-5b8cff.svg)]()
-[![NWP](https://img.shields.io/badge/NWP-v0.14-4af0b0.svg)]()
+[![NWP](https://img.shields.io/badge/NWP-v0.15-4af0b0.svg)]()
 [![NIP](https://img.shields.io/badge/NIP-v0.10-7b61ff.svg)]()
 [![NDP](https://img.shields.io/badge/NDP-v0.9-f0a050.svg)]()
 [![NOP](https://img.shields.io/badge/NOP-v0.7-ff8c42.svg)]()
@@ -17,7 +17,7 @@ C# / .NET 10 reference implementation for the Neural Protocol Suite.
 | Package | Version | Description |
 |---------|---------|-------------|
 | `LabAcacia.NPS.Core` | 1.0.0-alpha.15 | Shared frame types (AnchorFrame, DiffFrame, StreamFrame, CapsFrame, HelloFrame, ErrorFrame), JSON/MsgPack codecs, AnchorFrame cache, frame registry |
-| `LabAcacia.NPS.NWP` | 1.0.0-alpha.15 | Neural Web Protocol — NWM manifest, Query/Action/Subscribe/Diff frames, Memory/Action/Complex/Anchor/Bridge Node middleware plus native-mode serving |
+| `LabAcacia.NPS.NWP` | 1.0.0-alpha.15 | Neural Web Protocol — NWM manifest, Query/Action/Subscribe/Diff frames, typed Action/frame payload helpers including `llm.complete`, Memory/Action/Complex/Anchor/Bridge Node middleware plus native-mode serving |
 | `LabAcacia.NPS.NWP.Anchor` | 1.0.0-alpha.15 | NWP Anchor Node: stateless AaaS entry point translating ActionFrames to NOP TaskFrames; `AnchorNodeClient` for `topology.snapshot` / `topology.stream` queries |
 | `LabAcacia.NPS.NWP.Bridge` | 1.0.0-alpha.15 | NWP Bridge Node: stateless dispatcher from NPS frames to non-NPS protocols, with built-in HTTP/HTTPS, gRPC JSON unary, MCP JSON-RPC, and A2A JSON-RPC adapters |
 | `LabAcacia.NPS.NIP` | 1.0.0-alpha.15 | Neural Identity Protocol — CA, Ed25519 key generation, IdentFrame issuance/revocation, typed remote CA client, OCSP, CRL; X.509 + ACME `agent-01` challenge (RFC-0002 prototype) |
@@ -117,7 +117,7 @@ services.AddNipCaWithPostgres(options =>
 
 ### Bridge and Ingress Packages
 
-`LabAcacia.NPS.NWP.Bridge` models the NPS-to-external Bridge Node path and ships built-in HTTP/HTTPS, gRPC JSON unary, MCP JSON-RPC, and A2A JSON-RPC dispatchers. The external-to-NPS adapters are published as separate packages: `LabAcacia.McpIngress`, `LabAcacia.A2aIngress`, and `LabAcacia.GrpcIngress`.
+`LabAcacia.NPS.NWP.Bridge` models the NPS-to-external Bridge Node path and ships built-in HTTP/HTTPS, gRPC JSON unary, MCP JSON-RPC, and A2A JSON-RPC dispatchers. The external-to-NPS adapters are packaged separately as `LabAcacia.McpIngress`, `LabAcacia.A2aIngress`, and `LabAcacia.GrpcIngress`; they are consumable after the NuGet publish step for that release.
 
 ```csharp
 using System.Text.Json;
@@ -132,9 +132,11 @@ using var parameters = JsonDocument.Parse("""
   "bridge_target": {
     "protocol": "http",
     "endpoint": "https://api.example.test/run",
-    "method": "POST",
-    "allowed_prefixes": [ "https://api.example.test/" ],
-    "headers": { "x-agent": "nps" }
+    "extras": {
+      "method": "POST",
+      "allowed_prefixes": [ "https://api.example.test/" ],
+      "headers": { "x-agent": "nps" }
+    }
   },
   "body": { "task": "sync" }
 }
@@ -280,4 +282,4 @@ dotnet test
 
 Active development (v1.0.0-alpha.15). 696 tests passing.
 
-Alpha.14 highlights: warning-clean .NET package family with SourceLink symbols; native NCP TLS hook and bounded Hello reads; live NIP revocation checks and signed CRL artifacts; `NipCaClient`; `NwpNativeNodeServer`; built-in Bridge dispatchers for HTTP/HTTPS, gRPC JSON unary, MCP JSON-RPC, and A2A JSON-RPC; transport-neutral observability renderers; `LabAcacia.NPS.Conformance`; loopback dev stack.
+Alpha.15 highlights: official `llm.complete` Action/Caps/Stream DTO contracts; typed frame payload helpers for `CapsFrame`, `StreamFrame`, async task results, and `ErrorFrame.Details`; Bridge `bridge_target` canonical wire shape aligned on `extras`; warning-clean .NET package family with SourceLink symbols; native NCP TLS hook and bounded Hello reads; live NIP revocation checks and signed CRL artifacts; `NipCaClient`; `NwpNativeNodeServer`; built-in Bridge dispatchers for HTTP/HTTPS, gRPC JSON unary, MCP JSON-RPC, and A2A JSON-RPC; transport-neutral observability renderers; `LabAcacia.NPS.Conformance`; loopback dev stack.

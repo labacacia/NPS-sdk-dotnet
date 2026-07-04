@@ -31,7 +31,7 @@ public static class BridgeEndpointValidator
         {
             throw new BridgeDispatchException(
                 BridgeErrorCodes.EndpointInvalid,
-                "bridge_target.endpoint MUST use https:// unless bridge_target.allow_http is true.");
+                "bridge_target.endpoint MUST use https:// unless bridge_target.extras.allow_http is true.");
         }
 
         var allowedPrefixes = GetStringList(target, "allowed_prefixes");
@@ -40,7 +40,7 @@ public static class BridgeEndpointValidator
         {
             throw new BridgeDispatchException(
                 BridgeErrorCodes.EndpointInvalid,
-                $"bridge_target.endpoint '{target.Endpoint}' is not in bridge_target.allowed_prefixes.");
+                $"bridge_target.endpoint '{target.Endpoint}' is not in bridge_target.extras.allowed_prefixes.");
         }
 
         var rejectPrivate = GetBool(target, "reject_private", defaultValue: true);

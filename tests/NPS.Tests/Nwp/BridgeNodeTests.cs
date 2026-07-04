@@ -485,8 +485,10 @@ public sealed class BridgeNodeTests
           "bridge_target": {
             "protocol": "http",
             "endpoint": "https://api.example.test/run",
-            "method": "PUT",
-            "headers": { "x-agent": "nps" }
+            "extras": {
+              "method": "PUT",
+              "headers": { "x-agent": "nps" }
+            }
           },
           "body": { "task": "sync" }
         }
@@ -587,7 +589,9 @@ public sealed class BridgeNodeTests
         {
           "protocol": "mcp",
           "endpoint": "https://mcp.example.test/rpc",
-          "allowed_prefixes": [ "https://trusted.example.test/" ]
+          "extras": {
+            "allowed_prefixes": [ "https://trusted.example.test/" ]
+          }
         }
         """);
 
@@ -614,7 +618,9 @@ public sealed class BridgeNodeTests
         {
           "protocol": "mcp",
           "endpoint": "{{endpoint}}",
-          "allowed_prefixes": [ "{{allowedPrefix}}" ]
+          "extras": {
+            "allowed_prefixes": [ "{{allowedPrefix}}" ]
+          }
         }
         """);
 
@@ -725,7 +731,9 @@ public sealed class BridgeNodeTests
           "bridge_target": {
             "protocol": "mcp",
             "endpoint": "https://mcp.example.test/rpc",
-            "headers": { "authorization": "Bearer test" }
+            "extras": {
+              "headers": { "authorization": "Bearer test" }
+            }
           },
           "id": "req-1",
           "params": {
@@ -784,13 +792,15 @@ public sealed class BridgeNodeTests
         {
           "protocol": "a2a",
           "endpoint": "https://agent.example.test/a2a",
-          "rpc_method": "tasks/send",
-          "id": "task-1",
-          "rpc_params": {
+          "extras": {
+            "rpc_method": "tasks/send",
             "id": "task-1",
-            "message": {
-              "role": "user",
-              "parts": [ { "type": "text", "text": "hello" } ]
+            "rpc_params": {
+              "id": "task-1",
+              "message": {
+                "role": "user",
+                "parts": [ { "type": "text", "text": "hello" } ]
+              }
             }
           }
         }
