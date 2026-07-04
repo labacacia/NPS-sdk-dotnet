@@ -3,6 +3,7 @@
 
 using Microsoft.Extensions.DependencyInjection;
 using NPS.NIP.Ca;
+using NPS.NIP.Ca.Ra;
 using NPS.NIP.Extensions;
 using NPS.NIP.Storage;
 
@@ -33,8 +34,14 @@ public static class NipSqliteExtensions
         string sqliteConnectionString,
         bool generateKeyIfMissing = false)
     {
-        var store = SqliteNipCaStore.OpenAsync(sqliteConnectionString)
+        var certStore = SqliteNipCaStore.OpenAsync(sqliteConnectionString)
             .GetAwaiter().GetResult();
-        return services.AddNipCa(configure, store, generateKeyIfMissing);
+        var raStore = SqliteNipRaStore.OpenAsync(sqliteConnectionString)
+            .GetAwaiter().GetResult();
+
+        services.AddNipCa(configure, certStore, generateKeyIfMissing);
+        services.AddSingleton<IBootstrapTokenStore>(raStore);
+        services.AddSingleton<IPendingStore>(raStore);
+        return services;
     }
 }

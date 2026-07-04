@@ -19,7 +19,8 @@ namespace NPS.NIP.Extensions;
 /// <para>
 /// Embed in any ASP.NET Core app:
 /// <code>
-/// builder.Services.AddNipCa(opts => { opts.CaNid = "..."; ... });
+/// var store = await SqliteNipCaStore.OpenAsync("Data Source=nip-ca.db");
+/// builder.Services.AddNipCa(opts => { opts.CaNid = "..."; ... }, store);
 /// // ...
 /// app.MapNipCa();
 /// </code>

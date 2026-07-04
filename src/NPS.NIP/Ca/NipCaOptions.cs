@@ -97,7 +97,7 @@ public sealed class NipCaOptions
 
     /// <summary>
     /// Connection string for certificate storage.
-    /// Required when using the default PostgreSQL backend via <c>AddNipCa()</c>.
+    /// Required when using the PostgreSQL backend via <c>AddNipCaWithPostgres()</c>.
     /// Not needed when supplying a custom <c>INipCaStore</c> via
     /// <c>AddNipCa(..., INipCaStore)</c> or <c>AddNipCaWithSqlite()</c>.
     /// </summary>

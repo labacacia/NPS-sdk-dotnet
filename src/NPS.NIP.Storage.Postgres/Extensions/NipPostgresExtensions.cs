@@ -3,6 +3,7 @@
 
 using Microsoft.Extensions.DependencyInjection;
 using NPS.NIP.Ca;
+using NPS.NIP.Ca.Ra;
 using NPS.NIP.Extensions;
 using NPS.NIP.Storage;
 
@@ -51,7 +52,13 @@ public static class NipPostgresExtensions
                 "NipCaOptions.ConnectionString must be set when using AddNipCaWithPostgres(). " +
                 "Provide a valid PostgreSQL connection string.");
 
-        var store = new PostgreSqlNipCaStore(opts.ConnectionString);
-        return services.AddNipCa(configure, store, generateKeyIfMissing);
+        var certStore = new PostgreSqlNipCaStore(opts.ConnectionString);
+        var raStore   = new PostgreSqlNipRaStore(opts.ConnectionString);
+        raStore.MigrateAsync().GetAwaiter().GetResult();
+
+        services.AddNipCa(configure, certStore, generateKeyIfMissing);
+        services.AddSingleton<IBootstrapTokenStore>(raStore);
+        services.AddSingleton<IPendingStore>(raStore);
+        return services;
     }
 }

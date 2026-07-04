@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using NPS.NIP.Ca;
+using NPS.NIP.Ca.Ra;
 using NPS.NIP.Storage;
 
 namespace NPS.Tests.Nip;
@@ -195,6 +196,72 @@ public sealed class SqliteNipCaStoreTests : IAsyncLifetime
         var got    = await store2.GetByNidAsync("urn:nps:agent:test:persist");
         Assert.NotNull(got);
         Assert.Equal("0x99", got!.Serial);
+    }
+
+    // ── RA store persistence ─────────────────────────────────────────────────
+
+    [Fact]
+    public async Task RaBootstrapToken_PersistsAndConsumesOnceAcrossStoreInstances()
+    {
+        var ra1 = await SqliteNipRaStore.OpenAsync($"Data Source={_dbPath}");
+        var raw = await ra1.CreateAsync("operator-issued", DateTimeOffset.UtcNow.AddHours(1), default);
+
+        var listed = await ra1.ListAsync(default);
+        Assert.Single(listed);
+        Assert.Equal("operator-issued", listed[0].Label);
+        Assert.False(listed[0].Consumed);
+
+        var ra2 = await SqliteNipRaStore.OpenAsync($"Data Source={_dbPath}");
+        Assert.True(await ra2.ValidateAndConsumeAsync(raw, default));
+        Assert.False(await ra2.ValidateAndConsumeAsync(raw, default));
+
+        var after = await ra2.ListAsync(default);
+        Assert.True(after[0].Consumed);
+    }
+
+    [Fact]
+    public async Task RaBootstrapToken_RevokePreventsUseAcrossStoreInstances()
+    {
+        var ra1 = await SqliteNipRaStore.OpenAsync($"Data Source={_dbPath}");
+        var raw = await ra1.CreateAsync("to-revoke", DateTimeOffset.UtcNow.AddHours(1), default);
+        var id  = (await ra1.ListAsync(default))[0].Id;
+
+        var ra2 = await SqliteNipRaStore.OpenAsync($"Data Source={_dbPath}");
+        Assert.True(await ra2.RevokeAsync(id, default));
+        Assert.False(await ra2.ValidateAndConsumeAsync(raw, default));
+    }
+
+    [Fact]
+    public async Task RaPendingRequest_PersistsAndTransitionsAcrossStoreInstances()
+    {
+        var ra1 = await SqliteNipRaStore.OpenAsync($"Data Source={_dbPath}");
+        var req = new PendingRegistration(
+            "pending-1",
+            "agent",
+            "agent-a",
+            "ed25519:abc",
+            ["nwp:query"],
+            """{"nodes":["*"]}""",
+            """{"owner":"ops"}""",
+            DateTimeOffset.UtcNow,
+            PendingStatus.Pending,
+            null);
+
+        await ra1.EnqueueAsync(req, default);
+        Assert.Equal(1, ra1.PendingCount);
+
+        var ra2 = await SqliteNipRaStore.OpenAsync($"Data Source={_dbPath}");
+        var got = await ra2.GetAsync("pending-1", default);
+        Assert.NotNull(got);
+        Assert.Equal("agent-a", got!.Identifier);
+        Assert.Equal(PendingStatus.Pending, got.Status);
+
+        Assert.True(await ra2.ApproveAsync("pending-1", default));
+        Assert.False(await ra2.RejectAsync("pending-1", "too late", default));
+        Assert.Equal(0, ra2.PendingCount);
+
+        var approved = await ra2.GetAsync("pending-1", default);
+        Assert.Equal(PendingStatus.Approved, approved!.Status);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
