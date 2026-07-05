@@ -182,4 +182,12 @@ public static class NwpErrorCodes
 
     // Manifest
     public const string ManifestVersionUnsupported = "NWP-MANIFEST-VERSION-UNSUPPORTED";
+
+    // HTTP binding / advertised capability
+    public const string HttpOriginForbidden             = "NWP-HTTP-ORIGIN-FORBIDDEN";
+    public const string HttpContentTypeUnsupported      = "NWP-HTTP-CONTENT-TYPE-UNSUPPORTED";
+    public const string HttpAcceptUnsatisfiable         = "NWP-HTTP-ACCEPT-UNSATISFIABLE";
+    public const string HttpRequestIdMismatch           = "NWP-HTTP-REQUEST-ID-MISMATCH";
+    public const string HttpFrameBodyMalformed          = "NWP-HTTP-FRAME-BODY-MALFORMED";
+    public const string CapabilityAdvertisedUnimplemented = "NWP-CAPABILITY-ADVERTISED-UNIMPLEMENTED";
 }

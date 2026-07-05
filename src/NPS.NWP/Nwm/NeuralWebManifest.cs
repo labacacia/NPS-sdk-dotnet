@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Text.Json.Serialization;
+using NPS.NWP.Llm;
 
 namespace NPS.NWP.Nwm;
 
@@ -94,6 +95,12 @@ public sealed record NeuralWebManifest
     /// </summary>
     [JsonPropertyName("token_budget")]
     public NwmTokenBudget? TokenBudget { get; init; }
+
+    /// <summary>
+    /// Structured protocol profiles exposed by this node. Profiles refine a
+    /// normal NWP role without adding new <c>node_type</c> values.
+    /// </summary>
+    public NwmProfiles? Profiles { get; init; }
 }
 
 /// <summary>
@@ -107,6 +114,134 @@ public sealed record NwmTokenBudget
 
     /// <summary>CGN conversion profile in use, e.g. <c>"cgn.v1"</c>.</summary>
     public string Profile { get; init; } = "cgn.v1";
+}
+
+/// <summary>
+/// Structured optional profiles advertised in the NWM (NPS-2 §4.2a).
+/// </summary>
+public sealed record NwmProfiles
+{
+    /// <summary>
+    /// LLM/Thinking profile. Present only on Action or Complex nodes that expose
+    /// standard LLM actions such as <c>llm.complete</c>.
+    /// </summary>
+    public NwmLlmProfile? Llm { get; init; }
+}
+
+/// <summary>
+/// NWM LLM/Thinking profile. A node with this profile remains an Action or
+/// Complex node; this object describes the model-serving capabilities layered on
+/// top of that role.
+/// </summary>
+public sealed record NwmLlmProfile
+{
+    /// <summary>Profile schema version. Current value: <c>"0.1"</c>.</summary>
+    [JsonPropertyName("profile_version")]
+    public string ProfileVersion { get; init; } = "0.1";
+
+    /// <summary>
+    /// Standard LLM action identifiers implemented by this node. Must include
+    /// <c>llm.complete</c> for the initial profile.
+    /// </summary>
+    public IReadOnlyList<string> Actions { get; init; } = [LlmCompleteAction.ActionId];
+
+    /// <summary>Provider or runtime family, e.g. <c>"willow"</c> or <c>"ollama"</c>.</summary>
+    public string? Provider { get; init; }
+
+    /// <summary>Default model id used when the request omits provider-specific routing hints.</summary>
+    [JsonPropertyName("default_model")]
+    public string? DefaultModel { get; init; }
+
+    /// <summary>Models offered by this node.</summary>
+    public IReadOnlyList<NwmLlmModelProfile>? Models { get; init; }
+
+    /// <summary>Whether <c>llm.complete</c> supports <c>stream=true</c>.</summary>
+    [JsonPropertyName("supports_stream")]
+    public bool SupportsStream { get; init; }
+
+    /// <summary>Whether tool definitions and tool-call responses are supported.</summary>
+    [JsonPropertyName("supports_tools")]
+    public bool SupportsTools { get; init; }
+
+    /// <summary>Whether the node supports JSON/object-mode completions.</summary>
+    [JsonPropertyName("supports_json_mode")]
+    public bool SupportsJsonMode { get; init; }
+
+    /// <summary>Whether the node exposes embedding actions such as <c>llm.embed</c>.</summary>
+    [JsonPropertyName("supports_embeddings")]
+    public bool SupportsEmbeddings { get; init; }
+
+    /// <summary>Whether the node exposes reranking actions such as <c>llm.rerank</c>.</summary>
+    [JsonPropertyName("supports_rerank")]
+    public bool SupportsRerank { get; init; }
+
+    /// <summary>
+    /// Reasoning disclosure policy: <c>"none"</c>, <c>"summary"</c>, or
+    /// <c>"trace"</c>. Trace-level disclosure is deployment-sensitive.
+    /// </summary>
+    [JsonPropertyName("reasoning_visibility")]
+    public string? ReasoningVisibility { get; init; }
+
+    /// <summary>Privacy and retention promises advertised by the node operator.</summary>
+    public NwmLlmPrivacyProfile? Privacy { get; init; }
+
+    /// <summary>True when this profile includes the standard completion action.</summary>
+    [JsonIgnore]
+    public bool SupportsComplete =>
+        Actions.Contains(LlmCompleteAction.ActionId, StringComparer.Ordinal);
+}
+
+/// <summary>Single model entry inside <see cref="NwmLlmProfile"/>.</summary>
+public sealed record NwmLlmModelProfile
+{
+    /// <summary>Model id accepted by <see cref="LlmCompleteActionRequest.Model"/>.</summary>
+    public required string Id { get; init; }
+
+    /// <summary>Optional human-readable model name.</summary>
+    [JsonPropertyName("display_name")]
+    public string? DisplayName { get; init; }
+
+    /// <summary>Supported modalities, e.g. <c>["text"]</c> or <c>["text","image"]</c>.</summary>
+    public IReadOnlyList<string>? Modalities { get; init; }
+
+    /// <summary>Maximum input context window, in native model tokens.</summary>
+    [JsonPropertyName("context_window")]
+    public uint? ContextWindow { get; init; }
+
+    /// <summary>Maximum output tokens the node will permit for this model.</summary>
+    [JsonPropertyName("max_output_tokens")]
+    public uint? MaxOutputTokens { get; init; }
+
+    /// <summary>Tokenizer id used for estimates and CGN conversion hints.</summary>
+    public string? Tokenizer { get; init; }
+
+    /// <summary>CGN profile id from <c>cgn-profiles.yaml</c>, when known.</summary>
+    [JsonPropertyName("cgn_profile")]
+    public string? CgnProfile { get; init; }
+}
+
+/// <summary>Privacy metadata for an LLM/Thinking profile.</summary>
+public sealed record NwmLlmPrivacyProfile
+{
+    /// <summary>Prompt/response retention policy, e.g. <c>"none"</c> or <c>"30d"</c>.</summary>
+    public string? Retention { get; init; }
+
+    /// <summary>Whether prompts/responses may be used for model training.</summary>
+    public bool? Training { get; init; }
+
+    /// <summary>Optional processing or storage region hint.</summary>
+    public string? Region { get; init; }
+}
+
+/// <summary>Helper methods for NWM profile discovery.</summary>
+public static class NwmProfileExtensions
+{
+    /// <summary>
+    /// Returns <c>true</c> when the manifest advertises the NWP LLM/Thinking
+    /// profile. The node type remains <c>action</c> or <c>complex</c>.
+    /// </summary>
+    public static bool HasLlmProfile(this NeuralWebManifest manifest) =>
+        manifest.Profiles?.Llm is not null;
 }
 
 /// <summary>

@@ -32,6 +32,12 @@ public sealed class NwpErrorCodesTests
         yield return NwpErrorCodes.GraphCycle;
         yield return NwpErrorCodes.NodeUnavailable;
         yield return NwpErrorCodes.ManifestVersionUnsupported;
+        yield return NwpErrorCodes.HttpOriginForbidden;
+        yield return NwpErrorCodes.HttpContentTypeUnsupported;
+        yield return NwpErrorCodes.HttpAcceptUnsatisfiable;
+        yield return NwpErrorCodes.HttpRequestIdMismatch;
+        yield return NwpErrorCodes.HttpFrameBodyMalformed;
+        yield return NwpErrorCodes.CapabilityAdvertisedUnimplemented;
     }
 
     [Fact]

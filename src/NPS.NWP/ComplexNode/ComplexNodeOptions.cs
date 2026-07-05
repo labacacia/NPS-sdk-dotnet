@@ -3,6 +3,7 @@
 
 using NPS.NWP.ActionNode;
 using NPS.NWP.MemoryNode;
+using NPS.NWP.Nwm;
 
 namespace NPS.NWP.ComplexNode;
 
@@ -102,6 +103,14 @@ public sealed class ComplexNodeOptions
 
     /// <summary>Timeout for outbound child-node fetches during graph expansion. 10 s.</summary>
     public TimeSpan ChildFetchTimeout { get; set; } = TimeSpan.FromSeconds(10);
+
+    // ── Optional profiles ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Optional NWM LLM/Thinking profile. Set this when the Complex Node exposes
+    /// standard LLM actions such as <c>llm.complete</c> alongside data or graph behaviour.
+    /// </summary>
+    public NwmLlmProfile? LlmProfile { get; set; }
 }
 
 /// <summary>

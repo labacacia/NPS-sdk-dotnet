@@ -1,6 +1,8 @@
 // Copyright 2026 INNO LOTUS PTY LTD
 // SPDX-License-Identifier: Apache-2.0
 
+using NPS.NWP.Nwm;
+
 namespace NPS.NWP.ActionNode;
 
 /// <summary>
@@ -64,4 +66,12 @@ public sealed class ActionNodeOptions
 
     /// <summary>Default token budget when <c>X-NWP-Budget</c> header is absent. 0 = unlimited.</summary>
     public uint DefaultTokenBudget { get; set; } = 0;
+
+    // ── Optional profiles ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Optional NWM LLM/Thinking profile. Set this when the Action Node exposes
+    /// standard LLM actions such as <c>llm.complete</c>.
+    /// </summary>
+    public NwmLlmProfile? LlmProfile { get; set; }
 }

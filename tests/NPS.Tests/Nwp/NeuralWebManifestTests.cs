@@ -4,6 +4,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using NPS.NWP.Http;
+using NPS.NWP.Llm;
 using NPS.NWP.Nwm;
 
 namespace NPS.Tests.Nwp;
@@ -144,6 +145,60 @@ public sealed class NeuralWebManifestTests
         Assert.Equal("user",                         result.Graph.Refs[0].Rel);
         Assert.Equal("nwp://api.example.com/users",  result.Graph.Refs[0].Node);
         Assert.Equal(3u,                             result.Graph.MaxDepth);
+    }
+
+    // ── Profiles ──────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void LlmProfile_RoundTrips_WithoutChangingNodeType()
+    {
+        var manifest = MakeMemoryNode() with
+        {
+            NodeType = "action",
+            Profiles = new NwmProfiles
+            {
+                Llm = new NwmLlmProfile
+                {
+                    Provider = "willow",
+                    DefaultModel = "willow-small",
+                    SupportsStream = true,
+                    SupportsTools = true,
+                    ReasoningVisibility = LlmCompleteAction.ReasoningVisibilitySummary,
+                    Models =
+                    [
+                        new NwmLlmModelProfile
+                        {
+                            Id = "willow-small",
+                            Modalities = ["text"],
+                            ContextWindow = 128_000,
+                            MaxOutputTokens = 8_192,
+                            Tokenizer = "cl100k_base",
+                            CgnProfile = "oa.reasoning",
+                        },
+                    ],
+                    Privacy = new NwmLlmPrivacyProfile
+                    {
+                        Retention = "none",
+                        Training = false,
+                        Region = "us",
+                    },
+                },
+            },
+        };
+
+        var json = JsonSerializer.Serialize(manifest, JsonOpts);
+        var result = JsonSerializer.Deserialize<NeuralWebManifest>(json, JsonOpts)!;
+
+        Assert.Contains("\"profiles\"", json);
+        Assert.Contains("\"llm\"", json);
+        Assert.Contains("\"profile_version\":\"0.1\"", json);
+        Assert.Contains("\"default_model\":\"willow-small\"", json);
+        Assert.Contains("\"context_window\":128000", json);
+        Assert.DoesNotContain("\"node_type\":\"thinking\"", json);
+        Assert.True(result.HasLlmProfile());
+        Assert.Equal("action", result.NodeType);
+        Assert.True(result.Profiles!.Llm!.SupportsComplete);
+        Assert.Equal("willow-small", result.Profiles.Llm.Models![0].Id);
     }
 
     // ── MIME type constants ──────────────────────────────────────────────────

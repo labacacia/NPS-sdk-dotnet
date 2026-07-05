@@ -602,6 +602,9 @@ public sealed class ActionNodeMiddleware
                 Invoke = $"{baseUrl}/invoke",
                 Schema = $"{baseUrl}/.schema",
             },
+            Profiles = opt.LlmProfile is null
+                ? null
+                : new NwmProfiles { Llm = opt.LlmProfile },
         };
         var nwmJson = JsonSerializer.Serialize(nwm, Json);
 

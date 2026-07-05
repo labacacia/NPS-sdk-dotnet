@@ -16,6 +16,16 @@ public static class LlmCompleteAction
     public const string ResponseAnchorRef = "nps:system:llm.complete:response";
     public const string StreamAnchorRef = "nps:system:llm.complete:stream";
 
+    public const string CapabilityComplete = "llm:complete";
+    public const string CapabilityStream = "llm:stream";
+    public const string CapabilityToolCall = "llm:tool_call";
+    public const string CapabilityEmbed = "llm:embed";
+    public const string CapabilityRerank = "llm:rerank";
+
+    public const string ReasoningVisibilityNone = "none";
+    public const string ReasoningVisibilitySummary = "summary";
+    public const string ReasoningVisibilityTrace = "trace";
+
     public static ActionFrame ToActionFrame(
         LlmCompleteActionRequest request,
         NwpActionFrameOptions? options = null)

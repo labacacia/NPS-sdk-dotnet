@@ -623,6 +623,9 @@ public sealed class ComplexNodeMiddleware
             },
             Endpoints = endpoints,
             Graph     = graph,
+            Profiles  = opt.LlmProfile is null
+                ? null
+                : new NwmProfiles { Llm = opt.LlmProfile },
         };
         var nwmJson = JsonSerializer.Serialize(nwm, Json);
 
