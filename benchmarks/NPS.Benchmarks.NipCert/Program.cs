@@ -219,13 +219,13 @@ internal sealed class InMemBenchStore : INipCaStore
             _records.Where(r => r.Nid == nid).MaxBy(r => r.IssuedAt));
     public Task<NipCertRecord?> GetBySerialAsync(string serial, CancellationToken ct = default) =>
         Task.FromResult<NipCertRecord?>(_records.FirstOrDefault(r => r.Serial == serial));
+    public Task<IReadOnlyList<NipCertRecord>> GetByParentNidAsync(string parentNid, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<NipCertRecord>>(
+            _records.Where(r => r.ParentNid == parentNid).ToList());
     public Task<bool> RevokeAsync(string nid, string reason, DateTime revokedAt, CancellationToken ct = default)
         => Task.FromResult(true);
     public Task<string> NextSerialAsync(CancellationToken ct = default) =>
         Task.FromResult($"0x{Interlocked.Increment(ref _serial):X}");
     public Task<IReadOnlyList<NipCertRecord>> GetRevokedAsync(CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<NipCertRecord>>(Array.Empty<NipCertRecord>());
-    public Task<IReadOnlyList<NipCertRecord>> GetByParentNidAsync(string parentNid, CancellationToken ct = default) =>
-        Task.FromResult<IReadOnlyList<NipCertRecord>>(
-            _records.Where(r => r.ParentNid == parentNid).ToList());
 }

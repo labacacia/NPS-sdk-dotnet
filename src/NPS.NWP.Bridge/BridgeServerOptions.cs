@@ -97,7 +97,7 @@ public sealed class BridgeServerOptions
     public string ServerName { get; set; } = "nps-bridge-server";
 
     /// <summary>Server version returned by MCP initialize and A2A AgentCard.</summary>
-    public string ServerVersion { get; set; } = "1.0.0-alpha.15";
+    public string ServerVersion { get; set; } = "1.0.0-alpha.16";
 
     /// <summary>Server description returned by A2A AgentCard.</summary>
     public string? Description { get; set; } = "NPS Bridge server ingress.";

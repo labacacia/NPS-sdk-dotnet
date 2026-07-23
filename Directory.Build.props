@@ -1,8 +1,8 @@
 <Project>
 
   <PropertyGroup>
-    <Version>1.0.0-alpha.15</Version>
-    <PackageReleaseNotes>1.0.0-alpha.15: official llm.complete Action/Caps/Stream DTO contracts; typed frame payload helpers for CapsFrame, StreamFrame, async task results, and ErrorFrame.Details; Bridge bridge_target canonical wire shape aligned on extras; warning-clean .NET package family with SourceLink symbols; native NCP TLS hook and bounded Hello reads; live NIP revocation checks and signed CRL artifacts; NipCaClient; NwpNativeNodeServer; built-in Bridge dispatchers; transport-neutral observability renderers; LabAcacia.NPS.Conformance.</PackageReleaseNotes>
+    <Version>1.0.0-alpha.16</Version>
+    <PackageReleaseNotes>1.0.0-alpha.16: official llm.complete Action/Caps/Stream DTO contracts; typed frame payload helpers for CapsFrame, StreamFrame, async task results, and ErrorFrame.Details; Bridge bridge_target canonical wire shape aligned on extras; warning-clean .NET package family with SourceLink symbols; native NCP TLS hook and bounded Hello reads; live NIP revocation checks and signed CRL artifacts; NipCaClient; NwpNativeNodeServer; built-in Bridge dispatchers; transport-neutral observability renderers; LabAcacia.NPS.Conformance.</PackageReleaseNotes>
     <!-- XML documentation files are generated, but the alpha SDK still has broad
          public-surface doc gaps; keep compile output clean until the doc sweep. -->
     <NoWarn>$(NoWarn);CS1591;CS1573;CS1574;CS1734</NoWarn>

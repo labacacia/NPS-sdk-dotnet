@@ -9,7 +9,7 @@ var manifest = NpsConformanceManifest.Create(
     iutVersion: "0.1.0",
     iutNid: "urn:nps:node:example.test:node-1",
     peerName: "nps-dotnet-reference",
-    peerVersion: "1.0.0-alpha.15",
+    peerVersion: "1.0.0-alpha.16",
     results: myCaseResults);
 
 var validation = NpsConformanceValidator.Validate(manifest);

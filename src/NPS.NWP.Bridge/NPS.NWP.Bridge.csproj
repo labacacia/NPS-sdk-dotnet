@@ -9,7 +9,7 @@
     <RootNamespace>NPS.NWP.Bridge</RootNamespace>
     <PackageId>LabAcacia.NPS.NWP.Bridge</PackageId>
     <AssemblyName>NPS.NWP.Bridge</AssemblyName>
-    <Version>1.0.0-alpha.15</Version>
+    <Version>1.0.0-alpha.16</Version>
     <Description>NPS — NWP Bridge Node: stateless adapters between NPS frames and non-NPS protocols, with outbound HTTP/HTTPS, gRPC JSON unary, MCP JSON-RPC, and A2A JSON-RPC dispatchers plus inbound MCP/A2A server bridges.</Description>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Authors>LabAcacia / INNO LOTUS PTY LTD</Authors>
