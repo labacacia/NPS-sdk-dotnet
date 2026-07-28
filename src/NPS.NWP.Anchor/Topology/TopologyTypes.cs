@@ -38,6 +38,9 @@ public sealed record TopologySnapshot
     /// <summary><c>true</c> iff <c>topology.depth</c> cap was hit; otherwise omitted or false.</summary>
     [JsonPropertyName("truncated")]
     public bool? Truncated { get; init; }
+
+    /// <summary>Multi-Anchor cluster ownership epoch (NPS-CR-0009); null ⇒ 1 (single-Anchor).</summary>
+    public ulong? ClusterEpoch { get; init; }
 }
 
 /// <summary>
@@ -220,9 +223,37 @@ public sealed record MemberChanges
 
 public sealed record AnchorState : TopologyEvent
 {
-    /// <summary>Field tag, e.g. <c>"version_rebased"</c> (NPS-2 §12.3 restart-and-rebase).</summary>
+    /// <summary>anchor_state sub-type: Anchor restarted and reset its monotonic version counter (NPS-2 §12.3).</summary>
+    public const string FieldVersionRebased   = "version_rebased";
+    /// <summary>anchor_state sub-type: cluster ownership transferred to a peer Anchor (NPS-CR-0009).</summary>
+    public const string FieldAnchorFailover   = "anchor_failover";
+    /// <summary>anchor_state sub-type: cluster lost the ownership quorum, now read-only (NPS-CR-0009).</summary>
+    public const string FieldAnchorQuorumLost = "anchor_quorum_lost";
+
+    /// <summary>Field tag, e.g. <c>"version_rebased"</c> or one of the NPS-CR-0009 sub-types.</summary>
     public required string Field { get; init; }
     public JsonElement? Details { get; init; }
+
+    /// <summary><c>anchor_failover</c> (NPS-CR-0009): cluster ownership moved to <paramref name="successorNid"/>
+    /// at <paramref name="clusterEpoch"/>. <paramref name="reason"/> is <c>"planned"</c> or <c>"active_lost"</c>.</summary>
+    public static AnchorState Failover(string successorNid, ulong clusterEpoch, string reason = "planned", ulong version = 0) =>
+        new()
+        {
+            Field   = FieldAnchorFailover,
+            Version = version,
+            Details = JsonSerializer.SerializeToElement(
+                new { successor_nid = successorNid, cluster_epoch = clusterEpoch, reason }),
+        };
+
+    /// <summary><c>anchor_quorum_lost</c> (NPS-CR-0009): the cluster is read-only (degraded);
+    /// only <paramref name="available"/> of <paramref name="quorumSize"/> Anchors are reachable.</summary>
+    public static AnchorState QuorumLost(uint quorumSize, uint available, ulong version = 0) =>
+        new()
+        {
+            Field   = FieldAnchorQuorumLost,
+            Version = version,
+            Details = JsonSerializer.SerializeToElement(new { quorum_size = quorumSize, available }),
+        };
 }
 
 /// <summary>

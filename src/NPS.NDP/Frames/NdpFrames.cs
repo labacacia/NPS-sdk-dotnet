@@ -206,6 +206,18 @@ public sealed record AnnounceFrame : IFrame
     public IReadOnlyList<string>? BridgeProtocols { get; init; }
 
     /// <summary>
+    /// External protocols this Bridge Node <b>serves inbound</b> (external → NPS), e.g.
+    /// <c>["mcp","grpc"]</c> — protocols for which it exposes a native server endpoint.
+    /// Same value domain as <see cref="BridgeProtocols"/> (the outbound set). Absent or empty ⇒
+    /// no inbound surface, i.e. an outbound-only Bridge Node (the only kind that existed through
+    /// alpha.15). A node declaring the <c>"bridge"</c> role MUST have at least one of the two
+    /// non-empty (NPS-4 §3.1, NPS-CR-0010).
+    /// </summary>
+    [JsonPropertyName("bridge_inbound_protocols")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? BridgeInboundProtocols { get; init; }
+
+    /// <summary>
     /// Push target at which a resident or hybrid publisher accepts activation traffic.
     /// Same shape as an <see cref="NdpAddress"/> entry in <see cref="Addresses"/> (NPS-4 §3.1).
     /// </summary>
@@ -227,6 +239,15 @@ public sealed record AnnounceFrame : IFrame
     /// </summary>
     [JsonPropertyName("last_seen")]
     public string? LastSeen { get; init; }
+
+    /// <summary>
+    /// Multi-Anchor cluster ownership fence (NPS-CR-0009). The epoch under which this Anchor
+    /// holds ownership of its <see cref="ClusterAnchor"/> cluster; strictly increases on each
+    /// ownership transfer. Absent (<c>null</c>) is treated as <c>1</c> (single-Anchor). Omitted
+    /// from the signed canonical body when null, so single-Anchor frames are unaffected.
+    /// </summary>
+    [JsonPropertyName("cluster_epoch")]
+    public ulong? ClusterEpoch { get; init; }
 }
 
 // ── ResolveFrame (0x31) ───────────────────────────────────────────────────────

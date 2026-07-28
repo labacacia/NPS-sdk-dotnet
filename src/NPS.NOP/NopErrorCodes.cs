@@ -30,4 +30,20 @@ public static class NopErrorCodes
     public const string CompensationPartialFailed = "NOP-COMPENSATION-PARTIAL-FAILED";
     public const string CompensationNotSupported  = "NOP-COMPENSATION-NOT-SUPPORTED";
     public const string CallbackHmacMissing       = "NOP-CALLBACK-HMAC-MISSING";
+
+    // ── NOP v0.7 ──────────────────────────────────────────────────────────────
+    /// <summary>Task result read after result_ttl_seconds elapsed → NPS-CLIENT-NOT-FOUND.</summary>
+    public const string TaskResultExpired         = "NOP-TASK-RESULT-EXPIRED";
+    /// <summary>NAK references a frame evicted from the resend window → NPS-STREAM-SEQ-GAP.</summary>
+    public const string StreamNakUnresolvable     = "NOP-STREAM-NAK-UNRESOLVABLE";
+
+    // ── NPS-CR-0007 L3 runtime (§8) ──────────────────────────────────────────
+    /// <summary>TaskFrame already leased by a live runner lease → NPS-CLIENT-CONFLICT.</summary>
+    public const string ClaimConflict             = "NOP-CLAIM-CONFLICT";
+    /// <summary>spawn_spec_ref failed to resolve to a valid SpawnSpec → NPS-CLIENT-BAD-FRAME.</summary>
+    public const string SpawnSpecInvalid          = "NOP-SPAWN-SPEC-INVALID";
+    /// <summary>Worker exceeded the idle timeout → NPS-SERVER-TIMEOUT.</summary>
+    public const string RuntimeIdleTimeout        = "NOP-RUNTIME-IDLE-TIMEOUT";
+    /// <summary>Worker exceeded the max runtime → NPS-SERVER-TIMEOUT.</summary>
+    public const string RuntimeMaxRuntime         = "NOP-RUNTIME-MAX-RUNTIME";
 }

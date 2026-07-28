@@ -114,9 +114,9 @@ public sealed class BridgeNodeTests
 
         using var provider = services.BuildServiceProvider();
 
-        Assert.NotNull(provider.GetRequiredService<McpServerBridge>());
-        Assert.NotNull(provider.GetRequiredService<A2aServerBridge>());
-        Assert.NotNull(provider.GetRequiredService<IBridgeServerActionInvoker>());
+        Assert.NotNull(provider.GetRequiredService<McpInboundServer>());
+        Assert.NotNull(provider.GetRequiredService<A2aInboundServer>());
+        Assert.NotEmpty(provider.GetRequiredService<IReadOnlyList<INwpBackend>>());
         Assert.True(provider.GetRequiredService<BridgeServerOptions>().RequireAuth);
     }
 
@@ -137,7 +137,7 @@ public sealed class BridgeNodeTests
                 },
             };
         });
-        var bridge = new McpServerBridge(options, new DelegateBridgeInvoker(options));
+        var bridge = new McpInboundServer(options, BridgeServerBackends.Create(options));
 
         var list = await bridge.DispatchAsync(new BridgeJsonRpcRequest
         {
@@ -147,7 +147,8 @@ public sealed class BridgeNodeTests
 
         Assert.Null(list.Error);
         Assert.True(list.Result.HasValue);
-        Assert.Equal("orders_lookup", list.Result.Value.GetProperty("tools")[0].GetProperty("name").GetString());
+        Assert.Equal("bridge-inbound-test__orders_lookup",
+            list.Result.Value.GetProperty("tools")[0].GetProperty("name").GetString());
 
         var call = await bridge.DispatchAsync(new BridgeJsonRpcRequest
         {
@@ -179,7 +180,7 @@ public sealed class BridgeNodeTests
             Count = 0,
             Data = Array.Empty<JsonElement>(),
         });
-        var bridge = new McpServerBridge(options, new DelegateBridgeInvoker(options));
+        var bridge = new McpInboundServer(options, BridgeServerBackends.Create(options));
         using var input = new StringReader("""
         {"jsonrpc":"2.0","id":"list-stdio","method":"tools/list"}
         """);
@@ -189,7 +190,7 @@ public sealed class BridgeNodeTests
 
         using var doc = JsonDocument.Parse(output.ToString());
         Assert.Equal("list-stdio", doc.RootElement.GetProperty("id").GetString());
-        Assert.Equal("orders_lookup", doc.RootElement.GetProperty("result")
+        Assert.Equal("bridge-inbound-test__orders_lookup", doc.RootElement.GetProperty("result")
             .GetProperty("tools")[0]
             .GetProperty("name")
             .GetString());
@@ -212,7 +213,7 @@ public sealed class BridgeNodeTests
                 },
             };
         });
-        var bridge = new A2aServerBridge(options, new DelegateBridgeInvoker(options));
+        var bridge = new A2aInboundServer(options, BridgeServerBackends.Create(options));
 
         var response = await bridge.DispatchAsync(new BridgeJsonRpcRequest
         {
@@ -455,7 +456,8 @@ public sealed class BridgeNodeTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal("bridge-inbound-test", doc.RootElement.GetProperty("name").GetString());
-        Assert.Equal("orders.lookup", doc.RootElement.GetProperty("skills")[0].GetProperty("id").GetString());
+        Assert.Equal("bridge-inbound-test__orders_lookup",
+            doc.RootElement.GetProperty("skills")[0].GetProperty("id").GetString());
     }
 
     [Fact]
@@ -916,19 +918,6 @@ public sealed class BridgeNodeTests
             _handler(request);
     }
 
-    private sealed class DelegateBridgeInvoker : IBridgeServerActionInvoker
-    {
-        private readonly BridgeServerOptions _options;
-
-        public DelegateBridgeInvoker(BridgeServerOptions options)
-        {
-            _options = options;
-        }
-
-        public Task<IFrame> InvokeAsync(ActionFrame frame, CancellationToken cancellationToken = default) =>
-            _options.DispatchAsync!(frame, cancellationToken);
-    }
-
     private static byte[] GrpcFrame(string json)
     {
         var payload = Encoding.UTF8.GetBytes(json);
@@ -1019,6 +1008,153 @@ public sealed class BridgeNodeTests
     private static void AllowBridgeAgent(BridgeServerOptions options) =>
         options.VerifyAgentAsync = (nid, _, _) =>
             ValueTask.FromResult(nid == "urn:nps:agent:ca.example.com:caller");
+
+    // ── NPS-CR-0010: inbound profile (NWP §16.1.2) ───────────────────────────
+
+    [Fact]
+    public async Task McpInbound_ServesResourcesOverAQueryableNode()
+    {
+        var options = BuildInboundOptions(_ => new CapsFrame
+        {
+            AnchorRef = "nps://orders/v1",
+            Count = 1,
+            Data = new[] { JsonSerializer.SerializeToElement(new { order_id = "42" }) },
+        });
+        // A Complex Node is both queryable and invokable — so it projects onto MCP
+        // resources *and* tools. The pre-CR-0010 Bridge could not express this at all.
+        options.NodeRole = NwpNodeRole.Complex;
+        options.QueryAsync = (_, _) => Task.FromResult<IFrame>(new CapsFrame
+        {
+            AnchorRef = "nps://orders/v1",
+            Count = 1,
+            Data = new[] { JsonSerializer.SerializeToElement(new { order_id = "42" }) },
+        });
+
+        var bridge = new McpInboundServer(options, BridgeServerBackends.Create(options));
+
+        var list = await bridge.DispatchAsync(new BridgeJsonRpcRequest
+        {
+            Id = JsonSerializer.SerializeToElement("res-1"),
+            Method = "resources/list",
+        });
+
+        Assert.Null(list.Error);
+        var uri = list.Result!.Value.GetProperty("resources")[0].GetProperty("uri").GetString();
+        Assert.Equal("nwp://bridge-inbound-test/", uri);
+
+        var read = await bridge.DispatchAsync(new BridgeJsonRpcRequest
+        {
+            Id = JsonSerializer.SerializeToElement("res-2"),
+            Method = "resources/read",
+            Params = JsonSerializer.SerializeToElement(new { uri }),
+        });
+
+        Assert.Null(read.Error);
+        var text = read.Result!.Value.GetProperty("contents")[0].GetProperty("text").GetString()!;
+        using var payload = JsonDocument.Parse(text);
+        Assert.Equal("nps://orders/v1", payload.RootElement.GetProperty("anchor_ref").GetString());
+    }
+
+    [Fact]
+    public async Task McpInbound_ServesResourcesMethodsEvenWithNoMemoryNode()
+    {
+        // §16.1.2 requires the resource *methods* to be served. An action-only Bridge
+        // serves them over an empty set — it is conformant, not exempt.
+        var options = BuildInboundOptions(_ => new CapsFrame { AnchorRef = "nps://orders/v1", Count = 0, Data = Array.Empty<JsonElement>() });
+        var bridge = new McpInboundServer(options, BridgeServerBackends.Create(options));
+
+        var init = await bridge.DispatchAsync(new BridgeJsonRpcRequest
+        {
+            Id = JsonSerializer.SerializeToElement("i"),
+            Method = "initialize",
+        });
+        Assert.True(init.Result!.Value.GetProperty("capabilities").TryGetProperty("resources", out _));
+
+        var list = await bridge.DispatchAsync(new BridgeJsonRpcRequest
+        {
+            Id = JsonSerializer.SerializeToElement("r"),
+            Method = "resources/list",
+        });
+
+        Assert.Null(list.Error);
+        Assert.Empty(list.Result!.Value.GetProperty("resources").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task McpInbound_StillResolvesUnqualifiedToolNames()
+    {
+        // tools/list now emits the qualified `node__action` form, but a client written
+        // against the pre-CR-0010 Bridge sends the bare name. It must keep working.
+        ActionFrame? captured = null;
+        var options = BuildInboundOptions(frame =>
+        {
+            captured = frame;
+            return new CapsFrame { AnchorRef = "nps://orders/v1", Count = 0, Data = Array.Empty<JsonElement>() };
+        });
+        var bridge = new McpInboundServer(options, BridgeServerBackends.Create(options));
+
+        var call = await bridge.DispatchAsync(new BridgeJsonRpcRequest
+        {
+            Id = JsonSerializer.SerializeToElement("c"),
+            Method = "tools/call",
+            Params = JsonSerializer.SerializeToElement(new { name = "orders_lookup" }),
+        });
+
+        Assert.Null(call.Error);
+        Assert.NotNull(captured);
+        Assert.Equal("orders.lookup", captured.ActionId);
+    }
+
+    [Fact]
+    public async Task McpInbound_AuthFailureIsAProtocolErrorNotAnIsErrorResult()
+    {
+        // The §16.3 rule both pre-CR-0010 implementations broke: an NPS-AUTH-* failure
+        // came back as a *successful* JSON-RPC result carrying isError:true, which lets an
+        // MCP client mistake a 403 for a tool that merely returned unhappy text.
+        var options = BuildInboundOptions(_ => new ErrorFrame
+        {
+            Status = NPS.Core.NpsStatusCodes.AuthForbidden,
+            Error = "NWP-AUTH-NID-SCOPE-VIOLATION",
+            Message = "scope does not cover this node",
+        });
+        var bridge = new McpInboundServer(options, BridgeServerBackends.Create(options));
+
+        var call = await bridge.DispatchAsync(new BridgeJsonRpcRequest
+        {
+            Id = JsonSerializer.SerializeToElement("c"),
+            Method = "tools/call",
+            Params = JsonSerializer.SerializeToElement(new { name = "orders_lookup" }),
+        });
+
+        Assert.Null(call.Result);
+        Assert.NotNull(call.Error);
+        Assert.Equal(BridgeJsonRpcErrorCodes.Forbidden, call.Error!.Code);
+    }
+
+    [Fact]
+    public async Task McpInbound_MissingDispatcherFailsLoudlyWithARegisteredCode()
+    {
+        // Previously emitted the non-existent status NPS-SERVER-NOT-IMPLEMENTED.
+        var options = new BridgeServerOptions { NodeId = "no-dispatcher", ServerName = "no-dispatcher" };
+        options.AddAction("orders.lookup", "Lookup an order.");
+        var bridge = new McpInboundServer(options, BridgeServerBackends.Create(options));
+
+        var call = await bridge.DispatchAsync(new BridgeJsonRpcRequest
+        {
+            Id = JsonSerializer.SerializeToElement("c"),
+            Method = "tools/call",
+            Params = JsonSerializer.SerializeToElement(new { name = "orders_lookup" }),
+        });
+
+        // A missing backend is infrastructure failure (NPS-SERVER-INTERNAL), so per F4 it is a
+        // protocol-level error, not an isError tool result — the tool did not run.
+        Assert.Null(call.Result);
+        Assert.NotNull(call.Error);
+        Assert.Equal(BridgeJsonRpcErrorCodes.InternalError, call.Error!.Code);
+        var data = call.Error.Data!.Value.GetRawText();
+        Assert.Contains(BridgeErrorCodes.ServerDispatcherMissing, data);
+        Assert.DoesNotContain("NPS-SERVER-NOT-IMPLEMENTED", data);
+    }
 
     private static BridgeServerOptions BuildInboundOptions(Func<ActionFrame, IFrame> dispatch)
     {

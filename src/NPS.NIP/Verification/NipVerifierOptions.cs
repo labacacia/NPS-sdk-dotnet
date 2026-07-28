@@ -62,4 +62,12 @@ public sealed class NipVerifierOptions
     /// the primary path during Phase 1.
     /// </summary>
     public IReadOnlyList<X509Certificate2>? TrustedX509Roots { get; init; }
+
+    /// <summary>
+    /// NIP v0.11 §7.5 Phase-3 enforcement mode. When <c>true</c>, the CA-attestation checks
+    /// (node_roles / capabilities subset vs the id-nps-* cert extensions, and OCSP-staple
+    /// presence + freshness) become hard failures for <c>v2-x509</c> frames instead of advisory.
+    /// Defaults to <c>false</c> (Phase 1–2); becomes the default at the v1.0.0-beta.1 flag day.
+    /// </summary>
+    public bool Phase3Enforcement { get; init; }
 }

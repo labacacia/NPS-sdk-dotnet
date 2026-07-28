@@ -80,6 +80,14 @@ public sealed record TaskFrame : IFrame
     /// </summary>
     [JsonPropertyName("compensation_policy")]
     public string CompensationPolicy { get; init; } = Models.CompensationPolicy.BestEffort;
+
+    /// <summary>
+    /// How long (seconds) the Orchestrator retains this task's result for polling after
+    /// completion (NOP v0.7). Default 3600; omitted from the wire at the default.
+    /// Expired-result reads fail with <c>NOP-TASK-RESULT-EXPIRED</c>.
+    /// </summary>
+    [JsonPropertyName("result_ttl_seconds")]
+    public uint ResultTtlSeconds { get; init; } = 3600;
 }
 
 // ── DelegateFrame (0x41) ────────────────────────────────────────────────────

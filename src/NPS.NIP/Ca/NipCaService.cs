@@ -861,6 +861,15 @@ public static class NipErrorCodes
     public const string CertUntrusted    = "NIP-CERT-UNTRUSTED-ISSUER";
     public const string CertCapMissing   = "NIP-CERT-CAPABILITY-MISSING";
     public const string CertScope        = "NIP-CERT-SCOPE-VIOLATION";
+
+    /// <summary>IdentFrame.node_roles not a subset of the id-nps-node-roles cert extension (NIP v0.11 §7.5).</summary>
+    public const string CertNodeRolesMismatch = "NIP-CERT-NODE-ROLES-MISMATCH";
+
+    /// <summary>IdentFrame.capabilities claims a capability absent from id-nps-capabilities (NIP v0.11 §7.5).</summary>
+    public const string CertCapabilitiesExceeded = "NIP-CERT-CAPABILITIES-EXCEEDED";
+
+    /// <summary>ocsp_staple missing, malformed, or nextUpdate elapsed under Phase-3 enforcement (NIP v0.9 §5.1.4, v0.11 §7.5).</summary>
+    public const string OcspStapleExpired = "NIP-OCSP-STAPLE-EXPIRED";
     public const string NidNotFound      = "NIP-CA-NID-NOT-FOUND";
     public const string NidAlreadyExists = "NIP-CA-NID-ALREADY-EXISTS";
     public const string SerialDuplicate  = "NIP-CA-SERIAL-DUPLICATE";

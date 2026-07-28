@@ -16,17 +16,17 @@ C# / .NET 10 reference implementation for the Neural Protocol Suite.
 
 | Package | Version | Description |
 |---------|---------|-------------|
-| `LabAcacia.NPS.Core` | 1.0.0-alpha.16 | Shared frame types (AnchorFrame, DiffFrame, StreamFrame, CapsFrame, HelloFrame, ErrorFrame), JSON/MsgPack codecs, AnchorFrame cache, frame registry |
-| `LabAcacia.NPS.NWP` | 1.0.0-alpha.16 | Neural Web Protocol — NWM manifest, Query/Action/Subscribe/Diff frames, typed Action/frame payload helpers including `llm.complete`, Memory/Action/Complex/Anchor/Bridge Node middleware plus native-mode serving |
-| `LabAcacia.NPS.NWP.Anchor` | 1.0.0-alpha.16 | NWP Anchor Node: stateless AaaS entry point translating ActionFrames to NOP TaskFrames; `AnchorNodeClient` for `topology.snapshot` / `topology.stream` queries |
-| `LabAcacia.NPS.NWP.Bridge` | 1.0.0-alpha.16 | NWP Bridge Node: outbound dispatchers from NPS frames to non-NPS protocols plus inbound MCP/A2A server bridges |
-| `LabAcacia.NPS.NIP` | 1.0.0-alpha.16 | Neural Identity Protocol — CA, Ed25519 key generation, IdentFrame issuance/revocation, typed remote CA client, OCSP, CRL; X.509 + ACME `agent-01` challenge (RFC-0002 prototype) |
-| `LabAcacia.NPS.NIP.Storage.Sqlite` | 1.0.0-alpha.16 | SQLite storage backend for embedded/self-hosted NIP CA deployments |
-| `LabAcacia.NPS.NIP.Storage.Postgres` | 1.0.0-alpha.16 | PostgreSQL storage backend for service NIP CA deployments |
-| `LabAcacia.NPS.NDP` | 1.0.0-alpha.16 | Neural Discovery Protocol — announce/resolve frames, in-memory registry, Ed25519 validation |
-| `LabAcacia.NPS.NOP` | 1.0.0-alpha.16 | Neural Orchestration Protocol — Task/Delegate/Sync/AlignStream frames, DAG validator, orchestration engine |
-| `LabAcacia.NPS.Daemon.Observability` | 1.0.0-alpha.16 | JSON logging, transport-neutral health/readiness renderers, ASP.NET endpoint helpers, Prometheus metrics, graceful shutdown |
-| `LabAcacia.NPS.Conformance` | 1.0.0-alpha.16 | Node L1/L2 conformance case catalog, run manifest model, and CI validation helpers |
+| `LabAcacia.NPS.Core` | 1.0.0-alpha.17 | Shared frame types (AnchorFrame, DiffFrame, StreamFrame, CapsFrame, HelloFrame, ErrorFrame), JSON/MsgPack codecs, AnchorFrame cache, frame registry |
+| `LabAcacia.NPS.NWP` | 1.0.0-alpha.17 | Neural Web Protocol — NWM manifest, Query/Action/Subscribe/Diff frames, typed Action/frame payload helpers including `llm.complete`, Memory/Action/Complex/Anchor/Bridge Node middleware plus native-mode serving |
+| `LabAcacia.NPS.NWP.Anchor` | 1.0.0-alpha.17 | NWP Anchor Node: stateless AaaS entry point translating ActionFrames to NOP TaskFrames; `AnchorNodeClient` for `topology.snapshot` / `topology.stream` queries |
+| `LabAcacia.NPS.NWP.Bridge` | 1.0.0-alpha.17 | NWP Bridge Node: outbound dispatchers from NPS frames to non-NPS protocols plus inbound MCP/A2A server bridges |
+| `LabAcacia.NPS.NIP` | 1.0.0-alpha.17 | Neural Identity Protocol — CA, Ed25519 key generation, IdentFrame issuance/revocation, typed remote CA client, OCSP, CRL; X.509 + ACME `agent-01` challenge (RFC-0002 prototype) |
+| `LabAcacia.NPS.NIP.Storage.Sqlite` | 1.0.0-alpha.17 | SQLite storage backend for embedded/self-hosted NIP CA deployments |
+| `LabAcacia.NPS.NIP.Storage.Postgres` | 1.0.0-alpha.17 | PostgreSQL storage backend for service NIP CA deployments |
+| `LabAcacia.NPS.NDP` | 1.0.0-alpha.17 | Neural Discovery Protocol — announce/resolve frames, in-memory registry, Ed25519 validation |
+| `LabAcacia.NPS.NOP` | 1.0.0-alpha.17 | Neural Orchestration Protocol — Task/Delegate/Sync/AlignStream frames, DAG validator, orchestration engine |
+| `LabAcacia.NPS.Daemon.Observability` | 1.0.0-alpha.17 | JSON logging, transport-neutral health/readiness renderers, ASP.NET endpoint helpers, Prometheus metrics, graceful shutdown |
+| `LabAcacia.NPS.Conformance` | 1.0.0-alpha.17 | Node L1/L2 conformance case catalog, run manifest model, and CI validation helpers |
 
 ## Open vs NPS Cloud
 
@@ -295,7 +295,7 @@ var manifest = NpsConformanceManifest.Create(
     iutVersion: "0.1.0",
     iutNid: "urn:nps:node:example.test:node-1",
     peerName: "nps-dotnet-reference",
-    peerVersion: "1.0.0-alpha.16",
+    peerVersion: "1.0.0-alpha.17",
     results: caseResults);
 
 var validation = NpsConformanceValidator.Validate(manifest);
@@ -315,6 +315,6 @@ dotnet test
 
 ## Status
 
-Active development (v1.0.0-alpha.16). 696 tests passing.
+Active development (v1.0.0-alpha.17). 802 standalone SDK tests passing.
 
 Alpha.15 highlights: official `llm.complete` Action/Caps/Stream DTO contracts; typed frame payload helpers for `CapsFrame`, `StreamFrame`, async task results, and `ErrorFrame.Details`; Bridge `bridge_target` canonical wire shape aligned on `extras`; warning-clean .NET package family with SourceLink symbols; native NCP TLS hook and bounded Hello reads; live NIP revocation checks and signed CRL artifacts; `NipCaClient`; `NwpNativeNodeServer`; built-in Bridge dispatchers for HTTP/HTTPS, gRPC JSON unary, MCP JSON-RPC, and A2A JSON-RPC; transport-neutral observability renderers; `LabAcacia.NPS.Conformance`; loopback dev stack.

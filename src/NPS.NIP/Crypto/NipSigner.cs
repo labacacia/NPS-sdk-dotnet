@@ -115,7 +115,7 @@ public static class NipSigner
     ///     other five SDKs (which exclude them from the signed canonical form).</item>
     /// </list>
     /// </summary>
-    private static readonly HashSet<string> s_excluded = ["signature", "frame", "metadata", "cert_format", "cert_chain", "health", "last_seen"];
+    private static readonly HashSet<string> s_excluded = ["signature", "frame", "metadata", "cert_format", "cert_chain", "node_roles", "health", "last_seen"];
 
     private static void WriteCanonical(JsonElement el, StringBuilder sb)
     {

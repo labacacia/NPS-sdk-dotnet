@@ -29,6 +29,14 @@ public static class NwpTopologyErrorCodes
 
     /// <summary>NWP-TOPOLOGY-FILTER-UNSUPPORTED → NPS-CLIENT-BAD-PARAM.</summary>
     public const string FilterUnsupported = "NWP-TOPOLOGY-FILTER-UNSUPPORTED";
+
+    /// <summary>NWP-ANCHOR-NOT-LEADER → NPS-CLIENT-CONFLICT. Topology write to a standby /
+    /// read-only-degraded Anchor; only the active cluster owner accepts writes (NPS-CR-0009).</summary>
+    public const string AnchorNotLeader = "NWP-ANCHOR-NOT-LEADER";
+
+    /// <summary>NWP-ANCHOR-EPOCH-FENCED → NPS-CLIENT-CONFLICT. Inbound frame carries a higher
+    /// cluster_epoch than this Anchor; the receiver is a superseded leader and is fenced (NPS-CR-0009).</summary>
+    public const string AnchorEpochFenced = "NWP-ANCHOR-EPOCH-FENCED";
 }
 
 /// <summary>

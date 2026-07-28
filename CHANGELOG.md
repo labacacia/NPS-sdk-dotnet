@@ -8,7 +8,7 @@ Until NPS reaches v1.0 stable, every repository in the suite is synchronized to 
 
 ---
 
-## [1.0.0-alpha.16] — Unreleased
+## [1.0.0-alpha.17] — Unreleased
 
 ### Changed
 
@@ -26,6 +26,13 @@ Until NPS reaches v1.0 stable, every repository in the suite is synchronized to 
   compatibility fallback.
 - SQLite storage now pins `SQLitePCLRaw.bundle_e_sqlite3 2.1.12` and no longer suppresses
   `GHSA-2m69-gcr7-jv3q`.
+
+## [1.0.0-alpha.16] — 2026-07-23
+
+### Changed
+
+- Re-issued the alpha.15 .NET package family as alpha.16 so the suite could retain one
+  immutable cross-repository version after the alpha.15 package coordinates were published.
 
 ## [1.0.0-alpha.15] — 2026-06-28
 

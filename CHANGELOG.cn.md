@@ -8,7 +8,7 @@
 
 ---
 
-## [1.0.0-alpha.16] —— 未发布
+## [1.0.0-alpha.17] —— 未发布
 
 ### 变更
 
@@ -24,6 +24,13 @@
   运行时生成的注册重载继续作为显式兼容 fallback 保留。
 - SQLite storage 显式固定到 `SQLitePCLRaw.bundle_e_sqlite3 2.1.12`，并删除
   `GHSA-2m69-gcr7-jv3q` suppression。
+
+## [1.0.0-alpha.16] —— 2026-07-23
+
+### 变更
+
+- 将 alpha.15 的 .NET 包族重新签发为 alpha.16；alpha.15 package coordinates
+  已发布不可变，因此用 alpha.16 保持套件跨仓库统一版本。
 
 ## [1.0.0-alpha.15] —— 2026-06-28
 

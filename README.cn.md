@@ -16,17 +16,17 @@ C# / .NET 10 Neural Protocol Suite 参考实现。
 
 | 包名 | 版本 | 说明 |
 |------|------|------|
-| `LabAcacia.NPS.Core` | 1.0.0-alpha.16 | 共享帧类型（AnchorFrame、DiffFrame、StreamFrame、CapsFrame、HelloFrame、ErrorFrame）、JSON/MsgPack 编解码、AnchorFrame 缓存、帧注册表 |
-| `LabAcacia.NPS.NWP` | 1.0.0-alpha.16 | Neural Web Protocol — NWM 清单、Query / Action / Subscribe / Diff 帧、包含 `llm.complete` 的 typed Action/frame payload helper、Memory / Action / Complex / Anchor / Bridge Node 中间件，以及 native-mode serving |
-| `LabAcacia.NPS.NWP.Anchor` | 1.0.0-alpha.16 | NWP Anchor Node：把 ActionFrame 无状态翻译到 NOP TaskFrame 的 AaaS 入口；`AnchorNodeClient` 支持 `topology.snapshot` / `topology.stream` 拓扑查询 |
-| `LabAcacia.NPS.NWP.Bridge` | 1.0.0-alpha.16 | NWP Bridge Node：NPS 帧到非 NPS 协议的出站 dispatcher，以及入站 MCP/A2A server bridge |
-| `LabAcacia.NPS.NIP` | 1.0.0-alpha.16 | Neural Identity Protocol — CA、Ed25519 密钥生成、IdentFrame 签发 / 吊销、类型化远程 CA client、OCSP、CRL；X.509 + ACME `agent-01` challenge（RFC-0002 原型） |
-| `LabAcacia.NPS.NIP.Storage.Sqlite` | 1.0.0-alpha.16 | 嵌入式 / 自托管 NIP CA 的 SQLite 存储后端 |
-| `LabAcacia.NPS.NIP.Storage.Postgres` | 1.0.0-alpha.16 | 服务化 NIP CA 的 PostgreSQL 存储后端 |
-| `LabAcacia.NPS.NDP` | 1.0.0-alpha.16 | Neural Discovery Protocol — announce / resolve 帧、内存注册表、Ed25519 校验 |
-| `LabAcacia.NPS.NOP` | 1.0.0-alpha.16 | Neural Orchestration Protocol — Task / Delegate / Sync / AlignStream 帧、DAG 校验器、编排引擎 |
-| `LabAcacia.NPS.Daemon.Observability` | 1.0.0-alpha.16 | JSON 日志、传输无关 health/readiness 渲染器、ASP.NET endpoint helper、Prometheus metrics、优雅关闭 |
-| `LabAcacia.NPS.Conformance` | 1.0.0-alpha.16 | Node L1/L2 conformance case catalog、run manifest model 与 CI validation helper |
+| `LabAcacia.NPS.Core` | 1.0.0-alpha.17 | 共享帧类型（AnchorFrame、DiffFrame、StreamFrame、CapsFrame、HelloFrame、ErrorFrame）、JSON/MsgPack 编解码、AnchorFrame 缓存、帧注册表 |
+| `LabAcacia.NPS.NWP` | 1.0.0-alpha.17 | Neural Web Protocol — NWM 清单、Query / Action / Subscribe / Diff 帧、包含 `llm.complete` 的 typed Action/frame payload helper、Memory / Action / Complex / Anchor / Bridge Node 中间件，以及 native-mode serving |
+| `LabAcacia.NPS.NWP.Anchor` | 1.0.0-alpha.17 | NWP Anchor Node：把 ActionFrame 无状态翻译到 NOP TaskFrame 的 AaaS 入口；`AnchorNodeClient` 支持 `topology.snapshot` / `topology.stream` 拓扑查询 |
+| `LabAcacia.NPS.NWP.Bridge` | 1.0.0-alpha.17 | NWP Bridge Node：NPS 帧到非 NPS 协议的出站 dispatcher，以及入站 MCP/A2A server bridge |
+| `LabAcacia.NPS.NIP` | 1.0.0-alpha.17 | Neural Identity Protocol — CA、Ed25519 密钥生成、IdentFrame 签发 / 吊销、类型化远程 CA client、OCSP、CRL；X.509 + ACME `agent-01` challenge（RFC-0002 原型） |
+| `LabAcacia.NPS.NIP.Storage.Sqlite` | 1.0.0-alpha.17 | 嵌入式 / 自托管 NIP CA 的 SQLite 存储后端 |
+| `LabAcacia.NPS.NIP.Storage.Postgres` | 1.0.0-alpha.17 | 服务化 NIP CA 的 PostgreSQL 存储后端 |
+| `LabAcacia.NPS.NDP` | 1.0.0-alpha.17 | Neural Discovery Protocol — announce / resolve 帧、内存注册表、Ed25519 校验 |
+| `LabAcacia.NPS.NOP` | 1.0.0-alpha.17 | Neural Orchestration Protocol — Task / Delegate / Sync / AlignStream 帧、DAG 校验器、编排引擎 |
+| `LabAcacia.NPS.Daemon.Observability` | 1.0.0-alpha.17 | JSON 日志、传输无关 health/readiness 渲染器、ASP.NET endpoint helper、Prometheus metrics、优雅关闭 |
+| `LabAcacia.NPS.Conformance` | 1.0.0-alpha.17 | Node L1/L2 conformance case catalog、run manifest model 与 CI validation helper |
 
 ## 开源与 NPS Cloud 边界
 
@@ -285,7 +285,7 @@ var manifest = NpsConformanceManifest.Create(
     iutVersion: "0.1.0",
     iutNid: "urn:nps:node:example.test:node-1",
     peerName: "nps-dotnet-reference",
-    peerVersion: "1.0.0-alpha.16",
+    peerVersion: "1.0.0-alpha.17",
     results: caseResults);
 
 var validation = NpsConformanceValidator.Validate(manifest);
@@ -305,6 +305,6 @@ dotnet test
 
 ## 状态
 
-积极开发中（v1.0.0-alpha.16）。696 个测试全部通过。
+积极开发中（v1.0.0-alpha.17）。802 个 standalone SDK 测试全部通过。
 
 Alpha.15 主要内容：官方 `llm.complete` Action/Caps/Stream DTO contract；面向 `CapsFrame`、`StreamFrame`、异步 task result、`ErrorFrame.Details` 的 typed frame payload helper；Bridge `bridge_target` 规范 wire shape 统一到 `extras`；warning-clean .NET 包族与 SourceLink symbol；native NCP TLS hook 与有界 Hello 读取；live NIP revocation check 与 signed CRL artifact；`NipCaClient`；`NwpNativeNodeServer`；内置 HTTP/HTTPS、gRPC JSON unary、MCP JSON-RPC、A2A JSON-RPC Bridge dispatcher；transport-neutral observability renderer；`LabAcacia.NPS.Conformance`；loopback dev stack。

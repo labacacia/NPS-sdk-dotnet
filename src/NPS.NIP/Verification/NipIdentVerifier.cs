@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using NPS.NIP.Ca;
 using NPS.NIP.Crypto;
 using NPS.NIP.Frames;
+using System.Security.Cryptography.X509Certificates;
 using NPS.NIP.X509;
 
 namespace NPS.NIP.Verification;
@@ -115,6 +116,31 @@ public sealed class NipIdentVerifier
                 return NipIdentVerifyResult.Fail(3,
                     x509Result.ErrorCode ?? NipErrorCodes.CertFormatInvalid,
                     x509Result.Message   ?? "X.509 chain validation failed.");
+            }
+
+            // ── Step 3c: Phase-3 enforcement (NIP v0.11 §7.5, NipVerifierOptions.Phase3Enforcement) ─
+            // Only for v2-x509 frames that just passed the chain check; each attribute check
+            // applies only when the matching id-nps-* extension is present on the leaf.
+            if (_opts.Phase3Enforcement && frame.CertChain is { Count: > 0 })
+            {
+                X509Certificate2 leaf;
+                try
+                {
+                    var der = frame.CertChain[0].Replace('-', '+').Replace('_', '/');
+                    der = der.PadRight(der.Length + (4 - der.Length % 4) % 4, '=');
+                    leaf = X509CertificateLoader.LoadCertificate(Convert.FromBase64String(der));
+                }
+                catch (Exception)
+                {
+                    return NipIdentVerifyResult.Fail(3,
+                        NipErrorCodes.CertFormatInvalid,
+                        "cert_chain[0] could not be decoded for Phase-3 enforcement.");
+                }
+                using (leaf)
+                {
+                    var p3 = NipPhase3Enforcer.Enforce(frame, leaf);
+                    if (!p3.IsValid) return p3;
+                }
             }
         }
 

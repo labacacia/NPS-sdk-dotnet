@@ -1,0 +1,130 @@
+// Copyright 2026 INNO LOTUS PTY LTD
+// SPDX-License-Identifier: Apache-2.0
+//
+// NPS NWP ↔ gRPC ingress — generic passthrough service.
+//
+// Why bytes-carrying instead of typed messages:
+//   NWP schemas are declared at runtime via AnchorFrame + /.schema. A typed
+//   .proto would force every NWP action into a compile-time schema that
+//   doesn't exist yet at code-gen time. The ingress therefore exposes a
+//   handful of generic RPCs whose payloads are JSON-encoded NWP frame
+//   bodies. Callers wanting compile-time typing can generate their own
+//   .proto files from AnchorFrame and layer them on top of this service.
+
+syntax = "proto3";
+
+package labacacia.grpc_ingress.v1;
+
+option csharp_namespace = "LabAcacia.GrpcIngress.Generated";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Service
+// ─────────────────────────────────────────────────────────────────────────────
+
+service NwpIngress {
+  // Fetch the upstream NWP node's manifest (GET /.nwm).
+  rpc GetManifest(ManifestRequest) returns (ManifestResponse);
+
+  // Invoke an Action / Complex / Anchor Node action synchronously
+  // (POST /invoke). Async actions returning 202 are represented in the
+  // response with http_status=202 and task_id populated from the body.
+  rpc Invoke(InvokeRequest) returns (InvokeResponse);
+
+  // Query a Memory Node (POST /query).
+  rpc Query(QueryRequest) returns (QueryResponse);
+
+  // List actions on an Action / Complex / Anchor Node (GET /actions).
+  rpc ListActions(ActionsRequest) returns (ActionsResponse);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Common request metadata
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Headers forwarded to the upstream NWP node. Empty strings are ignored.
+message UpstreamContext {
+  // Logical name of the configured upstream (NwpUpstream.Name).
+  string upstream = 1;
+
+  // Forwarded as X-NWP-Agent. NID of the caller.
+  string agent_nid = 2;
+
+  // Forwarded as Idempotency-Key on /invoke. Caller-chosen.
+  string idempotency_key = 3;
+
+  // W3C traceparent (forwarded as-is). The ingress generates a new child
+  // span_id before sending if this is empty.
+  string traceparent = 4;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Manifest
+// ─────────────────────────────────────────────────────────────────────────────
+
+message ManifestRequest {
+  UpstreamContext ctx = 1;
+}
+
+message ManifestResponse {
+  // Full /.nwm JSON body, unmodified.
+  bytes nwm_json = 1;
+
+  // Shortcut: upstream's declared node_type (memory|action|complex|anchor|bridge).
+  // NOTE: "gateway" was retired in v1.0-alpha.3 (NPS-CR-0001) and is never emitted.
+  string node_type = 2;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Invoke
+// ─────────────────────────────────────────────────────────────────────────────
+
+message InvokeRequest {
+  UpstreamContext ctx = 1;
+
+  // Action identifier, e.g. "orders.create".
+  string action_id = 2;
+
+  // JSON-encoded `params` object for the ActionFrame.
+  bytes params_json = 3;
+}
+
+message InvokeResponse {
+  // HTTP status from the upstream (200 sync OK, 202 async accepted, 4xx/5xx).
+  int32 http_status = 1;
+
+  // Raw JSON body from the upstream — CapsFrame for sync, task-ack for async,
+  // ErrorFrame for failures.
+  bytes body_json = 2;
+
+  // If upstream returned 202, the task_id extracted from the ack.
+  string task_id = 3;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Query
+// ─────────────────────────────────────────────────────────────────────────────
+
+message QueryRequest {
+  UpstreamContext ctx = 1;
+
+  // JSON-encoded QueryFrame body: `{ "anchor_ref": ..., "select": ..., "where": ..., "limit": ... }`.
+  bytes query_json = 2;
+}
+
+message QueryResponse {
+  int32 http_status = 1;
+  bytes body_json = 2;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Actions list
+// ─────────────────────────────────────────────────────────────────────────────
+
+message ActionsRequest {
+  UpstreamContext ctx = 1;
+}
+
+message ActionsResponse {
+  // Full /actions JSON body.
+  bytes actions_json = 1;
+}

@@ -119,6 +119,16 @@ public sealed record IdentFrame : IFrame
     public string? OcspStaple { get; init; }
 
     /// <summary>
+    /// Self-declared node-role tags (NIP v0.10), same vocabulary as NDP
+    /// <c>AnnounceFrame.node_roles</c>. Excluded from the Ed25519-signed payload
+    /// (same exclusion pattern as <see cref="CertFormat"/> / <see cref="CertChain"/>).
+    /// Phase 1–2: informational. Phase-3 enforcement (<c>phase3_enforcement</c>, NIP v0.11 §7.5):
+    /// MUST be a subset of the CA-attested <c>id-nps-node-roles</c> X.509 extension.
+    /// </summary>
+    [JsonPropertyName("node_roles")]
+    public IReadOnlyList<string>? NodeRoles { get; init; }
+
+    /// <summary>
     /// Signed lineage metadata (NPS-CR-0003 §5.1.3). Present when this
     /// IdentFrame represents an orchestrator group NID
     /// (<c>lineage.role = "group"</c>) or a short-lived session NID

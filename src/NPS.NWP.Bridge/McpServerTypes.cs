@@ -37,12 +37,75 @@ public sealed record McpServerCapabilities
 {
     [JsonPropertyName("tools")]
     public McpToolCapabilities? Tools { get; init; }
+
+    /// <summary>
+    /// Resource capability. Always advertised by a conformant inbound MCP Bridge — NWP §16.1.2
+    /// requires <c>resources/list</c> and <c>resources/read</c> to be <i>served</i>, even when the
+    /// Bridge happens to front no Memory Node and the resource set is therefore empty. (NPS-CR-0010)
+    /// </summary>
+    [JsonPropertyName("resources")]
+    public McpResourceCapabilities? Resources { get; init; }
 }
 
 public sealed record McpToolCapabilities
 {
     [JsonPropertyName("listChanged")]
     public bool ListChanged { get; init; }
+}
+
+public sealed record McpResourceCapabilities
+{
+    [JsonPropertyName("subscribe")]
+    public bool Subscribe { get; init; }
+
+    [JsonPropertyName("listChanged")]
+    public bool ListChanged { get; init; }
+}
+
+/// <summary>One NWP Memory / Complex Node projected onto the MCP resource surface.</summary>
+public sealed record McpResource
+{
+    [JsonPropertyName("uri")]
+    public required string Uri { get; init; }
+
+    [JsonPropertyName("name")]
+    public required string Name { get; init; }
+
+    [JsonPropertyName("description")]
+    public string? Description { get; init; }
+
+    [JsonPropertyName("mimeType")]
+    public string? MimeType { get; init; }
+}
+
+public sealed record McpResourceListResult
+{
+    [JsonPropertyName("resources")]
+    public required IReadOnlyList<McpResource> Resources { get; init; }
+}
+
+public sealed record McpResourceReadParams
+{
+    [JsonPropertyName("uri")]
+    public required string Uri { get; init; }
+}
+
+public sealed record McpResourceReadResult
+{
+    [JsonPropertyName("contents")]
+    public required IReadOnlyList<McpResourceContent> Contents { get; init; }
+}
+
+public sealed record McpResourceContent
+{
+    [JsonPropertyName("uri")]
+    public required string Uri { get; init; }
+
+    [JsonPropertyName("mimeType")]
+    public string? MimeType { get; init; }
+
+    [JsonPropertyName("text")]
+    public string? Text { get; init; }
 }
 
 public sealed record McpTool

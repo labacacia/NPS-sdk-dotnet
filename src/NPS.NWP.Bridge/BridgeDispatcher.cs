@@ -109,6 +109,12 @@ public sealed class BridgeNode
 /// <summary>NWP error codes used by Bridge dispatchers.</summary>
 public static class BridgeErrorCodes
 {
+    /// <summary>
+    /// The request targets a protocol/direction pair this Bridge Node never declared in
+    /// NDP <c>bridge_protocols</c> / <c>bridge_inbound_protocols</c>. (NPS-CR-0010)
+    /// </summary>
+    public const string DirectionUnsupported = "NWP-BRIDGE-DIRECTION-UNSUPPORTED";
+
     /// <summary>The invocation does not contain a valid <c>bridge_target</c>.</summary>
     public const string TargetInvalid = "NWP-BRIDGE-TARGET-INVALID";
 

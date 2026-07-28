@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using NPS.Core;
 using NPS.Core.Frames.Ncp;
 using NPS.NWP.Frames;
 using NPS.NWP.Http;
@@ -23,12 +24,7 @@ public sealed class BridgeNodeMiddleware
     private readonly BridgeNodeOptions _options;
     private readonly ILogger _logger;
 
-    internal static readonly JsonSerializerOptions Json = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        WriteIndented = false,
-    };
+    internal static JsonSerializerOptions Json => BridgeFrameJson.Json;
 
     /// <summary>Create Bridge Node middleware.</summary>
     public BridgeNodeMiddleware(
@@ -91,7 +87,7 @@ public sealed class BridgeNodeMiddleware
     {
         if (_options.RequireAuth && !ctx.Request.Headers.ContainsKey(NwpHttpHeaders.Agent))
         {
-            await WriteError(ctx, 401, "NPS-CLIENT-UNAUTHORIZED",
+            await WriteError(ctx, 401, NpsStatusCodes.AuthUnauthenticated,
                 "NWP-BRIDGE-AUTH-REQUIRED", "X-NWP-Agent header is required.");
             return;
         }
@@ -104,14 +100,14 @@ public sealed class BridgeNodeMiddleware
         }
         catch (JsonException ex)
         {
-            await WriteError(ctx, 400, "NPS-CLIENT-BAD-REQUEST",
+            await WriteError(ctx, 400, NpsStatusCodes.ClientBadFrame,
                 BridgeErrorCodes.TargetInvalid, ex.Message);
             return;
         }
 
         if (frame is null)
         {
-            await WriteError(ctx, 400, "NPS-CLIENT-BAD-REQUEST",
+            await WriteError(ctx, 422, NpsStatusCodes.ClientUnprocessable,
                 BridgeErrorCodes.TargetInvalid, "ActionFrame body is required.");
             return;
         }
@@ -130,14 +126,14 @@ public sealed class BridgeNodeMiddleware
         }
         catch (BridgeDispatchException ex)
         {
-            var status = ex.ErrorCode == BridgeErrorCodes.UpstreamFailed ? 502 : 400;
-            var npsStatus = status == 502 ? "NPS-SERVER-UPSTREAM-FAILED" : "NPS-CLIENT-BAD-REQUEST";
+            var status = ex.ErrorCode == BridgeErrorCodes.UpstreamFailed ? 502 : 422;
+            var npsStatus = status == 502 ? NpsStatusCodes.DownstreamUnavailable : NpsStatusCodes.ClientUnprocessable;
             await WriteError(ctx, status, npsStatus, ex.ErrorCode, ex.Message);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Bridge Node dispatch failed.");
-            await WriteError(ctx, 500, "NPS-SERVER-ERROR",
+            await WriteError(ctx, 500, NpsStatusCodes.ServerInternal,
                 BridgeErrorCodes.UpstreamFailed, ex.Message);
         }
     }

@@ -54,6 +54,9 @@ public static class NdpErrorCodes
     /// <summary>Federation forwarding detected a loop.</summary>
     public const string FederationLoop            = "NDP-FEDERATION-LOOP";
 
+    /// <summary>Two live Anchor announcements advertise the same cluster_epoch for one cluster (split-brain).</summary>
+    public const string ClusterSplit              = "NDP-CLUSTER-SPLIT";
+
     /// <summary>AnnounceFrame issuer is not allowed by the active registry profile.</summary>
     public const string IssuerNotAllowed          = "NDP-ISSUER-NOT-ALLOWED";
 
