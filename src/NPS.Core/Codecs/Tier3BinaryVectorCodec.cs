@@ -1,11 +1,12 @@
 // Copyright 2026 INNO LOTUS PTY LTD
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Buffers;
 using System.Buffers.Binary;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using MessagePack;
-using MessagePack.Resolvers;
 using NPS.Core.Exceptions;
 using NPS.Core.Frames;
 using NPS.Core.Registry;
@@ -28,70 +29,20 @@ public sealed class Tier3BinaryVectorCodec : IFrameCodec
 
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
-        PropertyNamingPolicy        = JsonNamingPolicy.SnakeCaseLower,
-        DefaultIgnoreCondition      = JsonIgnoreCondition.WhenWritingNull,
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         PropertyNameCaseInsensitive = true,
-        WriteIndented               = false,
+        WriteIndented = false,
     };
 
-    private static readonly MessagePackSerializerOptions MsgPackOpts =
-        MessagePackSerializerOptions.Standard
-            .WithResolver(ContractlessStandardResolver.Instance)
-            .WithCompression(MessagePackCompression.None);
-
+    [RequiresDynamicCode("Use Encode(IFrame, FrameRegistry) with source-generated frame metadata for NativeAOT.")]
+    [RequiresUnreferencedCode("Use Encode(IFrame, FrameRegistry) with source-generated frame metadata when trimming.")]
     public byte[] Encode(IFrame frame)
     {
         try
         {
             var json = JsonSerializer.SerializeToUtf8Bytes(frame, frame.GetType(), JsonOpts);
-            using var doc = JsonDocument.Parse(json);
-
-            var metadata = ConvertElement(doc.RootElement) as Dictionary<string, object?>
-                           ?? throw BinaryVectorError(
-                               NcpErrorCodes.BinaryVectorMalformed,
-                               "Tier-3 BinaryVector metadata root must be an object.");
-
-            var vectors = new List<float[]>();
-            ExtractVectorSearchVector(metadata, vectors);
-
-            if (vectors.Count > ushort.MaxValue)
-                throw BinaryVectorError(
-                    NcpErrorCodes.BinaryVectorMalformed,
-                    $"Tier-3 BinaryVector supports at most {ushort.MaxValue} vectors per frame.");
-
-            var metadataBytes = MessagePackSerializer.Serialize(metadata, MsgPackOpts);
-            checked
-            {
-                var segmentBytes = 0;
-                foreach (var vector in vectors)
-                {
-                    segmentBytes += sizeof(uint);
-                    segmentBytes += vector.Length * sizeof(float);
-                }
-
-                var payload = new byte[PrefixSize + metadataBytes.Length + segmentBytes];
-                Magic.CopyTo(payload, 0);
-                payload[4] = Version;
-                payload[5] = 0;
-                BinaryPrimitives.WriteUInt16BigEndian(payload.AsSpan(6), (ushort)vectors.Count);
-                BinaryPrimitives.WriteUInt32BigEndian(payload.AsSpan(8), (uint)metadataBytes.Length);
-                BinaryPrimitives.WriteUInt32BigEndian(payload.AsSpan(12), 0);
-                metadataBytes.CopyTo(payload.AsSpan(PrefixSize));
-
-                var offset = PrefixSize + metadataBytes.Length;
-                foreach (var vector in vectors)
-                {
-                    BinaryPrimitives.WriteUInt32BigEndian(payload.AsSpan(offset), (uint)vector.Length);
-                    offset += sizeof(uint);
-                    foreach (var value in vector)
-                    {
-                        BinaryPrimitives.WriteSingleLittleEndian(payload.AsSpan(offset), value);
-                        offset += sizeof(float);
-                    }
-                }
-
-                return payload;
-            }
+            return EncodePayload(json);
         }
         catch (NpsCodecException)
         {
@@ -103,9 +54,78 @@ public sealed class Tier3BinaryVectorCodec : IFrameCodec
         }
     }
 
+    public byte[] Encode(IFrame frame, FrameRegistry registry)
+    {
+        try
+        {
+            var json = registry.ResolveRegistration(frame).JsonEncoder(frame);
+            return EncodePayload(json);
+        }
+        catch (NpsCodecException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new NpsCodecException($"Tier-3 BinaryVector encode failed for {frame.FrameType}.", ex);
+        }
+    }
+
+    private static byte[] EncodePayload(byte[] json)
+    {
+        using var doc = JsonDocument.Parse(json);
+
+        var metadata = ConvertElement(doc.RootElement) as Dictionary<string, object?>
+                       ?? throw BinaryVectorError(
+                           NcpErrorCodes.BinaryVectorMalformed,
+                           "Tier-3 BinaryVector metadata root must be an object.");
+
+        var vectors = new List<float[]>();
+        ExtractVectorSearchVector(metadata, vectors);
+
+        if (vectors.Count > ushort.MaxValue)
+            throw BinaryVectorError(
+                NcpErrorCodes.BinaryVectorMalformed,
+                $"Tier-3 BinaryVector supports at most {ushort.MaxValue} vectors per frame.");
+
+        var metadataBytes = EncodeMetadata(metadata);
+        checked
+        {
+            var segmentBytes = 0;
+            foreach (var vector in vectors)
+            {
+                segmentBytes += sizeof(uint);
+                segmentBytes += vector.Length * sizeof(float);
+            }
+
+            var payload = new byte[PrefixSize + metadataBytes.Length + segmentBytes];
+            Magic.CopyTo(payload, 0);
+            payload[4] = Version;
+            payload[5] = 0;
+            BinaryPrimitives.WriteUInt16BigEndian(payload.AsSpan(6), (ushort)vectors.Count);
+            BinaryPrimitives.WriteUInt32BigEndian(payload.AsSpan(8), (uint)metadataBytes.Length);
+            BinaryPrimitives.WriteUInt32BigEndian(payload.AsSpan(12), 0);
+            metadataBytes.CopyTo(payload.AsSpan(PrefixSize));
+
+            var offset = PrefixSize + metadataBytes.Length;
+            foreach (var vector in vectors)
+            {
+                BinaryPrimitives.WriteUInt32BigEndian(payload.AsSpan(offset), (uint)vector.Length);
+                offset += sizeof(uint);
+                foreach (var value in vector)
+                {
+                    BinaryPrimitives.WriteSingleLittleEndian(payload.AsSpan(offset), value);
+                    offset += sizeof(float);
+                }
+            }
+
+            return payload;
+        }
+    }
+
     public IFrame Decode(FrameType type, ReadOnlySpan<byte> payload, FrameRegistry registry)
     {
-        var clrType = registry.Resolve(type);
+        var registration = registry.ResolveRegistration(type);
         try
         {
             if (payload.Length < PrefixSize)
@@ -148,8 +168,8 @@ public sealed class Tier3BinaryVectorCodec : IFrameCodec
 
             RestoreVectorSearchVector(metadata, vectors);
 
-            var json = JsonSerializer.SerializeToUtf8Bytes(metadata, JsonOpts);
-            return (IFrame)JsonSerializer.Deserialize(json, clrType, JsonOpts)!;
+            var json = EncodeMetadataJson(metadata);
+            return registration.JsonDecoder(json);
         }
         catch (NpsCodecException)
         {
@@ -223,11 +243,19 @@ public sealed class Tier3BinaryVectorCodec : IFrameCodec
 
     private static Dictionary<string, object?> DecodeMetadata(byte[] metadataBytes)
     {
-        var raw = MessagePackSerializer.Deserialize<Dictionary<string, object?>>(metadataBytes, MsgPackOpts);
-        return Normalize(raw) as Dictionary<string, object?>
-               ?? throw BinaryVectorError(
-                   NcpErrorCodes.BinaryVectorMalformed,
-                   "Tier-3 BinaryVector metadata root must be a map.");
+        var sequence = new ReadOnlySequence<byte>(metadataBytes);
+        var reader = new MessagePackReader(sequence);
+        var metadata = ReadMetadataValue(ref reader) as Dictionary<string, object?>
+                       ?? throw BinaryVectorError(
+                           NcpErrorCodes.BinaryVectorMalformed,
+                           "Tier-3 BinaryVector metadata root must be a map.");
+
+        if (!reader.End)
+            throw BinaryVectorError(
+                NcpErrorCodes.BinaryVectorMalformed,
+                "Tier-3 BinaryVector metadata has trailing MessagePack values.");
+
+        return metadata;
     }
 
     private static List<float[]> DecodeVectors(ReadOnlySpan<byte> payload, ref int offset, int vectorCount)
@@ -286,40 +314,267 @@ public sealed class Tier3BinaryVectorCodec : IFrameCodec
             $"Unsupported JSON value in Tier-3 metadata: {element.ValueKind}."),
     };
 
-    private static object? Normalize(object? value)
+    private static byte[] EncodeMetadata(Dictionary<string, object?> metadata)
+    {
+        var buffer = new ArrayBufferWriter<byte>();
+        var writer = new MessagePackWriter(buffer);
+        WriteMetadataValue(ref writer, metadata);
+        writer.Flush();
+        return buffer.WrittenSpan.ToArray();
+    }
+
+    private static byte[] EncodeMetadataJson(Dictionary<string, object?> metadata)
+    {
+        var buffer = new ArrayBufferWriter<byte>();
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            WriteMetadataJson(writer, metadata);
+        }
+        return buffer.WrittenSpan.ToArray();
+    }
+
+    private static void WriteMetadataJson(Utf8JsonWriter writer, object? value)
     {
         switch (value)
         {
             case null:
-            case string:
-            case bool:
-            case byte:
-            case sbyte:
-            case short:
-            case ushort:
-            case int:
-            case uint:
-            case long:
-            case ulong:
-            case float:
-            case double:
-            case decimal:
-                return value;
+                writer.WriteNullValue();
+                break;
 
-            case Dictionary<string, object?> dict:
-                return dict.ToDictionary(pair => pair.Key, pair => Normalize(pair.Value));
+            case string text:
+                writer.WriteStringValue(text);
+                break;
 
-            case IDictionary<object, object?> dict:
-                return dict.ToDictionary(pair => pair.Key.ToString() ?? "", pair => Normalize(pair.Value));
+            case bool boolean:
+                writer.WriteBooleanValue(boolean);
+                break;
 
-            case object?[] array:
-                return array.Select(Normalize).ToList();
+            case byte number:
+                writer.WriteNumberValue(number);
+                break;
+
+            case sbyte number:
+                writer.WriteNumberValue(number);
+                break;
+
+            case short number:
+                writer.WriteNumberValue(number);
+                break;
+
+            case ushort number:
+                writer.WriteNumberValue(number);
+                break;
+
+            case int number:
+                writer.WriteNumberValue(number);
+                break;
+
+            case uint number:
+                writer.WriteNumberValue(number);
+                break;
+
+            case long number:
+                writer.WriteNumberValue(number);
+                break;
+
+            case ulong number:
+                writer.WriteNumberValue(number);
+                break;
+
+            case float number:
+                writer.WriteNumberValue(number);
+                break;
+
+            case double number:
+                writer.WriteNumberValue(number);
+                break;
+
+            case byte[] bytes:
+                writer.WriteBase64StringValue(bytes);
+                break;
+
+            case float[] vector:
+                writer.WriteStartArray();
+                foreach (var number in vector)
+                    writer.WriteNumberValue(number);
+                writer.WriteEndArray();
+                break;
+
+            case Dictionary<string, object?> map:
+                writer.WriteStartObject();
+                foreach (var pair in map)
+                {
+                    writer.WritePropertyName(pair.Key);
+                    WriteMetadataJson(writer, pair.Value);
+                }
+                writer.WriteEndObject();
+                break;
 
             case IList<object?> list:
-                return list.Select(Normalize).ToList();
+                writer.WriteStartArray();
+                foreach (var item in list)
+                    WriteMetadataJson(writer, item);
+                writer.WriteEndArray();
+                break;
 
             default:
-                return value;
+                throw BinaryVectorError(
+                    NcpErrorCodes.BinaryVectorMalformed,
+                    $"Unsupported Tier-3 metadata value type: {value.GetType().FullName}.");
+        }
+    }
+
+    private static void WriteMetadataValue(ref MessagePackWriter writer, object? value)
+    {
+        switch (value)
+        {
+            case null:
+                writer.WriteNil();
+                break;
+
+            case string:
+                writer.Write((string)value);
+                break;
+
+            case bool:
+                writer.Write((bool)value);
+                break;
+
+            case byte:
+                writer.Write((byte)value);
+                break;
+
+            case sbyte:
+                writer.Write((sbyte)value);
+                break;
+
+            case short:
+                writer.Write((short)value);
+                break;
+
+            case ushort:
+                writer.Write((ushort)value);
+                break;
+
+            case int:
+                writer.Write((int)value);
+                break;
+
+            case uint:
+                writer.Write((uint)value);
+                break;
+
+            case long:
+                writer.Write((long)value);
+                break;
+
+            case ulong:
+                writer.Write((ulong)value);
+                break;
+
+            case float:
+                writer.Write((float)value);
+                break;
+
+            case double:
+                writer.Write((double)value);
+                break;
+
+            case Dictionary<string, object?> dict:
+                writer.WriteMapHeader(dict.Count);
+                foreach (var pair in dict)
+                {
+                    writer.Write(pair.Key);
+                    WriteMetadataValue(ref writer, pair.Value);
+                }
+                break;
+
+            case IList<object?> list:
+                writer.WriteArrayHeader(list.Count);
+                foreach (var item in list)
+                    WriteMetadataValue(ref writer, item);
+                break;
+
+            default:
+                throw BinaryVectorError(
+                    NcpErrorCodes.BinaryVectorMalformed,
+                    $"Unsupported Tier-3 metadata value type: {value.GetType().FullName}.");
+        }
+    }
+
+    private static object? ReadMetadataValue(ref MessagePackReader reader)
+    {
+        switch (reader.NextMessagePackType)
+        {
+            case MessagePackType.Map:
+                {
+                    MessagePackSecurity.UntrustedData.DepthStep(ref reader);
+                    try
+                    {
+                        var count = reader.ReadMapHeader();
+                        var map = new Dictionary<string, object?>(count, StringComparer.Ordinal);
+                        for (var i = 0; i < count; i++)
+                        {
+                            var key = reader.ReadString()
+                                      ?? throw BinaryVectorError(
+                                          NcpErrorCodes.BinaryVectorMalformed,
+                                          "Tier-3 BinaryVector metadata map keys must be strings.");
+                            map[key] = ReadMetadataValue(ref reader);
+                        }
+                        return map;
+                    }
+                    finally
+                    {
+                        reader.Depth--;
+                    }
+                }
+
+            case MessagePackType.Array:
+                {
+                    MessagePackSecurity.UntrustedData.DepthStep(ref reader);
+                    try
+                    {
+                        var count = reader.ReadArrayHeader();
+                        var list = new List<object?>(count);
+                        for (var i = 0; i < count; i++)
+                            list.Add(ReadMetadataValue(ref reader));
+                        return list;
+                    }
+                    finally
+                    {
+                        reader.Depth--;
+                    }
+                }
+
+            case MessagePackType.String:
+                return reader.ReadString();
+
+            case MessagePackType.Binary:
+                return reader.ReadBytes()?.ToArray();
+
+            case MessagePackType.Integer:
+                return reader.NextCode >= MessagePackCode.MinNegativeFixInt ||
+                       reader.NextCode is >= MessagePackCode.Int8 and <= MessagePackCode.Int64
+                    ? reader.ReadInt64()
+                    : reader.ReadUInt64();
+
+            case MessagePackType.Float when reader.NextCode == MessagePackCode.Float32:
+                return reader.ReadSingle();
+
+            case MessagePackType.Float:
+                return reader.ReadDouble();
+
+            case MessagePackType.Boolean:
+                return reader.ReadBoolean();
+
+            case MessagePackType.Nil:
+                reader.ReadNil();
+                return null;
+
+            default:
+                throw BinaryVectorError(
+                    NcpErrorCodes.BinaryVectorMalformed,
+                    $"Unsupported MessagePack type in Tier-3 metadata: {reader.NextMessagePackType}.");
         }
     }
 

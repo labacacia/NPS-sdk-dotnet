@@ -11,6 +11,7 @@ using NPS.Core.Ncp;
 using NPS.Core.Registry;
 using NPS.NWP.ActionNode;
 using NPS.NWP.Frames;
+using NPS.NWP.Registry;
 using NPS.NWP.MemoryNode;
 using NPS.NWP.Native;
 
@@ -184,19 +185,10 @@ public sealed class NwpNativeNodeServerTests
     };
 
     private static FrameRegistry BuildNwpRegistry()
-    {
-#pragma warning disable CS0618
-        return new FrameRegistryBuilder()
-            .Register<AnchorFrame>(FrameType.Anchor)
-            .Register<DiffFrame>  (FrameType.Diff)
-            .Register<StreamFrame>(FrameType.Stream)
-            .Register<CapsFrame>  (FrameType.Caps)
-            .Register<ErrorFrame> (FrameType.Error)
-            .Register<QueryFrame> (FrameType.Query)
-            .Register<ActionFrame>(FrameType.Action)
+        => new FrameRegistryBuilder()
+            .AddNcp()
+            .AddNwp()
             .Build();
-#pragma warning restore CS0618
-    }
 
     private static NpsFrameCodec MakeCodec() =>
         new(new Tier1JsonCodec(), new Tier2MsgPackCodec(), BuildNwpRegistry());

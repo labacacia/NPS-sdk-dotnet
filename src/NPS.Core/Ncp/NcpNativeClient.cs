@@ -19,8 +19,7 @@ public sealed class NcpNativeClient
 {
     private static readonly FrameRegistry HandshakeRegistry =
         new FrameRegistryBuilder()
-            .Register<NcpHandshakeCapsFrame>(FrameType.Caps)
-            .Register<ErrorFrame>(FrameType.Error)
+            .AddNcpHandshake()
             .Build();
 
     private static readonly Tier1JsonCodec JsonCodec = new();
@@ -38,9 +37,9 @@ public sealed class NcpNativeClient
     /// </summary>
     /// <exception cref="NcpHandshakeException">Server rejected the handshake or sent an unexpected frame.</exception>
     public async Task<NcpSession> ConnectAsync(
-        string            host,
-        int               port,
-        HelloFrame        hello,
+        string host,
+        int port,
+        HelloFrame hello,
         CancellationToken ct = default)
     {
         var tcp = new TcpClient();
@@ -120,8 +119,8 @@ public sealed class NcpNativeClient
         var peek = new byte[2];
         await stream.ReadExactlyAsync(peek, ct).ConfigureAwait(false);
 
-        bool ext      = ((FrameFlags)peek[1] & FrameFlags.Ext) != 0;
-        int  remaining = ext ? FrameHeader.ExtendedSize - 2 : FrameHeader.DefaultSize - 2;
+        bool ext = ((FrameFlags)peek[1] & FrameFlags.Ext) != 0;
+        int remaining = ext ? FrameHeader.ExtendedSize - 2 : FrameHeader.DefaultSize - 2;
 
         var rest = new byte[remaining];
         await stream.ReadExactlyAsync(rest, ct).ConfigureAwait(false);

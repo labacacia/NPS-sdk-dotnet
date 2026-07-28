@@ -52,7 +52,8 @@ var header = codec.Peek(wire);
 var decoded = codec.Decode(wire);
 ```
 
-`LabAcacia.NPS.Core` uses MessagePack-CSharp for the built-in Tier-2 codec.
+`LabAcacia.NPS.Core` uses source-generated MessagePack-CSharp formatters for the built-in
+Tier-2 codec. The built-in registry and upper-layer registration helpers are NativeAOT-safe.
 Hosts that need a different binary codec can supply their own `IFrameCodec`
 implementation by constructing `NpsFrameCodec` with custom codec instances;
 the DI helper wires the default JSON + MessagePack pair.

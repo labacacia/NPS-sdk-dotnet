@@ -4,6 +4,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Linq;
+using MessagePack;
 using NPS.Core.Frames;
 
 namespace NPS.NDP.Frames;
@@ -14,6 +15,7 @@ namespace NPS.NDP.Frames;
 /// Physical address entry inside an <see cref="AnnounceFrame"/> (NPS-4 §3.1).
 /// Each node may publish multiple addresses (IPv4, IPv6, hostname).
 /// </summary>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record NdpAddress
 {
     /// <summary>Hostname or IP (e.g. <c>"10.0.0.5"</c> or <c>"api.example.com"</c>).</summary>
@@ -32,6 +34,7 @@ public sealed record NdpAddress
 /// <summary>
 /// Resolved endpoint returned inside a <see cref="ResolveFrame"/> response (NPS-4 §3.2).
 /// </summary>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record NdpResolveResult
 {
     /// <summary>Resolved hostname or IP.</summary>
@@ -54,6 +57,7 @@ public sealed record NdpResolveResult
 /// <summary>
 /// A node entry in a <see cref="GraphFrame"/> topology snapshot (NPS-4 §3.3, NDP v0.8).
 /// </summary>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record NdpGraphNode
 {
     /// <summary>Node NID.</summary>
@@ -72,6 +76,7 @@ public sealed record NdpGraphNode
 /// <summary>
 /// A directed edge in a <see cref="GraphFrame"/> topology snapshot (NPS-4 §3.3, NDP v0.8).
 /// </summary>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record NdpGraphEdge
 {
     /// <summary>Source node NID.</summary>
@@ -102,12 +107,13 @@ public sealed record NdpGraphEdge
 /// JSON of the frame (minus <c>signature</c>), made with the publisher's own private key
 /// (the same key that produced the corresponding <see cref="NPS.NIP.Frames.IdentFrame"/>).</para>
 /// </summary>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record AnnounceFrame : IFrame
 {
     /// <inheritdoc/>
-    [JsonIgnore] public FrameType    FrameType     => FrameType.Announce;
+    [JsonIgnore, IgnoreMember] public FrameType FrameType => FrameType.Announce;
     /// <inheritdoc/>
-    [JsonIgnore] public EncodingTier PreferredTier => EncodingTier.MsgPack;
+    [JsonIgnore, IgnoreMember] public EncodingTier PreferredTier => EncodingTier.MsgPack;
 
     /// <summary>Frame type discriminant. Fixed value <c>"0x30"</c>.</summary>
     [JsonPropertyName("frame")]
@@ -234,12 +240,13 @@ public sealed record AnnounceFrame : IFrame
 ///   <item>Response: same <see cref="Target"/> plus a populated <see cref="Resolved"/> object.</item>
 /// </list>
 /// </summary>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record ResolveFrame : IFrame
 {
     /// <inheritdoc/>
-    [JsonIgnore] public FrameType    FrameType     => FrameType.Resolve;
+    [JsonIgnore, IgnoreMember] public FrameType FrameType => FrameType.Resolve;
     /// <inheritdoc/>
-    [JsonIgnore] public EncodingTier PreferredTier => EncodingTier.Json;
+    [JsonIgnore, IgnoreMember] public EncodingTier PreferredTier => EncodingTier.Json;
 
     /// <summary>Frame type discriminant. Fixed value <c>"0x31"</c>.</summary>
     [JsonPropertyName("frame")]
@@ -270,12 +277,13 @@ public sealed record ResolveFrame : IFrame
 /// Oversized frames MUST be rejected with <c>NDP-GRAPH-TOO-LARGE</c>;
 /// structural errors with <c>NDP-GRAPH-INVALID</c>.
 /// </summary>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record GraphFrame : IFrame
 {
     /// <inheritdoc/>
-    [JsonIgnore] public FrameType    FrameType     => FrameType.Graph;
+    [JsonIgnore, IgnoreMember] public FrameType FrameType => FrameType.Graph;
     /// <inheritdoc/>
-    [JsonIgnore] public EncodingTier PreferredTier => EncodingTier.MsgPack;
+    [JsonIgnore, IgnoreMember] public EncodingTier PreferredTier => EncodingTier.MsgPack;
 
     /// <summary>Frame type discriminant. Fixed value <c>"0x32"</c>.</summary>
     [JsonPropertyName("frame")]

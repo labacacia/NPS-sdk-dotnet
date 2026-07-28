@@ -3,6 +3,7 @@
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using MessagePack;
 using NPS.Core.Frames;
 using NPS.NIP;
 
@@ -15,12 +16,13 @@ namespace NPS.NIP.Frames;
 /// Sent as a handshake frame when establishing a connection; Nodes verify it
 /// before granting access.
 /// </summary>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record IdentFrame : IFrame
 {
     /// <inheritdoc/>
-    [JsonIgnore] public FrameType    FrameType     => FrameType.Ident;
+    [JsonIgnore, IgnoreMember] public FrameType FrameType => FrameType.Ident;
     /// <inheritdoc/>
-    [JsonIgnore] public EncodingTier PreferredTier => EncodingTier.MsgPack;
+    [JsonIgnore, IgnoreMember] public EncodingTier PreferredTier => EncodingTier.MsgPack;
 
     /// <summary>Frame type discriminant. Fixed value <c>"0x20"</c>.</summary>
     [JsonPropertyName("frame")]
@@ -137,13 +139,14 @@ public static class IdentCertFormat
     public const string V1Proprietary = "v1-proprietary";
 
     /// <summary>X.509 DER cert chain in <see cref="IdentFrame.CertChain"/>.</summary>
-    public const string V2X509        = "v2-x509";
+    public const string V2X509 = "v2-x509";
 }
 
 /// <summary>
 /// Optional metadata carried in an <see cref="IdentFrame"/> (NPS-3 §5.1).
 /// Not included in signature computation — Agents may set dynamically at runtime.
 /// </summary>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record IdentMetadata
 {
     /// <summary>Model family identifier, e.g. <c>"anthropic/claude-4"</c>.</summary>
@@ -168,6 +171,7 @@ public sealed record IdentMetadata
 /// Agent-side advisory hint for reputation log endorsement (RFC-0005 §4.2).
 /// Carried in <see cref="IdentMetadata.ReputationPolicy"/> — unsigned, informational only.
 /// </summary>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record IdentReputationPolicyHint
 {
     /// <summary>
@@ -196,6 +200,7 @@ public sealed record IdentReputationPolicyHint
 /// alphabetically per NPS-3 §5.1).
 /// </para>
 /// </summary>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record IdentLineage
 {
     /// <summary>Lineage role: <c>"group"</c> or <c>"session"</c>.</summary>
@@ -231,7 +236,7 @@ public sealed record IdentLineage
 public static class IdentLineageRole
 {
     /// <summary>Orchestrator group NID — trust anchor for sessions.</summary>
-    public const string Group   = "group";
+    public const string Group = "group";
 
     /// <summary>Short-lived session NID, chained to a group via <see cref="IdentLineage.ParentNid"/>.</summary>
     public const string Session = "session";
@@ -247,12 +252,13 @@ public static class IdentLineageRole
 /// NPS Cloud capabilities.
 /// </para>
 /// </summary>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record TrustFrame : IFrame
 {
     /// <inheritdoc/>
-    [JsonIgnore] public FrameType    FrameType     => FrameType.Trust;
+    [JsonIgnore, IgnoreMember] public FrameType FrameType => FrameType.Trust;
     /// <inheritdoc/>
-    [JsonIgnore] public EncodingTier PreferredTier => EncodingTier.MsgPack;
+    [JsonIgnore, IgnoreMember] public EncodingTier PreferredTier => EncodingTier.MsgPack;
 
     /// <summary>Frame type discriminant. Fixed value <c>"0x21"</c>.</summary>
     [JsonPropertyName("frame")]
@@ -298,12 +304,13 @@ public sealed record TrustFrame : IFrame
 /// Certificate revocation frame (NPS-3 §5.3).
 /// Issued by the CA or an Operator to immediately invalidate a NID.
 /// </summary>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record RevokeFrame : IFrame
 {
     /// <inheritdoc/>
-    [JsonIgnore] public FrameType    FrameType     => FrameType.Revoke;
+    [JsonIgnore, IgnoreMember] public FrameType FrameType => FrameType.Revoke;
     /// <inheritdoc/>
-    [JsonIgnore] public EncodingTier PreferredTier => EncodingTier.MsgPack;
+    [JsonIgnore, IgnoreMember] public EncodingTier PreferredTier => EncodingTier.MsgPack;
 
     /// <summary>Frame type discriminant. Fixed value <c>"0x22"</c>.</summary>
     [JsonPropertyName("frame")]

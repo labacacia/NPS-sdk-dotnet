@@ -4,6 +4,7 @@
 using NPS.Core.Frames;
 using NPS.Core.Registry;
 using NPS.NDP.Frames;
+using NPS.NDP.Serialization;
 
 namespace NPS.NDP.Registry;
 
@@ -18,7 +19,7 @@ public static class NdpRegistryExtensions
     /// </summary>
     public static FrameRegistryBuilder AddNdp(this FrameRegistryBuilder builder) =>
         builder
-            .Register<AnnounceFrame>(FrameType.Announce)
-            .Register<ResolveFrame> (FrameType.Resolve)
-            .Register<GraphFrame>   (FrameType.Graph);
+            .Register(FrameType.Announce, NdpJsonContext.Default.AnnounceFrame, NdpMessagePackResolver.Instance)
+            .Register(FrameType.Resolve, NdpJsonContext.Default.ResolveFrame, NdpMessagePackResolver.Instance)
+            .Register(FrameType.Graph, NdpJsonContext.Default.GraphFrame, NdpMessagePackResolver.Instance);
 }

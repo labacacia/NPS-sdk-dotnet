@@ -316,10 +316,13 @@ Lower-level tier-specific codecs invoked by `NpsFrameCodec`.
 - `Tier1JsonCodec` uses `System.Text.Json` with `PropertyNamingPolicy = SnakeCaseLower` and a case-
   insensitive deserialiser. `JsonElement` fields are copied deeply so the returned frame doesn't
   retain a reference to the wire buffer.
-- `Tier2MsgPackCodec` uses `MessagePack-CSharp` with `ContractlessStandardResolver`.
+- `Tier2MsgPackCodec` uses MessagePack-CSharp source-generated formatters for the built-in NCP
+  frames. `AddNcp()`, `AddNcpHandshake()`, and the upper-layer `AddNwp()` / `AddNip()` /
+  `AddNdp()` helpers register NativeAOT-safe JSON and MessagePack metadata.
 
-Direct use is only needed in advanced scenarios (e.g. pre-computing payloads for many
-identically-shaped frames).
+Direct `Encode(frame)` and `FrameRegistryBuilder.Register<T>(type)` calls retain runtime-generated
+metadata for compatibility with third-party frame types. NativeAOT hosts should use
+`Encode(frame, registry)` and the `Register(type, JsonTypeInfo<T>, IFormatterResolver)` overload.
 
 ---
 

@@ -314,9 +314,13 @@ public sealed class NpsFrameCodec
 - `Tier1JsonCodec` 使用 `System.Text.Json`，`PropertyNamingPolicy = SnakeCaseLower`
   并采用大小写不敏感的反序列化器。`JsonElement` 字段深度拷贝,返回的帧不保留
   对线路缓冲区的引用。
-- `Tier2MsgPackCodec` 使用 `MessagePack-CSharp` 搭配 `ContractlessStandardResolver`。
+- `Tier2MsgPackCodec` 对内置 NCP 帧使用 MessagePack-CSharp 源生成 formatter。
+  `AddNcp()`、`AddNcpHandshake()` 以及上层的 `AddNwp()` / `AddNip()` / `AddNdp()`
+  helper 都会注册 NativeAOT 安全的 JSON 与 MessagePack metadata。
 
-仅在高级场景（例如为大量相同形状的帧预计算 payload）才需直接使用。
+直接调用 `Encode(frame)` 或 `FrameRegistryBuilder.Register<T>(type)` 时，会为第三方帧
+保留运行时生成 metadata 的兼容路径。NativeAOT 宿主应使用 `Encode(frame, registry)`
+以及 `Register(type, JsonTypeInfo<T>, IFormatterResolver)` 重载。
 
 ---
 

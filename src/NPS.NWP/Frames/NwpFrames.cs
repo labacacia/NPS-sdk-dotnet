@@ -3,6 +3,7 @@
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using MessagePack;
 using NPS.Core.Frames;
 
 namespace NPS.NWP.Frames;
@@ -13,9 +14,12 @@ namespace NPS.NWP.Frames;
 /// Structured data query frame, targeting a Memory Node (NPS-2 §5).
 /// Sent to the <c>/query</c> or <c>/stream</c> sub-path of a <c>nwp://</c> address.
 /// </summary>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record QueryFrame : IFrame
 {
-    public FrameType    FrameType     => FrameType.Query;
+    [IgnoreMember]
+    public FrameType FrameType => FrameType.Query;
+    [IgnoreMember]
     public EncodingTier PreferredTier => EncodingTier.MsgPack;
 
     /// <summary>
@@ -59,13 +63,15 @@ public sealed record QueryFrame : IFrame
 /// </summary>
 /// <param name="Field">Field name to sort by.</param>
 /// <param name="Dir">Sort direction: <c>"ASC"</c> or <c>"DESC"</c>.</param>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record QueryOrderClause(
     [property: JsonPropertyName("field")] string Field,
-    [property: JsonPropertyName("dir")]   string Dir);
+    [property: JsonPropertyName("dir")] string Dir);
 
 /// <summary>
 /// Vector similarity search parameters within a <see cref="QueryFrame"/> (NPS-2 §5.4).
 /// </summary>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record VectorSearchOptions
 {
     /// <summary>Name of the vector field in the schema.</summary>
@@ -91,9 +97,12 @@ public sealed record VectorSearchOptions
 /// Operation invocation frame, targeting an Action or Complex Node (NPS-2 §6).
 /// Sent to the <c>/invoke</c> sub-path of a <c>nwp://</c> address.
 /// </summary>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record ActionFrame : IFrame
 {
-    public FrameType    FrameType     => FrameType.Action;
+    [IgnoreMember]
+    public FrameType FrameType => FrameType.Action;
+    [IgnoreMember]
     public EncodingTier PreferredTier => EncodingTier.MsgPack;
 
     /// <summary>
@@ -160,9 +169,12 @@ public sealed record ActionFrame : IFrame
 /// last received <c>cursor</c> from a <c>DiffFrame</c> to resume losslessly.
 /// If the cursor has expired, the node returns <c>NWP-SUBSCRIBE-SEQ-TOO-OLD</c>.
 /// </summary>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record SubscribeFrame : IFrame
 {
-    public FrameType    FrameType     => FrameType.Subscribe;
+    [IgnoreMember]
+    public FrameType FrameType => FrameType.Subscribe;
+    [IgnoreMember]
     public EncodingTier PreferredTier => EncodingTier.MsgPack;
 
     /// <summary>

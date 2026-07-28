@@ -4,6 +4,7 @@
 using NPS.Core.Frames;
 using NPS.Core.Registry;
 using NPS.NIP.Frames;
+using NPS.NIP.Serialization;
 
 namespace NPS.NIP.Registry;
 
@@ -24,7 +25,7 @@ public static class NipRegistryExtensions
     /// </summary>
     public static FrameRegistryBuilder AddNip(this FrameRegistryBuilder builder) =>
         builder
-            .Register<IdentFrame> (FrameType.Ident)
-            .Register<TrustFrame> (FrameType.Trust)
-            .Register<RevokeFrame>(FrameType.Revoke);
+            .Register(FrameType.Ident, NipJsonContext.Default.IdentFrame, NipMessagePackResolver.Instance)
+            .Register(FrameType.Trust, NipJsonContext.Default.TrustFrame, NipMessagePackResolver.Instance)
+            .Register(FrameType.Revoke, NipJsonContext.Default.RevokeFrame, NipMessagePackResolver.Instance);
 }

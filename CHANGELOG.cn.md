@@ -8,6 +8,23 @@
 
 ---
 
+## [1.0.0-alpha.16] —— 未发布
+
+### 变更
+
+- Core、NWP、NIP 与 NDP 的内置帧注册路径改用源生成 JSON 和 MessagePack metadata。
+- Tier-3 BinaryVector metadata 改用有界 MessagePack/JSON 值树 writer，不再动态序列化
+  `object`。
+- 新增 `AddNcpHandshake()` 与 NativeAOT 安全的 `AddNwp()` registry 扩展。
+
+### 修复
+
+- Tier-2 现在会保留 `JsonElement` 内容，不再将其序列化为空 map。
+- Ivy NativeAOT 发布不再产生 NPS 自有的动态 JSON 或 MessagePack resolver 诊断；
+  运行时生成的注册重载继续作为显式兼容 fallback 保留。
+- SQLite storage 显式固定到 `SQLitePCLRaw.bundle_e_sqlite3 2.1.12`，并删除
+  `GHSA-2m69-gcr7-jv3q` suppression。
+
 ## [1.0.0-alpha.15] —— 2026-06-28
 
 ### 变更

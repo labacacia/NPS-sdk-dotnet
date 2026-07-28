@@ -3,6 +3,7 @@
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using MessagePack;
 
 namespace NPS.Core.Frames.Ncp;
 
@@ -13,9 +14,12 @@ namespace NPS.Core.Frames.Ncp;
 /// subsequent messages reference it by <see cref="AnchorId"/> only (NPS-1 §4.1).
 /// <para>Typical token saving: 30–60 % per session.</para>
 /// </summary>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record AnchorFrame : IFrame
 {
-    public FrameType    FrameType     => FrameType.Anchor;
+    [IgnoreMember]
+    public FrameType FrameType => FrameType.Anchor;
+    [IgnoreMember]
     public EncodingTier PreferredTier => EncodingTier.MsgPack;
 
     /// <summary>
@@ -42,9 +46,12 @@ public sealed record AnchorFrame : IFrame
 /// Incremental diff frame. Carries only changed fields as RFC 6902 JSON Patch operations
 /// or a compact binary bitset, referencing the base schema via <see cref="AnchorRef"/> (NPS-1 §4.2).
 /// </summary>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record DiffFrame : IFrame
 {
-    public FrameType    FrameType     => FrameType.Diff;
+    [IgnoreMember]
+    public FrameType FrameType => FrameType.Diff;
+    [IgnoreMember]
     public EncodingTier PreferredTier => EncodingTier.MsgPack;
 
     /// <summary>anchor_id of the base schema this diff applies to.</summary>
@@ -90,11 +97,12 @@ public sealed record DiffFrame : IFrame
 /// <param name="Path">JSON Pointer (RFC 6901) to the target location, e.g. <c>"/price"</c>.</param>
 /// <param name="Value">New value for <c>add</c> / <c>replace</c> / <c>test</c>; absent for <c>remove</c>.</param>
 /// <param name="From">Source location for <c>move</c> / <c>copy</c>.</param>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record JsonPatchOperation(
-    [property: JsonPropertyName("op")]    string        Op,
-    [property: JsonPropertyName("path")]  string        Path,
-    [property: JsonPropertyName("value")] JsonElement?  Value = null,
-    [property: JsonPropertyName("from")]  string?       From  = null);
+    [property: JsonPropertyName("op")] string Op,
+    [property: JsonPropertyName("path")] string Path,
+    [property: JsonPropertyName("value")] JsonElement? Value = null,
+    [property: JsonPropertyName("from")] string? From = null);
 
 // ── StreamFrame (0x03) ───────────────────────────────────────────────────────
 
@@ -103,9 +111,12 @@ public sealed record JsonPatchOperation(
 /// Chunks are ordered by <see cref="Seq"/> and reassembled by the receiver (NPS-1 §4.3).
 /// Back-pressure is signalled via <see cref="WindowSize"/>.
 /// </summary>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record StreamFrame : IFrame
 {
-    public FrameType    FrameType     => FrameType.Stream;
+    [IgnoreMember]
+    public FrameType FrameType => FrameType.Stream;
+    [IgnoreMember]
     public EncodingTier PreferredTier => EncodingTier.MsgPack;
 
     /// <summary>Unique identifier for this stream. UUID v4 format.</summary>
@@ -150,9 +161,12 @@ public sealed record StreamFrame : IFrame
 /// Capsule frame — full response envelope. References a cached anchor schema
 /// and carries the complete result set, with optional cursor for pagination (NPS-1 §4.4).
 /// </summary>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record CapsFrame : IFrame
 {
-    public FrameType    FrameType     => FrameType.Caps;
+    [IgnoreMember]
+    public FrameType FrameType => FrameType.Caps;
+    [IgnoreMember]
     public EncodingTier PreferredTier => EncodingTier.MsgPack;
 
     /// <summary>anchor_id of the schema that describes each record in <see cref="Data"/>.</summary>
@@ -199,9 +213,12 @@ public sealed record CapsFrame : IFrame
 /// Unified error frame shared across all NPS protocol layers (NPS-1 §4.6).
 /// In native transport mode, errors are conveyed via this frame type.
 /// </summary>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record ErrorFrame : IFrame
 {
-    public FrameType    FrameType     => FrameType.Error;
+    [IgnoreMember]
+    public FrameType FrameType => FrameType.Error;
+    [IgnoreMember]
     public EncodingTier PreferredTier => EncodingTier.MsgPack;
 
     /// <summary>NPS status code, e.g. <c>NPS-CLIENT-NOT-FOUND</c>.</summary>
@@ -228,10 +245,13 @@ public sealed record ErrorFrame : IFrame
 /// after opening a TCP/QUIC connection; the Node replies with a <see cref="CapsFrame"/>.
 /// Not used in HTTP mode (NPS-1 §4.6).
 /// </summary>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record HelloFrame : IFrame
 {
-    public FrameType    FrameType     => FrameType.Hello;
+    [IgnoreMember]
+    public FrameType FrameType => FrameType.Hello;
     /// <summary>Tier-1 JSON is recommended during handshake (encoding not yet negotiated).</summary>
+    [IgnoreMember]
     public EncodingTier PreferredTier => EncodingTier.Json;
 
     /// <summary>Highest NPS version the client supports, e.g. <c>"0.4"</c>.</summary>
@@ -297,9 +317,12 @@ public sealed record HelloFrame : IFrame
 /// </para>
 /// </summary>
 [Obsolete("AlignFrame (0x05) is deprecated in NCP v0.2. Use NOP AlignStream (0x43) instead. Will be removed in NPS v1.0.")]
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record AlignFrame : IFrame
 {
-    public FrameType    FrameType     => FrameType.Align;
+    [IgnoreMember]
+    public FrameType FrameType => FrameType.Align;
+    [IgnoreMember]
     public EncodingTier PreferredTier => EncodingTier.MsgPack;
 
     /// <summary>Shared state snapshot as an arbitrary JSON object.</summary>
@@ -321,9 +344,12 @@ public sealed record AlignFrame : IFrame
 /// The response frame header determines the stable default encoding; optional payload
 /// fields echo the full enabled encoding policy for extensions such as BinaryVector.
 /// </summary>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record NcpHandshakeCapsFrame : IFrame
 {
-    public FrameType    FrameType     => FrameType.Caps;
+    [IgnoreMember]
+    public FrameType FrameType => FrameType.Caps;
+    [IgnoreMember]
     public EncodingTier PreferredTier => EncodingTier.Json;
 
     /// <summary>The server's NID in <c>urn:nps:agent:{domain}:{id}</c> format.</summary>

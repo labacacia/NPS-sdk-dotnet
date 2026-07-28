@@ -12,10 +12,4 @@
     <None Include="$(MSBuildThisFileDirectory)CHANGELOG.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 
-  <ItemGroup>
-    <!-- Latest SQLitePCLRaw.lib.e_sqlite3 (2.1.11) is still flagged by this advisory;
-         keep audit suppression explicit until an upstream fixed package exists. -->
-    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-2m69-gcr7-jv3q" />
-  </ItemGroup>
-
 </Project>

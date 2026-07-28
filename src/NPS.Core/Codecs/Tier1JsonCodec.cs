@@ -1,6 +1,7 @@
 // Copyright 2026 INNO LOTUS PTY LTD
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using NPS.Core.Exceptions;
@@ -14,8 +15,10 @@ namespace NPS.Core.Codecs;
 /// <summary>Low-level encode/decode contract for a specific encoding tier.</summary>
 public interface IFrameCodec
 {
-    byte[]  Encode(IFrame frame);
-    IFrame  Decode(FrameType type, ReadOnlySpan<byte> payload, FrameRegistry registry);
+    [RequiresDynamicCode("Use Encode(IFrame, FrameRegistry) with source-generated frame metadata for NativeAOT.")]
+    [RequiresUnreferencedCode("Use Encode(IFrame, FrameRegistry) with source-generated frame metadata when trimming.")]
+    byte[] Encode(IFrame frame);
+    IFrame Decode(FrameType type, ReadOnlySpan<byte> payload, FrameRegistry registry);
 }
 
 // ── Tier1JsonCodec ────────────────────────────────────────────────────────────
@@ -28,12 +31,14 @@ public sealed class Tier1JsonCodec : IFrameCodec
 {
     private static readonly JsonSerializerOptions _opts = new()
     {
-        PropertyNamingPolicy        = JsonNamingPolicy.SnakeCaseLower,
-        DefaultIgnoreCondition      = JsonIgnoreCondition.WhenWritingNull,
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         PropertyNameCaseInsensitive = true,
-        WriteIndented               = false,
+        WriteIndented = false,
     };
 
+    [RequiresDynamicCode("Use Encode(IFrame, FrameRegistry) with source-generated frame metadata for NativeAOT.")]
+    [RequiresUnreferencedCode("Use Encode(IFrame, FrameRegistry) with source-generated frame metadata when trimming.")]
     public byte[] Encode(IFrame frame)
     {
         try
@@ -46,12 +51,24 @@ public sealed class Tier1JsonCodec : IFrameCodec
         }
     }
 
-    public IFrame Decode(FrameType type, ReadOnlySpan<byte> payload, FrameRegistry registry)
+    public byte[] Encode(IFrame frame, FrameRegistry registry)
     {
-        var clrType = registry.Resolve(type);
         try
         {
-            return (IFrame)JsonSerializer.Deserialize(payload, clrType, _opts)!;
+            return registry.ResolveRegistration(frame).JsonEncoder(frame);
+        }
+        catch (Exception ex)
+        {
+            throw new NpsCodecException($"Tier-1 JSON encode failed for {frame.FrameType}.", ex);
+        }
+    }
+
+    public IFrame Decode(FrameType type, ReadOnlySpan<byte> payload, FrameRegistry registry)
+    {
+        var registration = registry.ResolveRegistration(type);
+        try
+        {
+            return registration.JsonDecoder(payload);
         }
         catch (Exception ex)
         {

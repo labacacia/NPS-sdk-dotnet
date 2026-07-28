@@ -52,7 +52,8 @@ var header = codec.Peek(wire);
 var decoded = codec.Decode(wire);
 ```
 
-`LabAcacia.NPS.Core` 的内置 Tier-2 codec 使用 MessagePack-CSharp。宿主如果
+`LabAcacia.NPS.Core` 的内置 Tier-2 codec 使用 MessagePack-CSharp 源生成 formatter；
+内置 registry 与上层协议注册 helper 均兼容 NativeAOT。宿主如果
 需要替换二进制 codec，可以实现 `IFrameCodec`，并用自定义 codec 实例构造
 `NpsFrameCodec`；DI helper 默认注册 JSON + MessagePack 组合。
 

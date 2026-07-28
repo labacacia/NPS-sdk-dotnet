@@ -8,6 +8,25 @@ Until NPS reaches v1.0 stable, every repository in the suite is synchronized to 
 
 ---
 
+## [1.0.0-alpha.16] — Unreleased
+
+### Changed
+
+- Core, NWP, NIP, and NDP frame registries now use source-generated JSON and MessagePack metadata
+  in their built-in registration paths.
+- Tier-3 BinaryVector metadata is encoded with bounded MessagePack and JSON value-tree writers
+  instead of runtime object serialization.
+- Added `AddNcpHandshake()` and a NativeAOT-safe `AddNwp()` registry extension.
+
+### Fixed
+
+- Tier-2 now preserves `JsonElement` content instead of serializing it as an empty map.
+- Ivy NativeAOT publication no longer reports NPS-owned dynamic JSON or MessagePack resolver
+  diagnostics; the runtime-generated registration overload remains available as an explicit
+  compatibility fallback.
+- SQLite storage now pins `SQLitePCLRaw.bundle_e_sqlite3 2.1.12` and no longer suppresses
+  `GHSA-2m69-gcr7-jv3q`.
+
 ## [1.0.0-alpha.15] — 2026-06-28
 
 ### Changed

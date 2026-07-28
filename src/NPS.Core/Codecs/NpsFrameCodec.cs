@@ -15,16 +15,16 @@ namespace NPS.Core.Codecs;
 /// </summary>
 public sealed class NpsFrameCodec
 {
-    private readonly Tier1JsonCodec    _json;
+    private readonly Tier1JsonCodec _json;
     private readonly Tier2MsgPackCodec _msgpack;
     private readonly Tier3BinaryVectorCodec _binaryVector;
-    private readonly FrameRegistry     _registry;
-    private readonly uint              _maxPayload;
+    private readonly FrameRegistry _registry;
+    private readonly uint _maxPayload;
 
     public NpsFrameCodec(
-        Tier1JsonCodec    json,
+        Tier1JsonCodec json,
         Tier2MsgPackCodec msgpack,
-        FrameRegistry     registry)
+        FrameRegistry registry)
         : this(json, msgpack, new Tier3BinaryVectorCodec(), registry, FrameHeader.DefaultMaxPayload) { }
 
     /// <summary>
@@ -47,10 +47,10 @@ public sealed class NpsFrameCodec
     /// for dependency-injected hosts.
     /// </summary>
     public NpsFrameCodec(
-        Tier1JsonCodec    json,
+        Tier1JsonCodec json,
         Tier2MsgPackCodec msgpack,
-        FrameRegistry     registry,
-        uint              maxPayload)
+        FrameRegistry registry,
+        uint maxPayload)
         : this(json, msgpack, new Tier3BinaryVectorCodec(), registry, maxPayload) { }
 
     /// <summary>
@@ -59,17 +59,17 @@ public sealed class NpsFrameCodec
     /// for dependency-injected hosts.
     /// </summary>
     public NpsFrameCodec(
-        Tier1JsonCodec    json,
+        Tier1JsonCodec json,
         Tier2MsgPackCodec msgpack,
         Tier3BinaryVectorCodec binaryVector,
-        FrameRegistry     registry,
-        uint              maxPayload)
+        FrameRegistry registry,
+        uint maxPayload)
     {
-        _json         = json;
-        _msgpack      = msgpack;
+        _json = json;
+        _msgpack = msgpack;
         _binaryVector = binaryVector;
-        _registry     = registry;
-        _maxPayload   = maxPayload;
+        _registry = registry;
+        _maxPayload = maxPayload;
     }
 
     /// <summary>
@@ -82,9 +82,14 @@ public sealed class NpsFrameCodec
     /// </summary>
     public byte[] Encode(IFrame frame, EncodingTier? overrideTier = null)
     {
-        var tier    = overrideTier ?? frame.PreferredTier;
-        var codec   = SelectCodec(tier);
-        var payload = codec.Encode(frame);
+        var tier = overrideTier ?? frame.PreferredTier;
+        var payload = tier switch
+        {
+            EncodingTier.Json => _json.Encode(frame, _registry),
+            EncodingTier.MsgPack => _msgpack.Encode(frame, _registry),
+            EncodingTier.BinaryVector => _binaryVector.Encode(frame, _registry),
+            _ => throw UnsupportedTier(tier)
+        };
 
         if ((uint)payload.Length > _maxPayload)
             throw new NpsCodecException(
@@ -111,9 +116,9 @@ public sealed class NpsFrameCodec
     /// </summary>
     public IFrame Decode(ReadOnlySpan<byte> wire)
     {
-        var header  = FrameHeader.Parse(wire);
+        var header = FrameHeader.Parse(wire);
         var payload = wire.Slice(header.HeaderSize, (int)header.PayloadLength);
-        var codec   = SelectCodec(header.EncodingTier);
+        var codec = SelectCodec(header.EncodingTier);
         return codec.Decode(header.FrameType, payload, _registry);
     }
 
@@ -150,12 +155,15 @@ public sealed class NpsFrameCodec
 
     private IFrameCodec SelectCodec(EncodingTier tier) => tier switch
     {
-        EncodingTier.Json         => _json,
-        EncodingTier.MsgPack      => _msgpack,
+        EncodingTier.Json => _json,
+        EncodingTier.MsgPack => _msgpack,
         EncodingTier.BinaryVector => _binaryVector,
-        _ => throw new NpsCodecException(
+        _ => throw UnsupportedTier(tier)
+    };
+
+    private static NpsCodecException UnsupportedTier(EncodingTier tier) =>
+        new(
             $"Unsupported encoding tier: {tier} (0x{(byte)tier:X2}).",
             NpsStatusCodes.ClientBadFrame,
-            NcpErrorCodes.FrameFlagsInvalid)
-    };
+            NcpErrorCodes.FrameFlagsInvalid);
 }

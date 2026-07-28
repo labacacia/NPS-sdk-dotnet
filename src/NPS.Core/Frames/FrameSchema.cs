@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Text.Json.Serialization;
+using MessagePack;
 
 namespace NPS.Core.Frames;
 
@@ -9,6 +10,7 @@ namespace NPS.Core.Frames;
 /// Schema definition carried inside an <see cref="Ncp.AnchorFrame"/>.
 /// Defines field names, primitive types, and optional semantic annotations.
 /// </summary>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record FrameSchema
 {
     /// <summary>Ordered list of field descriptors.</summary>
@@ -30,8 +32,9 @@ public sealed record FrameSchema
 /// <param name="Nullable">
 /// Whether the field may be null. Defaults to <c>false</c> (NPS-1 §4.1).
 /// </param>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record SchemaField(
-    [property: JsonPropertyName("name")]     string  Name,
-    [property: JsonPropertyName("type")]     string  Type,
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("type")] string Type,
     [property: JsonPropertyName("semantic")] string? Semantic = null,
-    [property: JsonPropertyName("nullable")] bool    Nullable = false);
+    [property: JsonPropertyName("nullable")] bool Nullable = false);
