@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Net.Http.Json;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using NPS.NIP.Crypto;
 using NPS.NIP.Frames;
 
 namespace NPS.NIP.Client;
@@ -35,6 +37,38 @@ public sealed class NipCaClient
 
     public Task<NipCaCrl> GetCrlAsync(CancellationToken ct = default) =>
         GetJsonAsync<NipCaCrl>($"{_prefix}/v1/crl", ct);
+
+    public Task<NipCaCertificateList> GetCertificatesAsync(
+        string? bearerToken = null,
+        CancellationToken ct = default) =>
+        SendJsonAsync<NipCaCertificateList>(
+            HttpMethod.Get,
+            $"{_prefix}/v1/certificates",
+            null,
+            bearerToken,
+            ct);
+
+    /// <summary>Verifies a signed NIP v0.13 CRL artifact.</summary>
+    public static bool VerifyCrlSignature(NipCaCrl crl, string caPublicKey)
+    {
+        try
+        {
+            var key = NipSigner.DecodePublicKey(caPublicKey);
+            if (key is null) return false;
+            var body = new
+            {
+                issued_by = crl.IssuedBy,
+                issued_at = crl.IssuedAt,
+                entries = crl.Entries,
+            };
+            return NipSigner.Verify(key, body, crl.Signature);
+        }
+        catch (Exception ex) when (
+            ex is FormatException or ArgumentException or CryptographicException)
+        {
+            return false;
+        }
+    }
 
     public Task<IdentFrame> RegisterAgentAsync(
         NipCaRegisterRequest request, string? bearerToken = null, CancellationToken ct = default) =>
@@ -165,6 +199,28 @@ public sealed record NipCaCrlEntry
     public required string Serial { get; init; }
     public string? RevokedAt { get; init; }
     public string? Reason { get; init; }
+}
+
+public sealed record NipCaCertificateList
+{
+    public required IReadOnlyList<NipCaCertificateRecord> Entries { get; init; }
+}
+
+public sealed record NipCaCertificateRecord
+{
+    public required string Nid { get; init; }
+    public required string EntityType { get; init; }
+    public required string Serial { get; init; }
+    public required string PubKey { get; init; }
+    public required IReadOnlyList<string> Capabilities { get; init; }
+    public JsonElement Scope { get; init; }
+    public required string IssuedBy { get; init; }
+    public required string IssuedAt { get; init; }
+    public required string ExpiresAt { get; init; }
+    public string? RevokedAt { get; init; }
+    public string? RevokeReason { get; init; }
+    public string? NidRole { get; init; }
+    public string? ParentNid { get; init; }
 }
 
 public sealed record NipCaVerifyResponse

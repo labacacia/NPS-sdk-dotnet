@@ -4,6 +4,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Linq;
+using MessagePack;
 using NPS.Core.Frames;
 
 namespace NPS.NDP.Frames;
@@ -14,6 +15,7 @@ namespace NPS.NDP.Frames;
 /// Physical address entry inside an <see cref="AnnounceFrame"/> (NPS-4 §3.1).
 /// Each node may publish multiple addresses (IPv4, IPv6, hostname).
 /// </summary>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record NdpAddress
 {
     /// <summary>Hostname or IP (e.g. <c>"10.0.0.5"</c> or <c>"api.example.com"</c>).</summary>
@@ -32,6 +34,7 @@ public sealed record NdpAddress
 /// <summary>
 /// Resolved endpoint returned inside a <see cref="ResolveFrame"/> response (NPS-4 §3.2).
 /// </summary>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record NdpResolveResult
 {
     /// <summary>Resolved hostname or IP.</summary>
@@ -54,6 +57,7 @@ public sealed record NdpResolveResult
 /// <summary>
 /// A node entry in a <see cref="GraphFrame"/> topology snapshot (NPS-4 §3.3, NDP v0.8).
 /// </summary>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record NdpGraphNode
 {
     /// <summary>Node NID.</summary>
@@ -72,6 +76,7 @@ public sealed record NdpGraphNode
 /// <summary>
 /// A directed edge in a <see cref="GraphFrame"/> topology snapshot (NPS-4 §3.3, NDP v0.8).
 /// </summary>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record NdpGraphEdge
 {
     /// <summary>Source node NID.</summary>
@@ -102,12 +107,13 @@ public sealed record NdpGraphEdge
 /// JSON of the frame (minus <c>signature</c>), made with the publisher's own private key
 /// (the same key that produced the corresponding <see cref="NPS.NIP.Frames.IdentFrame"/>).</para>
 /// </summary>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record AnnounceFrame : IFrame
 {
     /// <inheritdoc/>
-    [JsonIgnore] public FrameType    FrameType     => FrameType.Announce;
+    [JsonIgnore, IgnoreMember] public FrameType FrameType => FrameType.Announce;
     /// <inheritdoc/>
-    [JsonIgnore] public EncodingTier PreferredTier => EncodingTier.MsgPack;
+    [JsonIgnore, IgnoreMember] public EncodingTier PreferredTier => EncodingTier.MsgPack;
 
     /// <summary>Frame type discriminant. Fixed value <c>"0x30"</c>.</summary>
     [JsonPropertyName("frame")]
@@ -151,6 +157,14 @@ public sealed record AnnounceFrame : IFrame
     /// <summary>Announcement timestamp (ISO 8601 UTC).</summary>
     [JsonPropertyName("timestamp")]
     public required string Timestamp { get; init; }
+
+    /// <summary>
+    /// Per-NID monotonic configuration sequence (NDP v0.12). Publishers conforming
+    /// to v0.12 emit this field; zero is reserved for legacy local-dev compatibility.
+    /// </summary>
+    [JsonPropertyName("graph_seq")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public ulong GraphSeq { get; init; }
 
     /// <summary>
     /// Ed25519 signature (<c>ed25519:{base64url}</c>) over the canonical JSON of this
@@ -200,6 +214,18 @@ public sealed record AnnounceFrame : IFrame
     public IReadOnlyList<string>? BridgeProtocols { get; init; }
 
     /// <summary>
+    /// External protocols this Bridge Node <b>serves inbound</b> (external → NPS), e.g.
+    /// <c>["mcp","grpc"]</c> — protocols for which it exposes a native server endpoint.
+    /// Same value domain as <see cref="BridgeProtocols"/> (the outbound set). Absent or empty ⇒
+    /// no inbound surface, i.e. an outbound-only Bridge Node (the only kind that existed through
+    /// alpha.15). A node declaring the <c>"bridge"</c> role MUST have at least one of the two
+    /// non-empty (NPS-4 §3.1, NPS-CR-0010).
+    /// </summary>
+    [JsonPropertyName("bridge_inbound_protocols")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? BridgeInboundProtocols { get; init; }
+
+    /// <summary>
     /// Push target at which a resident or hybrid publisher accepts activation traffic.
     /// Same shape as an <see cref="NdpAddress"/> entry in <see cref="Addresses"/> (NPS-4 §3.1).
     /// </summary>
@@ -221,6 +247,15 @@ public sealed record AnnounceFrame : IFrame
     /// </summary>
     [JsonPropertyName("last_seen")]
     public string? LastSeen { get; init; }
+
+    /// <summary>
+    /// Multi-Anchor cluster ownership fence (NPS-CR-0009). The epoch under which this Anchor
+    /// holds ownership of its <see cref="ClusterAnchor"/> cluster; strictly increases on each
+    /// ownership transfer. Absent (<c>null</c>) is treated as <c>1</c> (single-Anchor). Omitted
+    /// from the signed canonical body when null, so single-Anchor frames are unaffected.
+    /// </summary>
+    [JsonPropertyName("cluster_epoch")]
+    public ulong? ClusterEpoch { get; init; }
 }
 
 // ── ResolveFrame (0x31) ───────────────────────────────────────────────────────
@@ -234,12 +269,13 @@ public sealed record AnnounceFrame : IFrame
 ///   <item>Response: same <see cref="Target"/> plus a populated <see cref="Resolved"/> object.</item>
 /// </list>
 /// </summary>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record ResolveFrame : IFrame
 {
     /// <inheritdoc/>
-    [JsonIgnore] public FrameType    FrameType     => FrameType.Resolve;
+    [JsonIgnore, IgnoreMember] public FrameType FrameType => FrameType.Resolve;
     /// <inheritdoc/>
-    [JsonIgnore] public EncodingTier PreferredTier => EncodingTier.Json;
+    [JsonIgnore, IgnoreMember] public EncodingTier PreferredTier => EncodingTier.Json;
 
     /// <summary>Frame type discriminant. Fixed value <c>"0x31"</c>.</summary>
     [JsonPropertyName("frame")]
@@ -270,12 +306,13 @@ public sealed record ResolveFrame : IFrame
 /// Oversized frames MUST be rejected with <c>NDP-GRAPH-TOO-LARGE</c>;
 /// structural errors with <c>NDP-GRAPH-INVALID</c>.
 /// </summary>
+[MessagePackObject(keyAsPropertyName: true)]
 public sealed record GraphFrame : IFrame
 {
     /// <inheritdoc/>
-    [JsonIgnore] public FrameType    FrameType     => FrameType.Graph;
+    [JsonIgnore, IgnoreMember] public FrameType FrameType => FrameType.Graph;
     /// <inheritdoc/>
-    [JsonIgnore] public EncodingTier PreferredTier => EncodingTier.MsgPack;
+    [JsonIgnore, IgnoreMember] public EncodingTier PreferredTier => EncodingTier.MsgPack;
 
     /// <summary>Frame type discriminant. Fixed value <c>"0x32"</c>.</summary>
     [JsonPropertyName("frame")]

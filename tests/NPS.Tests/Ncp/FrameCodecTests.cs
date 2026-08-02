@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Text.Json;
+using MessagePack;
 using NPS.Core;
 using NPS.Core.Codecs;
 using NPS.Core.Exceptions;
@@ -17,8 +18,8 @@ namespace NPS.Tests.Ncp;
 /// </summary>
 public sealed class FrameCodecTests
 {
-    private static readonly FrameRegistry  Registry = FrameRegistry.CreateDefault();
-    private static readonly Tier1JsonCodec Json     = new();
+    private static readonly FrameRegistry Registry = FrameRegistry.CreateDefault();
+    private static readonly Tier1JsonCodec Json = new();
     private static readonly Tier2MsgPackCodec MsgPack = new();
 
     private static NpsFrameCodec MakeCodec(uint maxPayload = FrameHeader.DefaultMaxPayload) =>
@@ -44,19 +45,19 @@ public sealed class FrameCodecTests
         var frame = new AnchorFrame
         {
             AnchorId = "sha256:" + new string('a', 64),
-            Schema   = MakeSchema(),
-            Ttl      = 7200,
+            Schema = MakeSchema(),
+            Ttl = 7200,
         };
 
-        var codec  = MakeCodec();
-        var wire   = codec.Encode(frame, tier);
+        var codec = MakeCodec();
+        var wire = codec.Encode(frame, tier);
         var result = (AnchorFrame)codec.Decode(wire);
 
         Assert.Equal(frame.AnchorId, result.AnchorId);
-        Assert.Equal(frame.Ttl,      result.Ttl);
+        Assert.Equal(frame.Ttl, result.Ttl);
         Assert.Equal(frame.Schema.Fields.Count, result.Schema.Fields.Count);
-        Assert.Equal("id",           result.Schema.Fields[0].Name);
-        Assert.Equal("entity.id",    result.Schema.Fields[0].Semantic);
+        Assert.Equal("id", result.Schema.Fields[0].Name);
+        Assert.Equal("entity.id", result.Schema.Fields[0].Semantic);
     }
 
     [Fact]
@@ -64,14 +65,14 @@ public sealed class FrameCodecTests
     {
         var frame = new HelloFrame
         {
-            NpsVersion         = "1.0",
+            NpsVersion = "1.0",
             SupportedEncodings = ["msgpack", "json"],
             SupportedProtocols = ["ncp"],
-            AgentId            = "urn:nps:test:node",
+            AgentId = "urn:nps:test:node",
         };
 
         var codec = NpsFrameCodec.CreateDefault();
-        var wire  = codec.Encode(frame, EncodingTier.Json);
+        var wire = codec.Encode(frame, EncodingTier.Json);
 
         Assert.IsType<HelloFrame>(codec.Decode(wire));
     }
@@ -81,14 +82,14 @@ public sealed class FrameCodecTests
     {
         var frame = new HelloFrame
         {
-            NpsVersion         = "1.0",
+            NpsVersion = "1.0",
             SupportedEncodings = ["msgpack", "json"],
             SupportedProtocols = ["ncp"],
-            AgentId            = "urn:nps:test:node",
+            AgentId = "urn:nps:test:node",
         };
 
         var codec = MakeCodec();
-        var wire  = codec.Encode(frame, EncodingTier.MsgPack);
+        var wire = codec.Encode(frame, EncodingTier.MsgPack);
 
         Assert.Equal(NpsFrameCodec.PeekHeader(wire), codec.Peek(wire));
     }
@@ -97,9 +98,58 @@ public sealed class FrameCodecTests
     public void AnchorFrame_WireHeader_HasCorrectFrameType()
     {
         var frame = new AnchorFrame { AnchorId = "sha256:" + new string('b', 64), Schema = MakeSchema() };
-        var wire  = MakeCodec().Encode(frame, EncodingTier.MsgPack);
+        var wire = MakeCodec().Encode(frame, EncodingTier.MsgPack);
 
         Assert.Equal((byte)FrameType.Anchor, wire[0]);
+    }
+
+    [Fact]
+    public void Tier2_SourceGeneratedCodec_PreservesContractlessWireShape()
+    {
+        var frame = new DiffFrame
+        {
+            AnchorRef = "sha256:probe",
+            BaseSeq = 1,
+            BinaryBitset = [1, 2, 3],
+        };
+
+        var legacy = MsgPack.Encode(frame);
+        var generated = MsgPack.Encode(frame, Registry);
+        var json = MessagePackSerializer.ConvertToJson(generated);
+        using var doc = JsonDocument.Parse(json);
+
+        Assert.Equal(legacy, generated);
+        Assert.Equal(
+            ["AnchorRef", "BaseSeq", "PatchFormat", "Patch", "BinaryBitset", "EntityId"],
+            doc.RootElement.EnumerateObject().Select(property => property.Name));
+        Assert.Equal(JsonValueKind.Null, doc.RootElement.GetProperty("Patch").ValueKind);
+        Assert.Equal(JsonValueKind.Null, doc.RootElement.GetProperty("EntityId").ValueKind);
+        Assert.False(doc.RootElement.TryGetProperty("FrameType", out _));
+        Assert.False(doc.RootElement.TryGetProperty("PreferredTier", out _));
+    }
+
+    [Fact]
+    public void Tier2_JsonElement_RoundTripsContent()
+    {
+        var frame = new DiffFrame
+        {
+            AnchorRef = "sha256:json-element",
+            BaseSeq = 1,
+            Patch =
+            [
+                new JsonPatchOperation(
+                    "replace",
+                    "/price",
+                    JsonDocument.Parse("""{"amount":99.99,"currency":"USD"}""").RootElement),
+            ],
+        };
+
+        var codec = MakeCodec();
+        var result = (DiffFrame)codec.Decode(codec.Encode(frame, EncodingTier.MsgPack));
+
+        var value = Assert.IsType<JsonElement>(result.Patch![0].Value);
+        Assert.Equal(99.99m, value.GetProperty("amount").GetDecimal());
+        Assert.Equal("USD", value.GetProperty("currency").GetString());
     }
 
     // ── DiffFrame ────────────────────────────────────────────────────────────
@@ -112,26 +162,26 @@ public sealed class FrameCodecTests
         var frame = new DiffFrame
         {
             AnchorRef = "sha256:" + new string('c', 64),
-            BaseSeq   = 42,
-            EntityId  = "product:1001",
-            Patch     =
+            BaseSeq = 42,
+            EntityId = "product:1001",
+            Patch =
             [
                 new JsonPatchOperation("replace", "/price", JsonDocument.Parse("99.99").RootElement),
                 new JsonPatchOperation("remove",  "/name"),
             ],
         };
 
-        var codec  = MakeCodec();
-        var wire   = codec.Encode(frame, tier);
+        var codec = MakeCodec();
+        var wire = codec.Encode(frame, tier);
         var result = (DiffFrame)codec.Decode(wire);
 
         Assert.Equal(frame.AnchorRef, result.AnchorRef);
-        Assert.Equal(frame.BaseSeq,   result.BaseSeq);
-        Assert.Equal(frame.EntityId,  result.EntityId);
+        Assert.Equal(frame.BaseSeq, result.BaseSeq);
+        Assert.Equal(frame.EntityId, result.EntityId);
         Assert.NotNull(result.Patch);
-        Assert.Equal(2,               result.Patch.Count);
-        Assert.Equal("replace",       result.Patch[0].Op);
-        Assert.Equal("/price",        result.Patch[0].Path);
+        Assert.Equal(2, result.Patch.Count);
+        Assert.Equal("replace", result.Patch[0].Op);
+        Assert.Equal("/price", result.Patch[0].Path);
     }
 
     // ── StreamFrame ──────────────────────────────────────────────────────────
@@ -143,20 +193,20 @@ public sealed class FrameCodecTests
     {
         var frame = new StreamFrame
         {
-            StreamId   = "stream-001",
-            Seq        = 3,
-            IsLast     = false,
-            AnchorRef  = "sha256:" + new string('d', 64),
-            Data       = [JsonDocument.Parse("{\"id\":1}").RootElement],
+            StreamId = "stream-001",
+            Seq = 3,
+            IsLast = false,
+            AnchorRef = "sha256:" + new string('d', 64),
+            Data = [JsonDocument.Parse("{\"id\":1}").RootElement],
             WindowSize = 10,
         };
 
-        var codec  = MakeCodec();
-        var wire   = codec.Encode(frame, tier);
+        var codec = MakeCodec();
+        var wire = codec.Encode(frame, tier);
         var result = (StreamFrame)codec.Decode(wire);
 
-        Assert.Equal(frame.StreamId,   result.StreamId);
-        Assert.Equal(frame.Seq,        result.Seq);
+        Assert.Equal(frame.StreamId, result.StreamId);
+        Assert.Equal(frame.Seq, result.Seq);
         Assert.False(result.IsLast);
         Assert.Equal(frame.WindowSize, result.WindowSize);
         Assert.Single(result.Data);
@@ -167,10 +217,12 @@ public sealed class FrameCodecTests
     {
         var frame = new StreamFrame
         {
-            StreamId = "s1", Seq = 0, IsLast = false,
-            Data     = [JsonDocument.Parse("{}").RootElement],
+            StreamId = "s1",
+            Seq = 0,
+            IsLast = false,
+            Data = [JsonDocument.Parse("{}").RootElement],
         };
-        var wire  = MakeCodec().Encode(frame, EncodingTier.Json);
+        var wire = MakeCodec().Encode(frame, EncodingTier.Json);
         var flags = (FrameFlags)wire[1];
         Assert.Equal(0, (byte)flags & (byte)FrameFlags.Final);
     }
@@ -180,10 +232,12 @@ public sealed class FrameCodecTests
     {
         var frame = new StreamFrame
         {
-            StreamId = "s1", Seq = 1, IsLast = true,
-            Data     = [JsonDocument.Parse("{}").RootElement],
+            StreamId = "s1",
+            Seq = 1,
+            IsLast = true,
+            Data = [JsonDocument.Parse("{}").RootElement],
         };
-        var wire  = MakeCodec().Encode(frame, EncodingTier.Json);
+        var wire = MakeCodec().Encode(frame, EncodingTier.Json);
         var flags = (FrameFlags)wire[1];
         Assert.NotEqual(0, (byte)flags & (byte)FrameFlags.Final);
     }
@@ -197,24 +251,24 @@ public sealed class FrameCodecTests
     {
         var frame = new CapsFrame
         {
-            AnchorRef      = "sha256:" + new string('e', 64),
-            Count          = 2,
-            Data           = [JsonDocument.Parse("{\"id\":1}").RootElement, JsonDocument.Parse("{\"id\":2}").RootElement],
-            NextCursor     = "cursor_abc",
-            TokenEst       = 512,
-            Cached         = false,
-            TokenizerUsed  = "cl100k_base",
+            AnchorRef = "sha256:" + new string('e', 64),
+            Count = 2,
+            Data = [JsonDocument.Parse("{\"id\":1}").RootElement, JsonDocument.Parse("{\"id\":2}").RootElement],
+            NextCursor = "cursor_abc",
+            TokenEst = 512,
+            Cached = false,
+            TokenizerUsed = "cl100k_base",
         };
 
-        var codec  = MakeCodec();
-        var wire   = codec.Encode(frame, tier);
+        var codec = MakeCodec();
+        var wire = codec.Encode(frame, tier);
         var result = (CapsFrame)codec.Decode(wire);
 
-        Assert.Equal(frame.AnchorRef,     result.AnchorRef);
-        Assert.Equal(frame.Count,         result.Count);
-        Assert.Equal(2,                   result.Data.Count);
-        Assert.Equal(frame.NextCursor,    result.NextCursor);
-        Assert.Equal(frame.TokenEst,      result.TokenEst);
+        Assert.Equal(frame.AnchorRef, result.AnchorRef);
+        Assert.Equal(frame.Count, result.Count);
+        Assert.Equal(2, result.Data.Count);
+        Assert.Equal(frame.NextCursor, result.NextCursor);
+        Assert.Equal(frame.TokenEst, result.TokenEst);
         Assert.Equal(frame.TokenizerUsed, result.TokenizerUsed);
     }
 
@@ -227,18 +281,18 @@ public sealed class FrameCodecTests
     {
         var frame = new ErrorFrame
         {
-            Status  = NpsStatusCodes.ClientNotFound,
-            Error   = "NCP-ANCHOR-NOT-FOUND",
+            Status = NpsStatusCodes.ClientNotFound,
+            Error = "NCP-ANCHOR-NOT-FOUND",
             Message = "Anchor not in cache.",
             Details = JsonDocument.Parse("{\"anchor_ref\":\"sha256:abc\"}").RootElement,
         };
 
-        var codec  = MakeCodec();
-        var wire   = codec.Encode(frame, tier);
+        var codec = MakeCodec();
+        var wire = codec.Encode(frame, tier);
         var result = (ErrorFrame)codec.Decode(wire);
 
-        Assert.Equal(frame.Status,  result.Status);
-        Assert.Equal(frame.Error,   result.Error);
+        Assert.Equal(frame.Status, result.Status);
+        Assert.Equal(frame.Error, result.Error);
         Assert.Equal(frame.Message, result.Message);
         Assert.Equal((byte)FrameType.Error, wire[0]);
     }
@@ -258,13 +312,13 @@ public sealed class FrameCodecTests
         var frame = new CapsFrame
         {
             AnchorRef = "sha256:" + new string('f', 64),
-            Count     = (uint)bigData.Count,
-            Data      = bigData,
+            Count = (uint)bigData.Count,
+            Data = bigData,
         };
 
         // maxPayload = 4 MB → EXT mode enabled
         var codec = MakeCodec(maxPayload: 4 * 1024 * 1024);
-        var wire  = codec.Encode(frame, EncodingTier.Json);
+        var wire = codec.Encode(frame, EncodingTier.Json);
 
         var flags = (FrameFlags)wire[1];
         // EXT flag must be set (bit 7)
@@ -287,8 +341,8 @@ public sealed class FrameCodecTests
     public void PeekHeader_ReturnsHeaderWithoutDecoding()
     {
         var frame = new AnchorFrame { AnchorId = "sha256:" + new string('h', 64), Schema = MakeSchema() };
-        var wire  = MakeCodec().Encode(frame, EncodingTier.MsgPack);
-        var peek  = NpsFrameCodec.PeekHeader(wire);
+        var wire = MakeCodec().Encode(frame, EncodingTier.MsgPack);
+        var peek = NpsFrameCodec.PeekHeader(wire);
 
         Assert.Equal(FrameType.Anchor, peek.FrameType);
     }

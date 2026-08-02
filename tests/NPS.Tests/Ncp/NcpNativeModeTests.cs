@@ -76,6 +76,11 @@ public sealed class NcpNativeModeTests
         Assert.Equal("urn:nps:agent:test.local:server1", session.ServerCaps.NodeId);
         Assert.Contains("nwp", session.ServerCaps.Caps);
         Assert.Equal(EncodingTier.MsgPack, session.NegotiatedTier);  // server picks msgpack (first preference)
+        Assert.Equal("0.7", session.ServerCaps.SessionVersion);
+        Assert.Equal(["ncp", "nwp"], session.ServerCaps.SupportedProtocols);
+        Assert.Equal((uint)FrameHeader.DefaultMaxPayload, session.ServerCaps.MaxFramePayload);
+        Assert.False(session.ServerCaps.ExtSupport);
+        Assert.Equal(32u, session.ServerCaps.MaxConcurrentStreams);
 
         await serverTask;
     }

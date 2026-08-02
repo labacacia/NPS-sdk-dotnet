@@ -431,6 +431,40 @@ public sealed class NipIdentVerifierTests : IDisposable
             Assert.NotEqual(4, result.FailedStep);
     }
 
+    [Fact]
+    public async Task Step4_RequiredWithoutSource_FailsClosed()
+    {
+        var frame = MakeFrame();
+        var opts = new NipVerifierOptions
+        {
+            TrustedIssuers = _defaultOpts.TrustedIssuers,
+            RevocationMode = NipRevocationMode.Required,
+        };
+
+        var result = await MakeVerifier(opts).VerifyAsync(frame);
+
+        Assert.False(result.IsValid);
+        Assert.Equal(4, result.FailedStep);
+        Assert.Equal(NipErrorCodes.OcspUnavailable, result.ErrorCode);
+    }
+
+    [Fact]
+    public async Task Step4_OcspConfiguredWithoutHttpFactory_FailsClosed()
+    {
+        var frame = MakeFrame();
+        var opts = new NipVerifierOptions
+        {
+            TrustedIssuers = _defaultOpts.TrustedIssuers,
+            OcspUrl = "https://ocsp.test.example/nip",
+        };
+
+        var result = await MakeVerifier(opts).VerifyAsync(frame);
+
+        Assert.False(result.IsValid);
+        Assert.Equal(4, result.FailedStep);
+        Assert.Equal(NipErrorCodes.OcspUnavailable, result.ErrorCode);
+    }
+
     // ── Step 5: Capabilities ──────────────────────────────────────────────────
 
     [Fact]

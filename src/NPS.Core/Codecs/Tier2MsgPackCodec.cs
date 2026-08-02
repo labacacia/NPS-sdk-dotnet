@@ -1,6 +1,7 @@
 // Copyright 2026 INNO LOTUS PTY LTD
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Diagnostics.CodeAnalysis;
 using MessagePack;
 using MessagePack.Resolvers;
 using NPS.Core.Exceptions;
@@ -12,21 +13,39 @@ namespace NPS.Core.Codecs;
 /// <summary>
 /// Tier-2 codec: MessagePack binary serialisation via MessagePack-CSharp.
 /// Produces ~60 % smaller payloads vs Tier-1 JSON; default for production.
-/// Uses <see cref="ContractlessStandardResolver"/> to avoid [MessagePackObject] annotations
-/// on frame records — standard property names are used as keys.
+/// Registered frames use source-generated formatters. The single-argument
+/// <see cref="Encode(IFrame)"/> overload retains contractless runtime generation
+/// only as a compatibility fallback for unregistered third-party frame types.
 /// </summary>
 public sealed class Tier2MsgPackCodec : IFrameCodec
 {
-    private static readonly MessagePackSerializerOptions _opts =
-        MessagePackSerializerOptions.Standard
-            .WithResolver(ContractlessStandardResolver.Instance)
-            .WithCompression(MessagePackCompression.None);  // Compression handled at FrameFlags level
-
+    [RequiresDynamicCode("Use Encode(IFrame, FrameRegistry) with source-generated frame metadata for NativeAOT.")]
+    [RequiresUnreferencedCode("Use Encode(IFrame, FrameRegistry) with source-generated frame metadata when trimming.")]
     public byte[] Encode(IFrame frame)
     {
         try
         {
-            return MessagePackSerializer.Serialize(frame.GetType(), frame, _opts);
+            return MessagePackSerializer.Serialize(frame.GetType(), frame, DynamicFallback.Options);
+        }
+        catch (Exception ex)
+        {
+            throw new NpsCodecException($"Tier-2 MsgPack encode failed for {frame.FrameType}.", ex);
+        }
+    }
+
+    private static class DynamicFallback
+    {
+        internal static MessagePackSerializerOptions Options { get; } =
+            MessagePackSerializerOptions.Standard
+                .WithResolver(ContractlessStandardResolver.Instance)
+                .WithCompression(MessagePackCompression.None);
+    }
+
+    public byte[] Encode(IFrame frame, FrameRegistry registry)
+    {
+        try
+        {
+            return registry.ResolveRegistration(frame).MessagePackEncoder(frame);
         }
         catch (Exception ex)
         {
@@ -36,12 +55,10 @@ public sealed class Tier2MsgPackCodec : IFrameCodec
 
     public IFrame Decode(FrameType type, ReadOnlySpan<byte> payload, FrameRegistry registry)
     {
-        var clrType = registry.Resolve(type);
+        var registration = registry.ResolveRegistration(type);
         try
         {
-            var sequence = new System.Buffers.ReadOnlySequence<byte>(payload.ToArray());
-            var reader = new MessagePackReader(sequence);
-            return (IFrame)MessagePackSerializer.Deserialize(clrType, ref reader, _opts)!;
+            return registration.MessagePackDecoder(payload);
         }
         catch (Exception ex)
         {

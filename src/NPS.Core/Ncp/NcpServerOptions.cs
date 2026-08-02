@@ -32,8 +32,20 @@ public sealed class NcpServerOptions
     public uint MaxHelloPayload { get; init; } = FrameHeader.DefaultMaxPayload;
 
     /// <summary>
-    /// Wall-clock budget for the preamble, frame header, and Hello payload read.
-    /// Defaults to the NCP preamble timeout.
+    /// Wall-clock budget for the preamble read. Retained under its original
+    /// name for source compatibility. Defaults to the NCP preamble timeout.
     /// </summary>
     public TimeSpan HandshakeReadTimeout { get; init; } = NcpPreamble.ReadTimeout;
+
+    /// <summary>
+    /// Separate wall-clock budget for the Hello header and payload after a valid
+    /// preamble. Defaults to the NCP v0.11 portable-server limit.
+    /// </summary>
+    public TimeSpan HelloReadTimeout { get; init; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// Server capabilities used for deterministic version, encoding, protocol,
+    /// payload, and stream-limit negotiation.
+    /// </summary>
+    public NcpHandshakeProfile HandshakeProfile { get; init; } = new();
 }

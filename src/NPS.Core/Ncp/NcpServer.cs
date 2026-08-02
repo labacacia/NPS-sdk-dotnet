@@ -65,24 +65,32 @@ public sealed class NcpServer : IAsyncDisposable
         {
             stream = await AuthenticateAsync(tcp, stream, ct).ConfigureAwait(false);
 
-            using var handshakeCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            using var preambleCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             if (_options.HandshakeReadTimeout > TimeSpan.Zero)
-                handshakeCts.CancelAfter(_options.HandshakeReadTimeout);
-            var handshakeCt = handshakeCts.Token;
+                preambleCts.CancelAfter(_options.HandshakeReadTimeout);
 
-            // 1 — read & validate preamble within the handshake timeout.
+            // 1 — read & validate preamble within its own timeout.
             var preambleBuf = new byte[NcpPreamble.Length];
-            await stream.ReadExactlyAsync(preambleBuf, handshakeCt).ConfigureAwait(false);
+            await stream.ReadExactlyAsync(preambleBuf, preambleCts.Token).ConfigureAwait(false);
 
             NcpPreamble.Validate(preambleBuf);          // throws NcpPreambleInvalidException on mismatch
 
-            // 2 — read frame header
-            var (header, _) = await NcpNativeClient.ReadFrameHeaderAsync(stream, handshakeCt).ConfigureAwait(false);
+            using var helloCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            if (_options.HelloReadTimeout > TimeSpan.Zero)
+                helloCts.CancelAfter(_options.HelloReadTimeout);
+            var helloCt = helloCts.Token;
+
+            // 2 — read and validate the Hello header before allocating payload.
+            var (header, _) = await NcpNativeClient.ReadFrameHeaderAsync(stream, helloCt).ConfigureAwait(false);
 
             if (header.FrameType != FrameType.Hello)
                 throw new NpsFrameException(
                     $"Expected HelloFrame (0x{(byte)FrameType.Hello:X2}) as first frame after preamble, " +
                     $"got 0x{(byte)header.FrameType:X2}.");
+
+            if (header.EncodingTier != EncodingTier.Json || header.IsEncrypted || header.IsExtended)
+                throw new NpsFrameException(
+                    "HelloFrame must use an unencrypted Tier-1 JSON default header.");
 
             if (header.PayloadLength > _options.MaxHelloPayload)
                 throw new NpsFrameException(
@@ -91,12 +99,17 @@ public sealed class NcpServer : IAsyncDisposable
 
             // 3 — read payload and deserialise HelloFrame
             var payload = new byte[header.PayloadLength];
-            await stream.ReadExactlyAsync(payload, handshakeCt).ConfigureAwait(false);
+            await stream.ReadExactlyAsync(payload, helloCt).ConfigureAwait(false);
 
             var hello = JsonSerializer.Deserialize<HelloFrame>(payload, JsonOpts)
                         ?? throw new NpsFrameException("HelloFrame payload deserialised to null.");
 
-            return new NcpServerConnection(tcp, stream, _codec, hello);
+            return new NcpServerConnection(
+                tcp,
+                stream,
+                _codec,
+                hello,
+                _options.HandshakeProfile);
         }
         catch
         {

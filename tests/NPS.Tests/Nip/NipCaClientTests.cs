@@ -47,6 +47,23 @@ public sealed class NipCaClientTests
         Assert.Equal(HttpStatusCode.Unauthorized, ex.StatusCode);
     }
 
+    [Fact]
+    public async Task GetCertificates_SendsOperatorBearerToken()
+    {
+        var handler = new CaptureHandler(
+            """{"entries":[{"nid":"urn:nps:agent:ca.test:a","entity_type":"agent","serial":"0x1","pub_key":"ed25519:a","capabilities":[],"scope":{},"issued_by":"urn:nps:org:ca.test","issued_at":"2026-01-01T00:00:00Z","expires_at":"2026-01-02T00:00:00Z"}]}""");
+        var client = new NipCaClient(
+            new HttpClient(handler) { BaseAddress = new Uri("https://ca.test") },
+            "/nip");
+
+        var records = await client.GetCertificatesAsync("operator-secret");
+
+        Assert.Single(records.Entries);
+        Assert.Equal("/nip/v1/certificates", handler.LastRequest!.RequestUri!.PathAndQuery);
+        Assert.Equal("Bearer", handler.LastRequest.Headers.Authorization!.Scheme);
+        Assert.Equal("operator-secret", handler.LastRequest.Headers.Authorization.Parameter);
+    }
+
     private sealed class CaptureHandler : HttpMessageHandler
     {
         private readonly string _body;

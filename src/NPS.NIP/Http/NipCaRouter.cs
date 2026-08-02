@@ -20,7 +20,7 @@ namespace NPS.NIP.Http;
 
 /// <summary>
 /// ASP.NET Core minimal-API route handlers for the NIP CA Server (NPS-3 §8).
-/// Maps all 11 API endpoints + <c>/.well-known/nps-ca</c>.
+/// Maps the portable NIP CA API endpoints + <c>/.well-known/nps-ca</c>.
 /// Mount via <see cref="NipCaRouterExtensions.MapNipCa"/>.
 /// </summary>
 public static class NipCaRouter
@@ -93,13 +93,18 @@ public static class NipCaRouter
         app.MapGet($"{pfx}/v1/crl", async (CancellationToken ct) =>
         {
             var revoked = await ca.GetCrlAsync(ct);
-            var entries = revoked.Select(r => new
-            {
-                nid         = r.Nid,
-                serial      = r.Serial,
-                revoked_at  = r.RevokedAt?.ToString("O"),
-                reason      = r.RevokeReason,
-            }).ToList();
+            var entries = revoked
+                .OrderBy(r => r.RevokedAt)
+                .ThenBy(r => r.Serial, StringComparer.Ordinal)
+                .ThenBy(r => r.Nid, StringComparer.Ordinal)
+                .Select(r => new
+                {
+                    nid         = r.Nid,
+                    serial      = r.Serial,
+                    revoked_at  = r.RevokedAt?.ToString("O"),
+                    reason      = r.RevokeReason,
+                })
+                .ToList();
             var body = new
             {
                 issued_by = opts.CaNid,
@@ -113,6 +118,36 @@ public static class NipCaRouter
                 body.entries,
                 signature = ca.SignArtifact(body),
             }, s_json);
+        });
+
+        // ── Certificate enumeration (operator audit) ─────────────────────────
+
+        app.MapGet($"{pfx}/v1/certificates", async (HttpContext ctx, CancellationToken ct) =>
+        {
+            if (!IsAuthorized(ctx, opts)) return Unauthorized();
+
+            var records = await ca.ListCertificatesAsync(ct);
+            var entries = records
+                .OrderBy(r => r.IssuedAt)
+                .ThenBy(r => r.Serial, StringComparer.Ordinal)
+                .Select(r => new
+                {
+                    nid = r.Nid,
+                    entity_type = r.EntityType,
+                    serial = r.Serial,
+                    pub_key = r.PubKey,
+                    capabilities = r.Capabilities,
+                    scope = JsonDocument.Parse(r.ScopeJson).RootElement.Clone(),
+                    issued_by = r.IssuedBy,
+                    issued_at = r.IssuedAt.ToString("O"),
+                    expires_at = r.ExpiresAt.ToString("O"),
+                    revoked_at = r.RevokedAt?.ToString("O"),
+                    revoke_reason = r.RevokeReason,
+                    nid_role = r.NidRole,
+                    parent_nid = r.ParentNid,
+                })
+                .ToList();
+            return Results.Json(new { entries }, s_json);
         });
 
         // ── Agent registration ────────────────────────────────────────────────

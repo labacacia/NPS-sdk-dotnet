@@ -58,9 +58,17 @@ public static class BridgeServiceExtensions
         var options = new BridgeServerOptions();
         configure?.Invoke(options);
         services.AddSingleton(options);
-        services.TryAddSingleton<IBridgeServerActionInvoker, BridgeServerActionInvoker>();
-        services.AddSingleton<McpServerBridge>();
-        services.AddSingleton<A2aServerBridge>();
+        // The inbound servers depend on the transport-independent base type; register both so a
+        // consumer can resolve either the hosting options or just the protocol surface.
+        services.AddSingleton<BridgeInboundOptions>(options);
+        services.AddHttpClient();
+        services.TryAddSingleton<IReadOnlyList<INwpBackend>>(sp =>
+            BridgeServerBackends.Create(
+                sp.GetRequiredService<BridgeServerOptions>(),
+                sp.GetService<IHttpClientFactory>()?.CreateClient(nameof(HttpNwpBackend))));
+        services.AddSingleton<McpInboundServer>();
+        services.AddSingleton<A2aInboundServer>();
+        services.AddSingleton<GrpcInboundService>();
         return services;
     }
 
@@ -68,8 +76,8 @@ public static class BridgeServiceExtensions
     public static IApplicationBuilder UseBridgeServer(this IApplicationBuilder app) =>
         app.Use(next => ctx =>
         {
-            var mcp = ctx.RequestServices.GetRequiredService<McpServerBridge>();
-            var a2a = ctx.RequestServices.GetRequiredService<A2aServerBridge>();
+            var mcp = ctx.RequestServices.GetRequiredService<McpInboundServer>();
+            var a2a = ctx.RequestServices.GetRequiredService<A2aInboundServer>();
             var options = ctx.RequestServices.GetRequiredService<BridgeServerOptions>();
             var logger = ctx.RequestServices.GetRequiredService<ILogger<BridgeServerMiddleware>>();
             var middleware = new BridgeServerMiddleware(next, mcp, a2a, options, logger);

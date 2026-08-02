@@ -50,6 +50,9 @@ public static class NcpErrorCodes
     /// <summary>Tier-3 BinaryVector vector segment is truncated. → NPS-CLIENT-BAD-FRAME</summary>
     public const string BinaryVectorTruncated = "NCP-BINARY-VECTOR-TRUNCATED";
 
+    /// <summary>Native-mode TLS client-certificate NID does not match the session IdentFrame NID (RFC-0006 §6.3–6.4).</summary>
+    public const string NidMismatch           = "NCP-NID-MISMATCH";
+
     // ── Stream errors ─────────────────────────────────────────────────────────
     /// <summary>StreamFrame sequence number is non-contiguous. → NPS-STREAM-SEQ-GAP</summary>
     public const string StreamSeqGap          = "NCP-STREAM-SEQ-GAP";

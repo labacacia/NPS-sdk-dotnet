@@ -37,6 +37,7 @@ public sealed class NwpErrorCodesTests
         yield return NwpErrorCodes.HttpAcceptUnsatisfiable;
         yield return NwpErrorCodes.HttpRequestIdMismatch;
         yield return NwpErrorCodes.HttpFrameBodyMalformed;
+        yield return NwpErrorCodes.HttpBodyTooLarge;
         yield return NwpErrorCodes.CapabilityAdvertisedUnimplemented;
     }
 

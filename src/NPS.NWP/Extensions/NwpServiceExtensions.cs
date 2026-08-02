@@ -10,6 +10,7 @@ using NPS.NWP.ActionNode;
 using NPS.NWP.ComplexNode;
 using NPS.NWP.Frames;
 using NPS.NWP.MemoryNode;
+using NPS.NWP.Registry;
 
 namespace NPS.NWP.Extensions;
 
@@ -57,16 +58,8 @@ public static class NwpServiceExtensions
         // Replaces the default NCP-only registry with one that also knows Query and Action.
         services.AddSingleton<FrameRegistry>(_ =>
             new FrameRegistryBuilder()
-                // NCP frames (replicated here so the registry is self-contained)
-                .Register<NPS.Core.Frames.Ncp.AnchorFrame>(FrameType.Anchor)
-                .Register<NPS.Core.Frames.Ncp.DiffFrame>  (FrameType.Diff)
-                .Register<NPS.Core.Frames.Ncp.StreamFrame>(FrameType.Stream)
-                .Register<NPS.Core.Frames.Ncp.CapsFrame>  (FrameType.Caps)
-                .Register<NPS.Core.Frames.Ncp.ErrorFrame>(FrameType.Error)
-                // NWP frames
-                .Register<QueryFrame>    (FrameType.Query)
-                .Register<ActionFrame>   (FrameType.Action)
-                .Register<SubscribeFrame>(FrameType.Subscribe)
+                .AddNcp()
+                .AddNwp()
                 .Build());
 
         return services;
@@ -89,10 +82,10 @@ public static class NwpServiceExtensions
         services.AddSingleton<TProvider>();
         services.AddSingleton<MemoryNodeMiddleware>(sp =>
             new MemoryNodeMiddleware(
-                next:     _ => Task.CompletedTask,  // placeholder; replaced by UseMemoryNode()
+                next: _ => Task.CompletedTask,  // placeholder; replaced by UseMemoryNode()
                 provider: sp.GetRequiredService<TProvider>(),
-                options:  opts,
-                logger:   sp.GetRequiredService<ILogger<MemoryNodeMiddleware>>()));
+                options: opts,
+                logger: sp.GetRequiredService<ILogger<MemoryNodeMiddleware>>()));
         services.AddSingleton(opts);
         return services;
     }
@@ -110,8 +103,8 @@ public static class NwpServiceExtensions
         return app.Use(next => ctx =>
         {
             var provider = ctx.RequestServices.GetRequiredService<TProvider>();
-            var logger   = ctx.RequestServices.GetRequiredService<ILogger<MemoryNodeMiddleware>>();
-            var mw       = new MemoryNodeMiddleware(next, provider, opts, logger);
+            var logger = ctx.RequestServices.GetRequiredService<ILogger<MemoryNodeMiddleware>>();
+            var mw = new MemoryNodeMiddleware(next, provider, opts, logger);
             return mw.InvokeAsync(ctx);
         });
     }
@@ -120,8 +113,8 @@ public static class NwpServiceExtensions
     {
         var opts = new MemoryNodeOptions
         {
-            NodeId     = string.Empty,
-            Schema     = null!,
+            NodeId = string.Empty,
+            Schema = null!,
             PathPrefix = string.Empty,
         };
         configure(opts);
@@ -159,10 +152,10 @@ public static class NwpServiceExtensions
         var opts = BuildActionOptions(configure);
         return app.Use(next => ctx =>
         {
-            var provider    = ctx.RequestServices.GetRequiredService<TProvider>();
-            var taskStore   = ctx.RequestServices.GetRequiredService<IActionTaskStore>();
+            var provider = ctx.RequestServices.GetRequiredService<TProvider>();
+            var taskStore = ctx.RequestServices.GetRequiredService<IActionTaskStore>();
             var idempotency = ctx.RequestServices.GetRequiredService<IIdempotencyCache>();
-            var logger      = ctx.RequestServices.GetRequiredService<ILogger<ActionNodeMiddleware>>();
+            var logger = ctx.RequestServices.GetRequiredService<ILogger<ActionNodeMiddleware>>();
             var mw = new ActionNodeMiddleware(next, provider, opts, taskStore, idempotency, logger);
             return mw.InvokeAsync(ctx);
         });
@@ -172,8 +165,8 @@ public static class NwpServiceExtensions
     {
         var opts = new ActionNodeOptions
         {
-            NodeId     = string.Empty,
-            Actions    = new Dictionary<string, ActionSpec>(),
+            NodeId = string.Empty,
+            Actions = new Dictionary<string, ActionSpec>(),
             PathPrefix = string.Empty,
         };
         configure(opts);
@@ -226,7 +219,7 @@ public static class NwpServiceExtensions
         {
             var provider = ctx.RequestServices.GetRequiredService<TProvider>();
             var httpFact = ctx.RequestServices.GetRequiredService<IHttpClientFactory>();
-            var logger   = ctx.RequestServices.GetRequiredService<ILogger<ComplexNodeMiddleware>>();
+            var logger = ctx.RequestServices.GetRequiredService<ILogger<ComplexNodeMiddleware>>();
             var mw = new ComplexNodeMiddleware(next, provider, opts,
                 httpFact.CreateClient(ComplexNodeHttpClientName), logger);
             return mw.InvokeAsync(ctx);
@@ -237,7 +230,7 @@ public static class NwpServiceExtensions
     {
         var opts = new ComplexNodeOptions
         {
-            NodeId     = string.Empty,
+            NodeId = string.Empty,
             PathPrefix = string.Empty,
         };
         configure(opts);

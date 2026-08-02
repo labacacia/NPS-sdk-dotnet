@@ -1,3 +1,4 @@
+using System.Linq;
 // Copyright 2026 INNO LOTUS PTY LTD
 // SPDX-License-Identifier: Apache-2.0
 
@@ -47,4 +48,31 @@ public interface INdpRegistry
     /// Inject a fake implementation in unit tests to avoid real network calls.
     /// </param>
     NdpResolveResult? ResolveViaDns(string target, IDnsTxtLookup? dnsLookup = null);
+
+    /// <summary>
+    /// Resolves a cluster-anchor NID to its current <b>active</b> Anchor announcement — the live
+    /// member with the highest <see cref="AnnounceFrame.ClusterEpoch"/> (absent ⇒ 1). Returns
+    /// <c>null</c> when the cluster has no live members. Throws <see cref="NdpClusterSplitException"/>
+    /// when more than one live member advertises the top epoch (split-brain). NPS-CR-0009.
+    /// </summary>
+    AnnounceFrame? ResolveCluster(string clusterAnchor)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(clusterAnchor);
+        var members = GetAll().Where(f => f.ClusterAnchor == clusterAnchor).ToList();
+        if (members.Count == 0) return null;
+        var top = members.Max(f => f.ClusterEpoch ?? 1UL);
+        var leaders = members.Where(f => (f.ClusterEpoch ?? 1UL) == top).ToList();
+        if (leaders.Count > 1)
+            throw new NdpClusterSplitException(clusterAnchor, top);
+        return leaders[0];
+    }
+}
+
+/// <summary>Thrown when a cluster has more than one live active Anchor at the top epoch (NPS-CR-0009).</summary>
+public sealed class NdpClusterSplitException(string clusterAnchor, ulong epoch)
+    : Exception($"NDP-CLUSTER-SPLIT: cluster '{clusterAnchor}' has multiple live active Anchors at epoch {epoch}.")
+{
+    public string ClusterAnchor { get; } = clusterAnchor;
+    public ulong Epoch { get; } = epoch;
+    public string ErrorCode => NPS.NDP.NdpErrorCodes.ClusterSplit;
 }

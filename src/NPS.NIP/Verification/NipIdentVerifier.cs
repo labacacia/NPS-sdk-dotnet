@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using NPS.NIP.Ca;
 using NPS.NIP.Crypto;
 using NPS.NIP.Frames;
+using System.Security.Cryptography.X509Certificates;
 using NPS.NIP.X509;
 
 namespace NPS.NIP.Verification;
@@ -116,6 +117,31 @@ public sealed class NipIdentVerifier
                     x509Result.ErrorCode ?? NipErrorCodes.CertFormatInvalid,
                     x509Result.Message   ?? "X.509 chain validation failed.");
             }
+
+            // ── Step 3c: Phase-3 enforcement (NIP v0.11 §7.5, NipVerifierOptions.Phase3Enforcement) ─
+            // Only for v2-x509 frames that just passed the chain check; each attribute check
+            // applies only when the matching id-nps-* extension is present on the leaf.
+            if (_opts.Phase3Enforcement && frame.CertChain is { Count: > 0 })
+            {
+                X509Certificate2 leaf;
+                try
+                {
+                    var der = frame.CertChain[0].Replace('-', '+').Replace('_', '/');
+                    der = der.PadRight(der.Length + (4 - der.Length % 4) % 4, '=');
+                    leaf = X509CertificateLoader.LoadCertificate(Convert.FromBase64String(der));
+                }
+                catch (Exception)
+                {
+                    return NipIdentVerifyResult.Fail(3,
+                        NipErrorCodes.CertFormatInvalid,
+                        "cert_chain[0] could not be decoded for Phase-3 enforcement.");
+                }
+                using (leaf)
+                {
+                    var p3 = NipPhase3Enforcer.Enforce(frame, leaf);
+                    if (!p3.IsValid) return p3;
+                }
+            }
         }
 
         // ── Step 4: Revocation ────────────────────────────────────────────────
@@ -152,55 +178,100 @@ public sealed class NipIdentVerifier
     private async Task<NipIdentVerifyResult> CheckRevocationAsync(
         IdentFrame frame, CancellationToken ct)
     {
-        // Local CRL check first (fast, no network)
-        if (_opts.LocalRevokedSerials?.Contains(frame.Serial) == true)
+        var evaluation = new NipRevocationEvaluation(
+            _opts.RevocationMode,
+            _opts.OcspFailOpen);
+
+        // Local CRL check first (fast, no network).
+        if (_opts.LocalRevokedSerials is not null)
         {
-            return NipIdentVerifyResult.Fail(4,
-                NipErrorCodes.CertRevoked,
-                $"Certificate serial {frame.Serial} is in the local revocation list.");
+            var result = evaluation.Observe(
+                NipRevocationSource.LocalCrl,
+                _opts.LocalRevokedSerials.Contains(frame.Serial)
+                    ? NipRevocationOutcome.Revoked
+                    : NipRevocationOutcome.Good);
+            if (result is not null) return result;
         }
 
         if (_opts.RevocationCheck is not null)
         {
-            var callbackResult = await _opts.RevocationCheck(frame, ct).ConfigureAwait(false);
-            if (callbackResult is { IsValid: false })
-                return callbackResult;
+            try
+            {
+                var callbackResult = await _opts.RevocationCheck(frame, ct).ConfigureAwait(false);
+                if (callbackResult is { IsValid: false })
+                    return callbackResult;
+
+                var result = evaluation.Observe(
+                    NipRevocationSource.Callback,
+                    NipRevocationOutcome.Good);
+                if (result is not null) return result;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger?.LogWarning(ex,
+                    "Live revocation callback failed for serial {Serial}.", frame.Serial);
+                var result = evaluation.Observe(
+                    NipRevocationSource.Callback,
+                    NipRevocationOutcome.Unavailable);
+                if (result is not null) return result;
+            }
         }
 
         if (_opts.RevocationStore is not null)
         {
-            var record = await _opts.RevocationStore.GetBySerialAsync(frame.Serial, ct).ConfigureAwait(false);
-            if (record?.RevokedAt is not null)
+            try
             {
-                return NipIdentVerifyResult.Fail(4,
-                    NipErrorCodes.CertRevoked,
-                    $"Certificate serial {frame.Serial} was revoked at {record.RevokedAt:O}: {record.RevokeReason}");
+                var record = await _opts.RevocationStore
+                    .GetBySerialAsync(frame.Serial, ct)
+                    .ConfigureAwait(false);
+                var result = evaluation.Observe(
+                    NipRevocationSource.CaStore,
+                    record?.RevokedAt is not null
+                        ? NipRevocationOutcome.Revoked
+                        : NipRevocationOutcome.Good);
+                if (result is not null) return result;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger?.LogWarning(ex,
+                    "Revocation store lookup failed for serial {Serial}.", frame.Serial);
+                var result = evaluation.Observe(
+                    NipRevocationSource.CaStore,
+                    NipRevocationOutcome.Unavailable);
+                if (result is not null) return result;
             }
         }
 
-        // OCSP call to the CA server (optional)
-        if (_opts.OcspUrl is not null && _httpFactory is not null)
+        // OCSP call to the CA server (optional).
+        if (_opts.OcspUrl is not null)
         {
-            return await OcspCheckAsync(frame.Nid, frame.Serial, ct);
+            if (_httpFactory is null)
+            {
+                _logger?.LogWarning(
+                    "OcspUrl is configured but IHttpClientFactory is unavailable for NID {Nid}.",
+                    frame.Nid);
+                var unavailable = evaluation.Observe(
+                    NipRevocationSource.Ocsp,
+                    NipRevocationOutcome.Unavailable);
+                return unavailable ?? evaluation.Complete();
+            }
+
+            var ocsp = await OcspCheckAsync(frame.Nid, frame.Serial, ct).ConfigureAwait(false);
+            if (!ocsp.IsValid) return ocsp;
+            var result = evaluation.Observe(
+                NipRevocationSource.Ocsp,
+                NipRevocationOutcome.Good);
+            if (result is not null) return result;
         }
 
-        if (_opts.OcspUrl is not null && _httpFactory is null)
-        {
-            _logger?.LogWarning(
-                "OcspUrl is configured but IHttpClientFactory is not available. " +
-                "Skipping revocation check for NID {Nid}.", frame.Nid);
-        }
-        else if (_opts.OcspUrl is null
-                 && (_opts.LocalRevokedSerials is null || _opts.LocalRevokedSerials.Count == 0)
-                 && _opts.RevocationCheck is null
-                 && _opts.RevocationStore is null)
+        if (evaluation.ConsultedSources.Count == 0)
         {
             _logger?.LogDebug(
                 "No revocation source configured. " +
                 "Skipping revocation check for NID {Nid}.", frame.Nid);
         }
 
-        return NipIdentVerifyResult.Ok(); // pass-through when revocation is unconfigured
+        return evaluation.Complete();
     }
 
     private async Task<NipIdentVerifyResult> OcspCheckAsync(
@@ -214,8 +285,16 @@ public sealed class NipIdentVerifier
 
             if (!resp.IsSuccessStatusCode)
             {
+                if (_opts.OcspFailOpen)
+                {
+                    _logger?.LogWarning(
+                        "OCSP endpoint returned {Status} for NID {Nid}. Failing open by policy.",
+                        resp.StatusCode, nid);
+                    return NipIdentVerifyResult.Ok();
+                }
+
                 _logger?.LogWarning(
-                    "OCSP endpoint returned {Status} for NID {Nid}. Treating as revoked.",
+                    "OCSP endpoint returned {Status} for NID {Nid}. Failing closed.",
                     resp.StatusCode, nid);
                 return NipIdentVerifyResult.Fail(4,
                     NipErrorCodes.OcspUnavailable,
@@ -240,7 +319,8 @@ public sealed class NipIdentVerifier
 
             return NipIdentVerifyResult.Ok();
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (Exception ex) when (ex is not OperationCanceledException
+                                   || !ct.IsCancellationRequested)
         {
             if (_opts.OcspFailOpen)
             {

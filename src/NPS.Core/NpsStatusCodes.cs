@@ -34,6 +34,15 @@ public static class NpsStatusCodes
 
     // ── Server errors ────────────────────────────────────────────────────────
     public const string ServerInternal            = "NPS-SERVER-INTERNAL";
+
+    /// <summary>
+    /// The server does not implement the requested operation (e.g. an
+    /// unrecognized reserved query type, or a Bridge protocol/direction the
+    /// node never declared). HTTP 501. Spec'd in status-codes.md since v0.1 but
+    /// missing from this class until NPS-CR-0010.
+    /// </summary>
+    public const string ServerUnsupported         = "NPS-SERVER-UNSUPPORTED";
+
     public const string ServerUnavailable         = "NPS-SERVER-UNAVAILABLE";
     public const string ServerTimeout             = "NPS-SERVER-TIMEOUT";
     public const string ServerEncodingUnsupported = "NPS-SERVER-ENCODING-UNSUPPORTED";

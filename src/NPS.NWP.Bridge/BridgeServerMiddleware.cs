@@ -12,16 +12,16 @@ namespace NPS.NWP.Bridge;
 public sealed class BridgeServerMiddleware
 {
     private readonly RequestDelegate _next;
-    private readonly McpServerBridge _mcp;
-    private readonly A2aServerBridge _a2a;
+    private readonly McpInboundServer _mcp;
+    private readonly A2aInboundServer _a2a;
     private readonly BridgeServerOptions _options;
     private readonly ILogger _logger;
 
     /// <summary>Create Bridge server middleware.</summary>
     public BridgeServerMiddleware(
         RequestDelegate next,
-        McpServerBridge mcp,
-        A2aServerBridge a2a,
+        McpInboundServer mcp,
+        A2aInboundServer a2a,
         BridgeServerOptions options,
         ILogger<BridgeServerMiddleware> logger)
     {
@@ -130,7 +130,8 @@ public sealed class BridgeServerMiddleware
         }
 
         var endpoint = $"{ctx.Request.Scheme}://{ctx.Request.Host}{ctx.Request.PathBase}{Join(_options.PathPrefix, _options.A2aPath)}";
-        await WriteJson(ctx, 200, _a2a.BuildAgentCard(endpoint)).ConfigureAwait(false);
+        var card = await _a2a.BuildAgentCardAsync(endpoint, ctx.RequestAborted).ConfigureAwait(false);
+        await WriteJson(ctx, 200, card).ConfigureAwait(false);
     }
 
     private async Task<BridgeHttpResult> ReadAndDispatchAsync(

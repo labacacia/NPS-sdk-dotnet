@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using NPS.NDP.Frames;
+using NPS.NDP.Registry;
 using NPS.NIP.Crypto;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace NPS.NDP.Validation;
 
@@ -80,15 +83,15 @@ public sealed class NdpAnnounceValidator
                 "Provide the announcer's IdentFrame public key via RegisterPublicKey() first.");
         }
 
-        var pubKey = NipSigner.DecodePublicKey(encodedPubKey);
-        if (pubKey is null)
-        {
-            return NdpAnnounceResult.Fail(
-                NdpErrorCodes.AnnounceSignatureInvalid,
-                $"Failed to decode public key for NID '{frame.Nid}'.");
-        }
-
-        if (!NipSigner.Verify(pubKey, frame, frame.Signature))
+        var frameJson = JsonSerializer.SerializeToElement(frame, s_jsonOptions);
+        var portableValid = NdpAnnounceCanonicalizer.Verify(
+            frameJson,
+            encodedPubKey,
+            frame.Signature);
+        var legacyPublicKey = NipSigner.DecodePublicKey(encodedPubKey);
+        var legacyValid = legacyPublicKey is not null &&
+            NipSigner.Verify(legacyPublicKey, frame, frame.Signature);
+        if (!portableValid && !legacyValid)
         {
             return NdpAnnounceResult.Fail(
                 NdpErrorCodes.AnnounceSignatureInvalid,
@@ -97,4 +100,10 @@ public sealed class NdpAnnounceValidator
 
         return NdpAnnounceResult.Ok();
     }
+
+    private static readonly JsonSerializerOptions s_jsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    };
 }

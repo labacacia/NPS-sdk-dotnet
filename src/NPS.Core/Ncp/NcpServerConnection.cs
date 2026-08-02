@@ -20,6 +20,7 @@ public sealed class NcpServerConnection : IAsyncDisposable
     private readonly TcpClient     _tcp;
     private readonly Stream        _stream;
     private readonly NpsFrameCodec _codec;
+    private readonly NcpHandshakeProfile _profile;
 
     /// <summary>The <see cref="HelloFrame"/> sent by the connecting client.</summary>
     public HelloFrame ClientHello { get; }
@@ -28,12 +29,14 @@ public sealed class NcpServerConnection : IAsyncDisposable
         TcpClient     tcp,
         Stream        stream,
         NpsFrameCodec codec,
-        HelloFrame    clientHello)
+        HelloFrame    clientHello,
+        NcpHandshakeProfile profile)
     {
         _tcp        = tcp;
         _stream     = stream;
         _codec      = codec;
         ClientHello = clientHello;
+        _profile    = profile;
     }
 
     /// <summary>
@@ -44,11 +47,36 @@ public sealed class NcpServerConnection : IAsyncDisposable
         NcpHandshakeCapsFrame serverCaps,
         CancellationToken     ct = default)
     {
-        var policy = NegotiateEncodingPolicy(ClientHello);
+        var negotiation = NcpNativeServerPolicy.Negotiate(_profile, ClientHello);
+        if (negotiation.Action != NcpHandshakeAction.Accept)
+        {
+            var error = negotiation.Error ?? NcpErrorCodes.VersionIncompatible;
+            await RejectAsync(new ErrorFrame
+            {
+                Status = negotiation.Status ?? NpsStatusCodes.ProtoVersionIncompatible,
+                Error = error,
+                Message = "Native NCP handshake negotiation failed.",
+            }, ct).ConfigureAwait(false);
+            throw new NcpHandshakeException(error, "Native NCP handshake negotiation failed.");
+        }
+
+        var defaultTier = negotiation.NegotiatedEncoding == "msgpack"
+            ? EncodingTier.MsgPack
+            : EncodingTier.Json;
+        var policy = new NcpEncodingPolicy(
+            defaultTier,
+            negotiation.EnabledEncodings?.Contains(
+                "binary_vector.v1",
+                StringComparer.Ordinal) == true);
         var caps = serverCaps with
         {
-            NegotiatedEncoding = NcpEncodingPolicy.EncodingToken(policy.DefaultTier),
-            EnabledEncodings   = policy.EnabledEncodings,
+            SessionVersion = negotiation.SessionVersion,
+            NegotiatedEncoding = negotiation.NegotiatedEncoding,
+            EnabledEncodings = negotiation.EnabledEncodings,
+            SupportedProtocols = negotiation.SupportedProtocols,
+            MaxFramePayload = negotiation.MaxFramePayload,
+            ExtSupport = negotiation.ExtSupport,
+            MaxConcurrentStreams = negotiation.MaxConcurrentStreams,
         };
         var wire = _codec.Encode(caps, policy.DefaultTier);
         await _stream.WriteAsync(wire, ct).ConfigureAwait(false);
@@ -71,26 +99,6 @@ public sealed class NcpServerConnection : IAsyncDisposable
         {
             await DisposeAsync().ConfigureAwait(false);
         }
-    }
-
-    /// <summary>
-    /// Selects a stable default encoding from the client's <c>SupportedEncodings</c> list.
-    /// Optional encodings such as BinaryVector are recorded as extensions, not defaults.
-    /// </summary>
-    private static NcpEncodingPolicy NegotiateEncodingPolicy(HelloFrame hello)
-    {
-        var binaryVectorEnabled = hello.SupportedEncodings.Contains("binary_vector.v1");
-
-        foreach (var enc in hello.SupportedEncodings)
-        {
-            if (enc is "msgpack")
-                return new NcpEncodingPolicy(EncodingTier.MsgPack, binaryVectorEnabled);
-            if (enc is "json")
-                return new NcpEncodingPolicy(EncodingTier.Json, binaryVectorEnabled);
-        }
-
-        throw new NpsEncodingUnsupportedException(
-            "Client did not offer a supported stable default encoding (expected msgpack or json).");
     }
 
     public async ValueTask DisposeAsync()
