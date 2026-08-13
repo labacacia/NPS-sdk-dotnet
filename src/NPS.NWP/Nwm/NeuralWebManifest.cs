@@ -185,10 +185,30 @@ public sealed record NwmLlmProfile
     /// <summary>Privacy and retention promises advertised by the node operator.</summary>
     public NwmLlmPrivacyProfile? Privacy { get; init; }
 
+    /// <summary>Stateful completion context lifecycle, when implemented.</summary>
+    public NwmLlmContextProfile? Context { get; init; }
+
     /// <summary>True when this profile includes the standard completion action.</summary>
     [JsonIgnore]
     public bool SupportsComplete =>
         Actions.Contains(LlmCompleteAction.ActionId, StringComparer.Ordinal);
+}
+
+/// <summary>Stateful LLM context capability advertised by profile version 0.2.</summary>
+public sealed record NwmLlmContextProfile
+{
+    public required bool Supported { get; init; }
+    public required IReadOnlyList<string> Operations { get; init; }
+    public required string Persistence { get; init; }
+
+    [JsonPropertyName("max_contexts_per_principal")]
+    public required uint MaxContextsPerPrincipal { get; init; }
+
+    [JsonPropertyName("max_ttl_seconds")]
+    public required uint MaxTtlSeconds { get; init; }
+
+    [JsonPropertyName("tombstone_seconds")]
+    public required uint TombstoneSeconds { get; init; }
 }
 
 /// <summary>Single model entry inside <see cref="NwmLlmProfile"/>.</summary>
@@ -345,5 +365,5 @@ public sealed record NodeGraph
 /// <param name="Rel">Semantic relationship label, e.g. <c>"user"</c>, <c>"payment"</c>.</param>
 /// <param name="Node">NWP address of the child node.</param>
 public sealed record NodeGraphRef(
-    [property: JsonPropertyName("rel")]  string Rel,
+    [property: JsonPropertyName("rel")] string Rel,
     [property: JsonPropertyName("node")] string Node);

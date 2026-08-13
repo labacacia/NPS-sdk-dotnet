@@ -95,4 +95,77 @@ public sealed class AotFrameCodecTests
             "ap-southeast-2",
             result.Metadata!.Value.GetProperty("region").GetString());
     }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(7UL)]
+    public void NdpGeneratedMetadata_RoundTripsOptionalAnnounceClusterEpoch(ulong? clusterEpoch)
+    {
+        var registry = new FrameRegistryBuilder()
+            .AddNcp()
+            .AddNdp()
+            .Build();
+        var codec = NpsFrameCodec.Create(registry);
+        var frame = new AnnounceFrame
+        {
+            Nid = "urn:nps:node:example.test:anchor",
+            NodeType = "action",
+            Addresses =
+            [
+                new NdpAddress
+                {
+                    Host = "127.0.0.1",
+                    Port = 17433,
+                    Protocol = "ncp",
+                },
+            ],
+            Capabilities = ["llm:complete"],
+            Ttl = 60,
+            Timestamp = "2026-08-12T00:00:00Z",
+            Signature = "ed25519:test",
+            ClusterAnchor = "urn:nps:node:example.test:anchor",
+            ClusterEpoch = clusterEpoch,
+        };
+
+        var result = Assert.IsType<AnnounceFrame>(
+            codec.Decode(codec.Encode(frame, EncodingTier.MsgPack)));
+
+        Assert.Equal(clusterEpoch, result.ClusterEpoch);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(12U)]
+    public void NdpGeneratedMetadata_RoundTripsOptionalGraphLatency(uint? latencyMs)
+    {
+        var registry = new FrameRegistryBuilder()
+            .AddNcp()
+            .AddNdp()
+            .Build();
+        var codec = NpsFrameCodec.Create(registry);
+        var frame = new GraphFrame
+        {
+            GraphId = "graph-optional-primitives",
+            Nodes =
+            [
+                new NdpGraphNode { Nid = "urn:nps:node:example.test:a" },
+                new NdpGraphNode { Nid = "urn:nps:node:example.test:b" },
+            ],
+            Edges =
+            [
+                new NdpGraphEdge
+                {
+                    FromNid = "urn:nps:node:example.test:a",
+                    ToNid = "urn:nps:node:example.test:b",
+                    LatencyMs = latencyMs,
+                },
+            ],
+            Ttl = 60,
+        };
+
+        var result = Assert.IsType<GraphFrame>(
+            codec.Decode(codec.Encode(frame, EncodingTier.MsgPack)));
+
+        Assert.Equal(latencyMs, Assert.Single(result.Edges).LatencyMs);
+    }
 }

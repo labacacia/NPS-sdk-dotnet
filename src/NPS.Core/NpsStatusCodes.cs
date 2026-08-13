@@ -31,6 +31,7 @@ public static class NpsStatusCodes
     public const string LimitRate    = "NPS-LIMIT-RATE";
     public const string LimitBudget  = "NPS-LIMIT-BUDGET";
     public const string LimitPayload = "NPS-LIMIT-PAYLOAD";
+    public const string LimitResource = "NPS-LIMIT-RESOURCE";
 
     // ── Server errors ────────────────────────────────────────────────────────
     public const string ServerInternal            = "NPS-SERVER-INTERNAL";

@@ -146,6 +146,13 @@ public static class NwpErrorCodes
     public const string ActionNotFound = "NWP-ACTION-NOT-FOUND";
     public const string ActionParamsInvalid = "NWP-ACTION-PARAMS-INVALID";
     public const string ActionIdempotencyConflict = "NWP-ACTION-IDEMPOTENCY-CONFLICT";
+    public const string LlmContextNotFound = "NWP-LLM-CONTEXT-NOT-FOUND";
+    public const string LlmContextExpired = "NWP-LLM-CONTEXT-EXPIRED";
+    public const string LlmContextVersionConflict = "NWP-LLM-CONTEXT-VERSION-CONFLICT";
+    public const string LlmContextBindingMismatch = "NWP-LLM-CONTEXT-BINDING-MISMATCH";
+    public const string LlmContextForbidden = "NWP-LLM-CONTEXT-FORBIDDEN";
+    public const string LlmContextLimitExceeded = "NWP-LLM-CONTEXT-LIMIT-EXCEEDED";
+    public const string LlmContextOperationUnsupported = "NWP-LLM-CONTEXT-OPERATION-UNSUPPORTED";
     public const string TaskNotFound = "NWP-TASK-NOT-FOUND";
     public const string TaskAlreadyCancelled = "NWP-TASK-ALREADY-CANCELLED";
 

@@ -120,6 +120,14 @@ public sealed class LlmActionContractTests
         {
             StopReason = LlmStopReason.ToolCalls,
             Content = "Need tool output.",
+            Usage = new LlmUsageDto
+            {
+                InputTokens = 120,
+                OutputTokens = 9,
+                CacheHit = true,
+                ReusedTokens = 100,
+                EvaluatedTokens = 20,
+            },
             ToolCalls =
             [
                 new LlmToolCallDto
@@ -135,12 +143,42 @@ public sealed class LlmActionContractTests
 
         Assert.Contains("\"stop_reason\":\"tool_calls\"", json);
         Assert.Contains("\"call_id\":\"call-1\"", json);
+        Assert.Contains("\"input_tokens\":120", json);
+        Assert.Contains("\"cache_hit\":true", json);
+        Assert.Contains("\"evaluated_tokens\":20", json);
         Assert.DoesNotContain("StopReason", json);
 
         var element = LlmCompleteAction.ToResponsePayload(response);
         var decoded = LlmCompleteAction.ReadResponsePayload(element);
         Assert.Equal(LlmStopReason.ToolCalls, decoded.StopReason);
         Assert.Equal("weather.lookup", decoded.ToolCalls![0].ToolName);
+        Assert.Equal(100u, decoded.Usage!.ReusedTokens);
+    }
+
+    [Fact]
+    public void LlmCompleteUsage_MsgPackPayload_RoundTrips()
+    {
+        var response = new LlmCompleteActionResponse
+        {
+            StopReason = LlmStopReason.EndTurn,
+            Usage = new LlmUsageDto
+            {
+                InputTokens = 200,
+                OutputTokens = 12,
+                CacheHit = false,
+                ReusedTokens = 0,
+                EvaluatedTokens = 200,
+            },
+        };
+
+        byte[] bytes = NwpActionPayloadCodec.EncodeMsgPack(response);
+        var decoded = NwpActionPayloadCodec.DecodeMsgPack<LlmCompleteActionResponse>(bytes);
+
+        Assert.Equal(200u, decoded.Usage!.InputTokens);
+        Assert.Equal(12u, decoded.Usage.OutputTokens);
+        Assert.False(decoded.Usage.CacheHit);
+        Assert.Equal(0u, decoded.Usage.ReusedTokens);
+        Assert.Equal(200u, decoded.Usage.EvaluatedTokens);
     }
 
     [Fact]
@@ -152,12 +190,17 @@ public sealed class LlmActionContractTests
             Content = "Done.",
         };
 
-        var frame = LlmCompleteAction.ToCapsFrame(response, tokenEst: 3, tokenizerUsed: "test-tokenizer");
+        var frame = LlmCompleteAction.ToCapsFrame(
+            response,
+            tokenEst: 3,
+            tokenizerUsed: "test-tokenizer",
+            requestId: "request-1");
 
         Assert.Equal(LlmCompleteAction.ResponseAnchorRef, frame.AnchorRef);
         Assert.Equal(1u, frame.Count);
         Assert.Equal(3u, frame.TokenEst);
         Assert.Equal("test-tokenizer", frame.TokenizerUsed);
+        Assert.Equal("request-1", frame.RequestId);
         Assert.Equal("end_turn", frame.Data[0].GetProperty("stop_reason").GetString());
 
         var decoded = LlmCompleteAction.ReadResponse(frame);

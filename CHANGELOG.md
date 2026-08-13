@@ -8,6 +8,45 @@ Until NPS reaches v1.0 stable, every repository in the suite is synchronized to 
 
 ---
 
+## [1.0.0-alpha.18] — Unreleased
+
+### Added
+
+- Added official stateful LLM context DTOs, a process-local context store, and an Action Server coordinator with owner scoping, CAS reservations, lifecycle actions, true asynchronous execution, cancellation, and all 19 shared conformance vectors.
+- Added a NativeAOT publish-and-run smoke host for generated frame codecs, including nullable `UInt64` round trips.
+
+### Changed
+
+- Aligned unary request correlation, LLM usage accounting, strict stateful request validation, and task ownership with the other five SDK families.
+
+## [1.0.0-alpha.17] — 2026-08-02
+
+### Changed
+
+- Core, NWP, NIP, and NDP frame registries now use source-generated JSON and MessagePack metadata
+  in their built-in registration paths.
+- Tier-3 BinaryVector metadata is encoded with bounded MessagePack and JSON value-tree writers
+  instead of runtime object serialization.
+- Added `AddNcpHandshake()` and a NativeAOT-safe `AddNwp()` registry extension.
+- Implement the shared NCP 0.11, NWP 0.20, NIP 0.13, NDP 0.12, and NOP 0.9
+  portable profiles and language-neutral conformance fixtures.
+
+### Fixed
+
+- Tier-2 now preserves `JsonElement` content instead of serializing it as an empty map.
+- Ivy NativeAOT publication no longer reports NPS-owned dynamic JSON or MessagePack resolver
+  diagnostics; the runtime-generated registration overload remains available as an explicit
+  compatibility fallback.
+- SQLite storage now pins `SQLitePCLRaw.bundle_e_sqlite3 2.1.12` and no longer suppresses
+  `GHSA-2m69-gcr7-jv3q`.
+
+## [1.0.0-alpha.16] — 2026-07-23
+
+### Changed
+
+- Re-issued the alpha.15 .NET package family as alpha.16 so the suite could retain one
+  immutable cross-repository version after the alpha.15 package coordinates were published.
+
 ## [1.0.0-alpha.15] — 2026-06-28
 
 ### Changed

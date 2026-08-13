@@ -28,40 +28,43 @@ public sealed class ActionNodeMiddleware
     /// <summary>Reserved action id for cancelling a running async task (NPS-2 §7.3).</summary>
     public const string SystemTaskCancel = "system.task.cancel";
 
-    private readonly RequestDelegate       _next;
-    private readonly IActionNodeProvider   _provider;
-    private readonly ActionNodeOptions     _options;
-    private readonly IActionTaskStore      _taskStore;
-    private readonly IIdempotencyCache     _idempotency;
-    private readonly ILogger               _logger;
+    private readonly RequestDelegate _next;
+    private readonly IActionNodeProvider _provider;
+    private readonly ActionNodeOptions _options;
+    private readonly IActionTaskStore _taskStore;
+    private readonly IActionTaskCancellationRegistry _taskCancellations;
+    private readonly IIdempotencyCache _idempotency;
+    private readonly ILogger _logger;
 
     private readonly string _nwmJson;
     private readonly string _actionsJson;
 
     internal static readonly JsonSerializerOptions Json = new()
     {
-        PropertyNamingPolicy   = JsonNamingPolicy.SnakeCaseLower,
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        WriteIndented          = false,
+        WriteIndented = false,
     };
 
     /// <summary>Clock override, primarily for tests. Defaults to <see cref="DateTime.UtcNow"/>.</summary>
     public Func<DateTime> Clock { get; init; } = () => DateTime.UtcNow;
 
     public ActionNodeMiddleware(
-        RequestDelegate     next,
+        RequestDelegate next,
         IActionNodeProvider provider,
-        ActionNodeOptions   options,
-        IActionTaskStore    taskStore,
-        IIdempotencyCache   idempotency,
+        ActionNodeOptions options,
+        IActionTaskStore taskStore,
+        IActionTaskCancellationRegistry taskCancellations,
+        IIdempotencyCache idempotency,
         ILogger<ActionNodeMiddleware> logger)
     {
-        _next        = next;
-        _provider    = provider;
-        _options     = options;
-        _taskStore   = taskStore;
+        _next = next;
+        _provider = provider;
+        _options = options;
+        _taskStore = taskStore;
+        _taskCancellations = taskCancellations;
         _idempotency = idempotency;
-        _logger      = logger;
+        _logger = logger;
 
         if (_options.Actions.ContainsKey(SystemTaskStatus) ||
             _options.Actions.ContainsKey(SystemTaskCancel))
@@ -75,7 +78,7 @@ public sealed class ActionNodeMiddleware
 
     public async Task InvokeAsync(HttpContext ctx)
     {
-        var path   = ctx.Request.Path.Value ?? string.Empty;
+        var path = ctx.Request.Path.Value ?? string.Empty;
         var prefix = _options.PathPrefix.TrimEnd('/');
 
         if (!path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
@@ -131,7 +134,7 @@ public sealed class ActionNodeMiddleware
 
     private Task HandleNwm(HttpContext ctx)
     {
-        ctx.Response.StatusCode  = 200;
+        ctx.Response.StatusCode = 200;
         ctx.Response.ContentType = NwpHttpHeaders.MimeManifest;
         ctx.Response.Headers[NwpHttpHeaders.NodeType] = "action";
         return ctx.Response.WriteAsync(_nwmJson);
@@ -141,14 +144,14 @@ public sealed class ActionNodeMiddleware
     {
         // Action Node does not own a row schema, but we still answer the conventional
         // /.schema route with the JSON action registry so tools can introspect.
-        ctx.Response.StatusCode  = 200;
+        ctx.Response.StatusCode = 200;
         ctx.Response.ContentType = "application/json";
         return ctx.Response.WriteAsync(_actionsJson);
     }
 
     private Task HandleActions(HttpContext ctx)
     {
-        ctx.Response.StatusCode  = 200;
+        ctx.Response.StatusCode = 200;
         ctx.Response.ContentType = "application/json";
         return ctx.Response.WriteAsync(_actionsJson);
     }
@@ -186,9 +189,9 @@ public sealed class ActionNodeMiddleware
 
         using var activity = NwpTelemetry.Source.StartActivity(
             "nps.nwp.action.invoke", ActivityKind.Server, parentContext);
-        activity?.SetTag("nps.frame.type",   "action");
-        activity?.SetTag("nps.action.id",    frame.ActionId);
-        activity?.SetTag("nps.agent.nid",    ctx.Request.Headers[NwpHttpHeaders.Agent].ToString());
+        activity?.SetTag("nps.frame.type", "action");
+        activity?.SetTag("nps.action.id", frame.ActionId);
+        activity?.SetTag("nps.agent.nid", ctx.Request.Headers[NwpHttpHeaders.Agent].ToString());
         activity?.SetTag("nps.action.async", frame.Async);
 
         var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -238,11 +241,38 @@ public sealed class ActionNodeMiddleware
             }
         }
 
-        // Idempotency check (sync + async). §7.1
+        // Agent / request context. Authorization runs before cached replay so a
+        // revoked principal cannot recover a previously authorized result.
+        var agentNid = ctx.Request.Headers.TryGetValue(NwpHttpHeaders.Agent, out var a)
+            ? a.ToString() : null;
+        var priority = frame.Priority ?? "normal";
+        var actionContext = new ActionContext
+        {
+            AgentNid = agentNid,
+            RequestId = frame.RequestId,
+            TaskId = null,
+            Spec = spec,
+            TimeoutMs = effectiveTimeout,
+            Priority = priority,
+        };
+        try
+        {
+            await _provider.AuthorizeAsync(frame, actionContext, ctx.RequestAborted);
+        }
+        catch (ActionNodeException ex)
+        {
+            await WriteError(ctx, ex.HttpStatus, ex.NpsStatus, ex.ErrorCode, ex.Message);
+            return;
+        }
+
+        // Idempotency check (sync + async). §7.1. Scope generic action replay to
+        // the authenticated caller; deployment-specific scope remains the
+        // provider/store's responsibility.
+        var cacheActionId = ScopedCacheActionId(_options.NodeId, frame.ActionId, agentNid);
         var paramsHash = HashParams(frame.Params);
         if (frame.IdempotencyKey is not null)
         {
-            var cached = _idempotency.Get(frame.ActionId, frame.IdempotencyKey);
+            var cached = _idempotency.Get(cacheActionId, frame.IdempotencyKey);
             if (cached is not null)
             {
                 if (cached.ParamsHash != paramsHash)
@@ -266,11 +296,6 @@ public sealed class ActionNodeMiddleware
             }
         }
 
-        // Agent / request context
-        var agentNid  = ctx.Request.Headers.TryGetValue(NwpHttpHeaders.Agent, out var a)
-            ? a.ToString() : null;
-        var priority  = frame.Priority ?? "normal";
-
         if (frame.Async)
         {
             var taskId = Guid.NewGuid().ToString("N");
@@ -279,27 +304,34 @@ public sealed class ActionNodeMiddleware
             // Cache the task id so repeated idempotent async calls return the same handle.
             if (frame.IdempotencyKey is not null)
             {
-                _idempotency.TryStore(frame.ActionId, frame.IdempotencyKey, new IdempotentEntry
+                _idempotency.TryStore(cacheActionId, frame.IdempotencyKey, new IdempotentEntry
                 {
-                    ActionId    = frame.ActionId,
-                    ParamsHash  = paramsHash,
-                    TaskId      = taskId,
-                    ExpiresAt   = Clock().Add(_options.IdempotencyTtl),
+                    ActionId = frame.ActionId,
+                    ParamsHash = paramsHash,
+                    TaskId = taskId,
+                    ExpiresAt = Clock().Add(_options.IdempotencyTtl),
                 });
             }
 
             var runCtx = new ActionContext
             {
-                AgentNid  = agentNid,
+                AgentNid = agentNid,
                 RequestId = frame.RequestId,
-                TaskId    = taskId,
-                Spec      = spec,
+                TaskId = taskId,
+                Spec = spec,
                 TimeoutMs = effectiveTimeout,
-                Priority  = priority,
+                Priority = priority,
             };
 
             // Fire-and-forget; lifetime tied to the task (not the request).
-            _ = Task.Run(() => RunAsyncTask(frame, runCtx, effectiveTimeout));
+            var taskCancellation = new CancellationTokenSource(
+                TimeSpan.FromMilliseconds(effectiveTimeout));
+            if (!_taskCancellations.TryRegister(taskId, taskCancellation))
+            {
+                taskCancellation.Dispose();
+                throw new InvalidOperationException($"Task cancellation id collision: {taskId}");
+            }
+            _ = Task.Run(() => RunAsyncTask(frame, runCtx, taskCancellation));
 
             sw.Stop();
             activity?.SetTag("nps.task.id", taskId);
@@ -313,15 +345,7 @@ public sealed class ActionNodeMiddleware
         }
 
         // Synchronous path
-        var syncCtx = new ActionContext
-        {
-            AgentNid  = agentNid,
-            RequestId = frame.RequestId,
-            TaskId    = null,
-            Spec      = spec,
-            TimeoutMs = effectiveTimeout,
-            Priority  = priority,
-        };
+        var syncCtx = actionContext;
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ctx.RequestAborted);
         cts.CancelAfter(TimeSpan.FromMilliseconds(effectiveTimeout));
@@ -339,6 +363,12 @@ public sealed class ActionNodeMiddleware
                 "action execution timed out.");
             return;
         }
+        catch (ActionNodeException ex)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            await WriteError(ctx, ex.HttpStatus, ex.NpsStatus, ex.ErrorCode, ex.Message);
+            return;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Action {ActionId} failed", frame.ActionId);
@@ -351,13 +381,13 @@ public sealed class ActionNodeMiddleware
 
         if (frame.IdempotencyKey is not null)
         {
-            _idempotency.TryStore(frame.ActionId, frame.IdempotencyKey, new IdempotentEntry
+            _idempotency.TryStore(cacheActionId, frame.IdempotencyKey, new IdempotentEntry
             {
-                ActionId   = frame.ActionId,
+                ActionId = frame.ActionId,
                 ParamsHash = paramsHash,
-                Result     = result.Result,
-                AnchorRef  = result.AnchorRef ?? spec.ResultAnchor,
-                ExpiresAt  = Clock().Add(_options.IdempotencyTtl),
+                Result = result.Result,
+                AnchorRef = result.AnchorRef ?? spec.ResultAnchor,
+                ExpiresAt = Clock().Add(_options.IdempotencyTtl),
             });
         }
 
@@ -372,21 +402,29 @@ public sealed class ActionNodeMiddleware
             frame.RequestId, result.TokenEst);
     }
 
-    private async Task RunAsyncTask(ActionFrame frame, ActionContext runCtx, uint timeoutMs)
+    private async Task RunAsyncTask(
+        ActionFrame frame,
+        ActionContext runCtx,
+        CancellationTokenSource cancellation)
     {
         // Mark as running (only if still pending)
         _taskStore.TryTransition(runCtx.TaskId!, "pending", "running");
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs));
         try
         {
-            var res = await _provider.ExecuteAsync(frame, runCtx, cts.Token);
+            var res = await _provider.ExecuteAsync(frame, runCtx, cancellation.Token);
             _taskStore.Complete(runCtx.TaskId!, res.Result);
         }
         catch (OperationCanceledException)
         {
             var err = JsonSerializer.SerializeToElement(
                 new { code = "NWP-NODE-UNAVAILABLE", message = "task timed out" }, Json);
+            _taskStore.Fail(runCtx.TaskId!, err);
+        }
+        catch (ActionNodeException ex)
+        {
+            var err = JsonSerializer.SerializeToElement(
+                new { code = ex.ErrorCode, message = ex.Message }, Json);
             _taskStore.Fail(runCtx.TaskId!, err);
         }
         catch (Exception ex)
@@ -396,6 +434,11 @@ public sealed class ActionNodeMiddleware
             var err = JsonSerializer.SerializeToElement(
                 new { code = "NWP-NODE-UNAVAILABLE", message = ex.Message }, Json);
             _taskStore.Fail(runCtx.TaskId!, err);
+        }
+        finally
+        {
+            _taskCancellations.Remove(runCtx.TaskId!);
+            cancellation.Dispose();
         }
     }
 
@@ -418,17 +461,24 @@ public sealed class ActionNodeMiddleware
                 NwpErrorCodes.TaskNotFound, $"Unknown task_id '{taskId}'.");
             return;
         }
+        if (!OwnsTask(ctx, rec))
+        {
+            await WriteError(ctx, 403, "NPS-AUTH-FORBIDDEN",
+                NwpErrorCodes.AuthNidScopeViolation,
+                "The caller does not own this task.");
+            return;
+        }
 
         var status = new ActionTaskStatus
         {
-            TaskId    = rec.TaskId,
-            Status    = rec.Status,
-            Progress  = rec.Progress,
+            TaskId = rec.TaskId,
+            Status = rec.Status,
+            Progress = rec.Progress,
             CreatedAt = rec.CreatedAt.ToString("O"),
             UpdatedAt = rec.UpdatedAt.ToString("O"),
             RequestId = rec.RequestId,
-            Result    = rec.Result,
-            Error     = rec.Error,
+            Result = rec.Result,
+            Error = rec.Error,
         };
 
         var payload = JsonSerializer.SerializeToElement(status, Json);
@@ -452,6 +502,13 @@ public sealed class ActionNodeMiddleware
                 NwpErrorCodes.TaskNotFound, $"Unknown task_id '{taskId}'.");
             return;
         }
+        if (!OwnsTask(ctx, rec))
+        {
+            await WriteError(ctx, 403, "NPS-AUTH-FORBIDDEN",
+                NwpErrorCodes.AuthNidScopeViolation,
+                "The caller does not own this task.");
+            return;
+        }
 
         if (rec.Status is "completed" or "failed" or "cancelled")
         {
@@ -462,6 +519,7 @@ public sealed class ActionNodeMiddleware
         }
 
         _taskStore.Cancel(taskId);
+        _taskCancellations.Cancel(taskId);
         var payload = JsonSerializer.SerializeToElement(
             new { task_id = taskId, status = "cancelled" }, Json);
         await WriteCaps(ctx, payload, anchorRef: null, frame.RequestId);
@@ -473,7 +531,7 @@ public sealed class ActionNodeMiddleware
     {
         var traceparent = ctx.Request.Headers["traceparent"].ToString();
         if (string.IsNullOrEmpty(traceparent)) return default;
-        var tracestate  = ctx.Request.Headers["tracestate"].ToString();
+        var tracestate = ctx.Request.Headers["tracestate"].ToString();
         ActivityContext.TryParse(traceparent, tracestate, isRemote: true, out var context);
         return context;
     }
@@ -498,6 +556,17 @@ public sealed class ActionNodeMiddleware
         return Convert.ToHexString(bytes);
     }
 
+    private static string ScopedCacheActionId(string nodeId, string actionId, string? agentNid) =>
+        $"{nodeId}\u001f{actionId}\u001f{agentNid ?? string.Empty}";
+
+    private static bool OwnsTask(HttpContext ctx, ActionTaskRecord task)
+    {
+        var caller = ctx.Request.Headers.TryGetValue(NwpHttpHeaders.Agent, out var value)
+            ? value.ToString()
+            : null;
+        return string.Equals(task.AgentNid, caller, StringComparison.Ordinal);
+    }
+
     private static string? ReadStringParam(JsonElement? p, string name)
     {
         if (p is not { ValueKind: JsonValueKind.Object } root) return null;
@@ -520,13 +589,13 @@ public sealed class ActionNodeMiddleware
     {
         var body = new AsyncActionResponse
         {
-            TaskId      = taskId,
-            Status      = status,
-            PollUrl     = $"{_options.PathPrefix.TrimEnd('/')}/invoke",
+            TaskId = taskId,
+            Status = status,
+            PollUrl = $"{_options.PathPrefix.TrimEnd('/')}/invoke",
             EstimatedMs = estimatedMs,
-            RequestId   = requestId,
+            RequestId = requestId,
         };
-        ctx.Response.StatusCode  = 202;
+        ctx.Response.StatusCode = 202;
         ctx.Response.ContentType = "application/json";
         ctx.Response.Headers[NwpHttpHeaders.NodeType] = "action";
         return ctx.Response.WriteAsync(JsonSerializer.Serialize(body, Json));
@@ -543,12 +612,12 @@ public sealed class ActionNodeMiddleware
         var caps = new CapsFrame
         {
             AnchorRef = anchorRef ?? string.Empty,
-            Count     = (uint)dataList.Length,
-            Data      = dataList,
-            TokenEst  = tokenEst,
+            Count = (uint)dataList.Length,
+            Data = dataList,
+            TokenEst = tokenEst,
         };
 
-        ctx.Response.StatusCode  = 200;
+        ctx.Response.StatusCode = 200;
         ctx.Response.ContentType = NwpHttpHeaders.MimeCapsule;
         ctx.Response.Headers[NwpHttpHeaders.NodeType] = "action";
         if (anchorRef is not null)
@@ -565,11 +634,11 @@ public sealed class ActionNodeMiddleware
     {
         var err = new ErrorFrame
         {
-            Status  = npsStatus,
-            Error   = errorCode,
+            Status = npsStatus,
+            Error = errorCode,
             Message = message,
         };
-        ctx.Response.StatusCode  = status;
+        ctx.Response.StatusCode = status;
         ctx.Response.ContentType = "application/json";
         return ctx.Response.WriteAsync(JsonSerializer.Serialize(err, Json));
     }
@@ -580,21 +649,21 @@ public sealed class ActionNodeMiddleware
 
         var nwm = new NeuralWebManifest
         {
-            Nwp             = "0.4",
-            NodeId          = opt.NodeId,
-            NodeType        = "action",
-            DisplayName     = opt.DisplayName,
-            WireFormats     = ["ncp-capsule", "json"],
+            Nwp = "0.4",
+            NodeId = opt.NodeId,
+            NodeType = "action",
+            DisplayName = opt.DisplayName,
+            WireFormats = ["ncp-capsule", "json"],
             PreferredFormat = "json",
-            Capabilities    = new NodeCapabilities
+            Capabilities = new NodeCapabilities
             {
-                Query           = false,
-                Stream          = false,
+                Query = false,
+                Stream = false,
                 TokenBudgetHint = true,
             },
             Auth = new NodeAuth
             {
-                Required     = opt.RequireAuth,
+                Required = opt.RequireAuth,
                 IdentityType = opt.RequireAuth ? "nip-cert" : "none",
             },
             Endpoints = new NodeEndpoints

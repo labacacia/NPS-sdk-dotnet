@@ -47,11 +47,12 @@ public sealed class NwpNativeNodeServerTests
             },
             memoryProvider: new StubMemoryProvider());
 
-        var response = Assert.IsType<CapsFrame>(await server.DispatchAsync(new QueryFrame { Limit = 1 }));
+        var response = Assert.IsType<CapsFrame>(await server.DispatchAsync(new QueryFrame { Limit = 1, RequestId = "req-query-1" }));
 
         Assert.Equal("sha256:test", response.AnchorRef);
         Assert.Equal(1u, response.Count);
         Assert.Equal(1, response.Data[0].GetProperty("id").GetInt32());
+        Assert.Equal("req-query-1", response.RequestId);
     }
 
     [Fact]
@@ -74,10 +75,11 @@ public sealed class NwpNativeNodeServerTests
             actionProvider: new StubActionProvider());
 
         var response = Assert.IsType<CapsFrame>(await server.DispatchAsync(
-            new ActionFrame { ActionId = "orders.ping" }));
+            new ActionFrame { ActionId = "orders.ping", RequestId = "req-action-1" }));
 
         Assert.Equal("sha256:result", response.AnchorRef);
         Assert.Equal("ok", response.Data[0].GetProperty("status").GetString());
+        Assert.Equal("req-action-1", response.RequestId);
     }
 
     [Fact]

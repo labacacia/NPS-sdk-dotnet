@@ -8,6 +8,43 @@
 
 ---
 
+## [1.0.0-alpha.18] —— 未发布
+
+### 新增
+
+- 新增官方有状态 LLM context DTO、进程内 context store 与 Action Server coordinator，覆盖 owner 隔离、CAS reservation、生命周期 action、真异步执行、取消和 19 个共享一致性向量。
+- 新增 generated frame codec 的 NativeAOT publish-and-run smoke host，覆盖 nullable `UInt64` 往返。
+
+### 变更
+
+- 与其余五个 SDK 家族统一 unary request correlation、LLM usage 记账、严格有状态请求校验与任务所有权。
+
+## [1.0.0-alpha.17] —— 2026-08-02
+
+### 变更
+
+- Core、NWP、NIP 与 NDP 的内置帧注册路径改用源生成 JSON 和 MessagePack metadata。
+- Tier-3 BinaryVector metadata 改用有界 MessagePack/JSON 值树 writer，不再动态序列化
+  `object`。
+- 新增 `AddNcpHandshake()` 与 NativeAOT 安全的 `AddNwp()` registry 扩展。
+- 实现共享的 NCP 0.11、NWP 0.20、NIP 0.13、NDP 0.12 与 NOP 0.9
+  可移植 Profile，并执行语言无关一致性 fixture。
+
+### 修复
+
+- Tier-2 现在会保留 `JsonElement` 内容，不再将其序列化为空 map。
+- Ivy NativeAOT 发布不再产生 NPS 自有的动态 JSON 或 MessagePack resolver 诊断；
+  运行时生成的注册重载继续作为显式兼容 fallback 保留。
+- SQLite storage 显式固定到 `SQLitePCLRaw.bundle_e_sqlite3 2.1.12`，并删除
+  `GHSA-2m69-gcr7-jv3q` suppression。
+
+## [1.0.0-alpha.16] —— 2026-07-23
+
+### 变更
+
+- 将 alpha.15 的 .NET 包族重新签发为 alpha.16；alpha.15 package coordinates
+  已发布不可变，因此用 alpha.16 保持套件跨仓库统一版本。
+
 ## [1.0.0-alpha.15] —— 2026-06-28
 
 ### 变更

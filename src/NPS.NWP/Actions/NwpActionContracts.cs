@@ -288,7 +288,8 @@ public static class NwpFramePayloadCodec
         string anchorRef,
         TPayload payload,
         uint? tokenEst = null,
-        string? tokenizerUsed = null) =>
+        string? tokenizerUsed = null,
+        string? requestId = null) =>
         new()
         {
             AnchorRef = anchorRef,
@@ -296,6 +297,7 @@ public static class NwpFramePayloadCodec
             Data = [ToJsonElement(payload)],
             TokenEst = tokenEst,
             TokenizerUsed = tokenizerUsed,
+            RequestId = requestId,
         };
 
     public static TPayload ReadCapsPayload<TPayload>(CapsFrame frame, int index = 0)

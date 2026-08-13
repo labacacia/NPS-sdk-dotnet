@@ -33,6 +33,7 @@ public static class NpsMessagePackResolver
             UInt32Formatter.Instance,
             NullableUInt32Formatter.Instance,
             UInt64Formatter.Instance,
+            NullableUInt64Formatter.Instance,
             ByteArrayFormatter.Instance,
             new InterfaceReadOnlyListFormatter<string>(),
             new InterfaceReadOnlyListFormatter<JsonElement>(),

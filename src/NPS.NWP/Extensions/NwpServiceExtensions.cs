@@ -154,9 +154,11 @@ public static class NwpServiceExtensions
         {
             var provider = ctx.RequestServices.GetRequiredService<TProvider>();
             var taskStore = ctx.RequestServices.GetRequiredService<IActionTaskStore>();
+            var taskCancellations = ctx.RequestServices.GetRequiredService<IActionTaskCancellationRegistry>();
             var idempotency = ctx.RequestServices.GetRequiredService<IIdempotencyCache>();
             var logger = ctx.RequestServices.GetRequiredService<ILogger<ActionNodeMiddleware>>();
-            var mw = new ActionNodeMiddleware(next, provider, opts, taskStore, idempotency, logger);
+            var mw = new ActionNodeMiddleware(
+                next, provider, opts, taskStore, taskCancellations, idempotency, logger);
             return mw.InvokeAsync(ctx);
         });
     }
@@ -179,6 +181,8 @@ public static class NwpServiceExtensions
         // supplied a custom implementation (e.g. Redis-backed).
         if (!services.Any(d => d.ServiceType == typeof(IActionTaskStore)))
             services.AddSingleton<IActionTaskStore, InMemoryActionTaskStore>();
+        if (!services.Any(d => d.ServiceType == typeof(IActionTaskCancellationRegistry)))
+            services.AddSingleton<IActionTaskCancellationRegistry, InMemoryActionTaskCancellationRegistry>();
         if (!services.Any(d => d.ServiceType == typeof(IIdempotencyCache)))
             services.AddSingleton<IIdempotencyCache, InMemoryIdempotencyCache>();
     }

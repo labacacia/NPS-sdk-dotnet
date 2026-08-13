@@ -194,6 +194,13 @@ public sealed record CapsFrame : IFrame
     [JsonPropertyName("cached")]
     public bool? Cached { get; init; }
 
+    /// <summary>
+    /// Correlates this unary response with the originating request. For synchronous
+    /// NWP operations, producers SHOULD copy the request frame's <c>request_id</c>.
+    /// </summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
+
     /// <summary>Tokenizer identifier used for <see cref="TokenEst"/> calculation (NPS-1 §4.4).</summary>
     [JsonPropertyName("tokenizer_used")]
     public string? TokenizerUsed { get; init; }

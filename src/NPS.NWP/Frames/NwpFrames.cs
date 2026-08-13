@@ -56,6 +56,10 @@ public sealed record QueryFrame : IFrame
     /// <summary>Vector similarity search parameters (NPS-2 §5.4). Requires capability <c>vector_search</c>.</summary>
     [JsonPropertyName("vector_search")]
     public VectorSearchOptions? VectorSearch { get; init; }
+
+    /// <summary>Optional caller-supplied identifier echoed by unary <c>CapsFrame</c> responses.</summary>
+    [JsonPropertyName("request_id")]
+    public string? RequestId { get; init; }
 }
 
 /// <summary>

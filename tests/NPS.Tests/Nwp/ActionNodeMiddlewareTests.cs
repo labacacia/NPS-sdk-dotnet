@@ -28,8 +28,8 @@ public sealed class ActionNodeMiddlewareTests : IAsyncLifetime
 {
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
-        PropertyNamingPolicy        = JsonNamingPolicy.SnakeCaseLower,
-        DefaultIgnoreCondition      = JsonIgnoreCondition.WhenWritingNull,
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         PropertyNameCaseInsensitive = true,
     };
 
@@ -38,29 +38,29 @@ public sealed class ActionNodeMiddlewareTests : IAsyncLifetime
         {
             ["orders.create"] = new()
             {
-                Description      = "Create a new order",
-                Async            = true,
-                Idempotent       = true,
+                Description = "Create a new order",
+                Async = true,
+                Idempotent = true,
                 TimeoutMsDefault = 5_000,
-                TimeoutMsMax     = 60_000,
-                ResultAnchor     = "sha256:order",
+                TimeoutMsMax = 60_000,
+                ResultAnchor = "sha256:order",
             },
             ["orders.ping"] = new()
             {
                 Description = "Sync-only echo",
-                Async       = false,
+                Async = false,
             },
         };
 
-    private IHost         _host     = null!;
-    private HttpClient    _client   = null!;
+    private IHost _host = null!;
+    private HttpClient _client = null!;
     private FakeActionProvider _provider = null!;
 
     public async Task InitializeAsync()
     {
         _provider = new FakeActionProvider();
-        _host     = await BuildHost(requireAuth: false);
-        _client   = _host.GetTestClient();
+        _host = await BuildHost(requireAuth: false);
+        _client = _host.GetTestClient();
     }
 
     public async Task DisposeAsync()
@@ -101,7 +101,7 @@ public sealed class ActionNodeMiddlewareTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
         var body = await resp.Content.ReadAsStringAsync();
         Assert.Contains("orders.create", body);
-        Assert.Contains("orders.ping",   body);
+        Assert.Contains("orders.ping", body);
     }
 
     [Fact]
@@ -230,7 +230,7 @@ public sealed class ActionNodeMiddlewareTests : IAsyncLifetime
             var poll = await PostInvoke(new ActionFrame
             {
                 ActionId = ActionNodeMiddleware.SystemTaskStatus,
-                Params   = JsonSerializer.SerializeToElement(new { task_id = taskId }, JsonOpts),
+                Params = JsonSerializer.SerializeToElement(new { task_id = taskId }, JsonOpts),
             });
             Assert.Equal(HttpStatusCode.OK, poll.StatusCode);
             using var pdoc = JsonDocument.Parse(await poll.Content.ReadAsStringAsync());
@@ -248,7 +248,7 @@ public sealed class ActionNodeMiddlewareTests : IAsyncLifetime
         var resp = await PostInvoke(new ActionFrame
         {
             ActionId = ActionNodeMiddleware.SystemTaskStatus,
-            Params   = JsonSerializer.SerializeToElement(new { task_id = "nope" }, JsonOpts),
+            Params = JsonSerializer.SerializeToElement(new { task_id = "nope" }, JsonOpts),
         });
         Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
         var body = await resp.Content.ReadAsStringAsync();
@@ -261,7 +261,7 @@ public sealed class ActionNodeMiddlewareTests : IAsyncLifetime
         var resp = await PostInvoke(new ActionFrame
         {
             ActionId = ActionNodeMiddleware.SystemTaskStatus,
-            Params   = JsonSerializer.SerializeToElement(new { foo = "bar" }, JsonOpts),
+            Params = JsonSerializer.SerializeToElement(new { foo = "bar" }, JsonOpts),
         });
         Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
     }
@@ -278,7 +278,7 @@ public sealed class ActionNodeMiddlewareTests : IAsyncLifetime
         var cancel = await PostInvoke(new ActionFrame
         {
             ActionId = ActionNodeMiddleware.SystemTaskCancel,
-            Params   = JsonSerializer.SerializeToElement(new { task_id = taskId }, JsonOpts),
+            Params = JsonSerializer.SerializeToElement(new { task_id = taskId }, JsonOpts),
         });
         Assert.Equal(HttpStatusCode.OK, cancel.StatusCode);
     }
@@ -289,7 +289,7 @@ public sealed class ActionNodeMiddlewareTests : IAsyncLifetime
         var resp = await PostInvoke(new ActionFrame
         {
             ActionId = ActionNodeMiddleware.SystemTaskCancel,
-            Params   = JsonSerializer.SerializeToElement(new { task_id = "nope" }, JsonOpts),
+            Params = JsonSerializer.SerializeToElement(new { task_id = "nope" }, JsonOpts),
         });
         Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
     }
@@ -300,15 +300,15 @@ public sealed class ActionNodeMiddlewareTests : IAsyncLifetime
     public async Task Invoke_Sync_IdempotencyKeyHit_ReturnsSameResult_NoReExecution()
     {
         _provider.SyncResult = JsonSerializer.SerializeToElement(new { call = 1 }, JsonOpts);
-        var key   = Guid.NewGuid().ToString();
+        var key = Guid.NewGuid().ToString();
         var frame = new ActionFrame
         {
-            ActionId       = "orders.ping",
-            Params         = JsonSerializer.SerializeToElement(new { x = 1 }, JsonOpts),
+            ActionId = "orders.ping",
+            Params = JsonSerializer.SerializeToElement(new { x = 1 }, JsonOpts),
             IdempotencyKey = key,
         };
 
-        var first  = await PostInvoke(frame);
+        var first = await PostInvoke(frame);
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
         Assert.Equal(1, _provider.SyncInvocations);
 
@@ -327,8 +327,8 @@ public sealed class ActionNodeMiddlewareTests : IAsyncLifetime
 
         var first = await PostInvoke(new ActionFrame
         {
-            ActionId       = "orders.ping",
-            Params         = JsonSerializer.SerializeToElement(new { x = 1 }, JsonOpts),
+            ActionId = "orders.ping",
+            Params = JsonSerializer.SerializeToElement(new { x = 1 }, JsonOpts),
             IdempotencyKey = key,
         });
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
@@ -336,8 +336,8 @@ public sealed class ActionNodeMiddlewareTests : IAsyncLifetime
         // Same key, different params → conflict
         var second = await PostInvoke(new ActionFrame
         {
-            ActionId       = "orders.ping",
-            Params         = JsonSerializer.SerializeToElement(new { x = 2 }, JsonOpts),
+            ActionId = "orders.ping",
+            Params = JsonSerializer.SerializeToElement(new { x = 2 }, JsonOpts),
             IdempotencyKey = key,
         });
         Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
@@ -352,8 +352,8 @@ public sealed class ActionNodeMiddlewareTests : IAsyncLifetime
     {
         var frame = new ActionFrame
         {
-            ActionId    = "orders.create",
-            Async       = true,
+            ActionId = "orders.create",
+            Async = true,
             CallbackUrl = "https://127.0.0.1/notify",
         };
         var resp = await PostInvoke(frame);
@@ -367,8 +367,8 @@ public sealed class ActionNodeMiddlewareTests : IAsyncLifetime
     {
         var frame = new ActionFrame
         {
-            ActionId    = "orders.create",
-            Async       = true,
+            ActionId = "orders.create",
+            Async = true,
             CallbackUrl = "http://example.com/notify",
         };
         var resp = await PostInvoke(frame);
@@ -380,12 +380,12 @@ public sealed class ActionNodeMiddlewareTests : IAsyncLifetime
     [Fact]
     public async Task Invoke_RequireAuth_MissingHeader_Returns401()
     {
-        using var authHost   = await BuildHost(requireAuth: true);
+        using var authHost = await BuildHost(requireAuth: true);
         using var authClient = authHost.GetTestClient();
 
-        var frame   = new ActionFrame { ActionId = "orders.ping" };
+        var frame = new ActionFrame { ActionId = "orders.ping" };
         var content = new StringContent(JsonSerializer.Serialize(frame, JsonOpts), Encoding.UTF8, NwpHttpHeaders.MimeFrame);
-        var resp    = await authClient.PostAsync("/orders/invoke", content);
+        var resp = await authClient.PostAsync("/orders/invoke", content);
 
         Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
     }
@@ -394,10 +394,10 @@ public sealed class ActionNodeMiddlewareTests : IAsyncLifetime
     public async Task Invoke_RequireAuth_Present_Returns200()
     {
         _provider.SyncResult = JsonSerializer.SerializeToElement(new { ok = true }, JsonOpts);
-        using var authHost   = await BuildHost(requireAuth: true);
+        using var authHost = await BuildHost(requireAuth: true);
         using var authClient = authHost.GetTestClient();
 
-        var frame   = new ActionFrame { ActionId = "orders.ping" };
+        var frame = new ActionFrame { ActionId = "orders.ping" };
         var content = new StringContent(JsonSerializer.Serialize(frame, JsonOpts), Encoding.UTF8, NwpHttpHeaders.MimeFrame);
         var request = new HttpRequestMessage(HttpMethod.Post, "/orders/invoke")
         {
@@ -429,12 +429,12 @@ public sealed class ActionNodeMiddlewareTests : IAsyncLifetime
     [Fact]
     public async Task Invoke_Sync_ProviderTimeout_Returns504()
     {
-        _provider.SyncDelay  = TimeSpan.FromSeconds(5);
+        _provider.SyncDelay = TimeSpan.FromSeconds(5);
         _provider.SyncResult = JsonSerializer.SerializeToElement(new { ok = true }, JsonOpts);
 
         var frame = new ActionFrame
         {
-            ActionId  = "orders.ping",
+            ActionId = "orders.ping",
             TimeoutMs = 100,
         };
 
@@ -448,7 +448,7 @@ public sealed class ActionNodeMiddlewareTests : IAsyncLifetime
         _provider.ThrowSync = true;
 
         var frame = new ActionFrame { ActionId = "orders.ping" };
-        var resp  = await PostInvoke(frame);
+        var resp = await PostInvoke(frame);
 
         Assert.Equal(HttpStatusCode.InternalServerError, resp.StatusCode);
     }
@@ -473,16 +473,17 @@ public sealed class ActionNodeMiddlewareTests : IAsyncLifetime
                     services.AddLogging(b => b.AddDebug().SetMinimumLevel(LogLevel.Warning));
                     services.AddSingleton<FakeActionProvider>(_ => provider);
                     services.AddSingleton<IActionTaskStore, InMemoryActionTaskStore>();
+                    services.AddSingleton<IActionTaskCancellationRegistry, InMemoryActionTaskCancellationRegistry>();
                     services.AddSingleton<IIdempotencyCache, InMemoryIdempotencyCache>();
                 });
                 web.Configure(app =>
                 {
                     app.UseActionNode<FakeActionProvider>(opts =>
                     {
-                        opts.NodeId      = "urn:nps:node:test:orders";
+                        opts.NodeId = "urn:nps:node:test:orders";
                         opts.DisplayName = "Test Orders";
-                        opts.PathPrefix  = "/orders";
-                        opts.Actions     = Actions;
+                        opts.PathPrefix = "/orders";
+                        opts.Actions = Actions;
                         opts.RequireAuth = requireAuth;
                     });
                     app.Run(ctx => { ctx.Response.StatusCode = 404; return Task.CompletedTask; });
@@ -499,9 +500,9 @@ public sealed class ActionNodeMiddlewareTests : IAsyncLifetime
 internal sealed class FakeActionProvider : IActionNodeProvider
 {
     public JsonElement? SyncResult { get; set; }
-    public TimeSpan     SyncDelay  { get; set; } = TimeSpan.Zero;
-    public bool         ThrowSync  { get; set; }
-    public TimeSpan     AsyncCompletionDelay { get; set; } = TimeSpan.FromMilliseconds(50);
+    public TimeSpan SyncDelay { get; set; } = TimeSpan.Zero;
+    public bool ThrowSync { get; set; }
+    public TimeSpan AsyncCompletionDelay { get; set; } = TimeSpan.FromMilliseconds(50);
 
     private int _syncInvocations;
     public int SyncInvocations => _syncInvocations;

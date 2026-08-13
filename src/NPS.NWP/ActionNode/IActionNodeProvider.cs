@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Text.Json;
+using NPS.Core;
 using NPS.NWP.Frames;
+using NPS.NWP.Http;
 
 namespace NPS.NWP.ActionNode;
 
@@ -53,18 +55,57 @@ public sealed class ActionContext
 }
 
 /// <summary>
+/// Protocol-aware failure raised by an Action Node provider. The middleware maps
+/// this exception to an ErrorFrame without replacing the provider's public error.
+/// </summary>
+public sealed class ActionNodeException : Exception
+{
+    public ActionNodeException(
+        int httpStatus,
+        string npsStatus,
+        string errorCode,
+        string message)
+        : base(message)
+    {
+        HttpStatus = httpStatus;
+        NpsStatus = npsStatus;
+        ErrorCode = errorCode;
+    }
+
+    public int HttpStatus { get; }
+    public string NpsStatus { get; }
+    public string ErrorCode { get; }
+
+    public static ActionNodeException ParamsInvalid(string message) =>
+        new(422, NpsStatusCodes.ClientUnprocessable, NwpErrorCodes.ActionParamsInvalid, message);
+
+    public static ActionNodeException Internal(string message) =>
+        new(500, NpsStatusCodes.ServerInternal, NwpErrorCodes.NodeUnavailable, message);
+}
+
+/// <summary>
 /// Implement this to expose a set of actions on an Action Node. All <c>action_id</c> values
 /// declared in <see cref="ActionNodeOptions.Actions"/> MUST be handled.
 /// </summary>
 public interface IActionNodeProvider
 {
     /// <summary>
+    /// Authorize and validate an action before the middleware consults its
+    /// idempotency cache. Stateful providers use this hook to re-check NIP
+    /// authorization before returning a cached result.
+    /// </summary>
+    Task AuthorizeAsync(
+        ActionFrame frame,
+        ActionContext context,
+        CancellationToken ct = default) => Task.CompletedTask;
+
+    /// <summary>
     /// Execute one action. May be invoked either synchronously (the caller awaits the
     /// result) or from the background async task runner (in which case
     /// <see cref="ActionContext.TaskId"/> is non-null).
     /// </summary>
     Task<ActionExecutionResult> ExecuteAsync(
-        ActionFrame      frame,
-        ActionContext    context,
+        ActionFrame frame,
+        ActionContext context,
         CancellationToken ct = default);
 }

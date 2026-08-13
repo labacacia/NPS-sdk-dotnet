@@ -120,6 +120,7 @@ public sealed class NwpNativeNodeServer
             NextCursor = result.NextCursor,
             TokenEst = EstimateTokens(result.Rows),
             TokenizerUsed = "native-estimate",
+            RequestId = frame.RequestId,
         };
     }
 
@@ -156,6 +157,7 @@ public sealed class NwpNativeNodeServer
             Data = result.Result.HasValue ? [result.Result.Value.Clone()] : [],
             TokenEst = result.TokenEst,
             TokenizerUsed = "native-estimate",
+            RequestId = frame.RequestId,
         };
     }
 
