@@ -3,23 +3,23 @@
 # NPS .NET 参考实现
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](../../LICENSE)
-[![Candidate](https://img.shields.io/badge/candidate-v1.0.0--alpha.17-blue.svg)](../../CHANGELOG.cn.md)
+[![Release](https://img.shields.io/badge/release-v1.0.0--alpha.18-orange.svg)](../../CHANGELOG.cn.md)
 [![NCP](https://img.shields.io/badge/NCP-v0.11-5b8cff.svg)]()
-[![NWP](https://img.shields.io/badge/NWP-v0.20-4af0b0.svg)]()
-[![NIP](https://img.shields.io/badge/NIP-v0.13-7b61ff.svg)]()
+[![NWP](https://img.shields.io/badge/NWP-v0.21-4af0b0.svg)]()
+[![NIP](https://img.shields.io/badge/NIP-v0.14-7b61ff.svg)]()
 [![NDP](https://img.shields.io/badge/NDP-v0.12-f0a050.svg)]()
 [![NOP](https://img.shields.io/badge/NOP-v0.9-ff8c42.svg)]()
 
 C# / .NET 10 Neural Protocol Suite 参考实现。
 
-## Alpha.17 可移植 Profile
+## Alpha.18 可移植 Profile
 
-本候选实现五个共享协议 Profile，并执行
+本发布版实现五个共享协议 Profile，并执行
 [`spec/conformance`](../../spec/conformance/) 下的语言无关 fixture：
 
 - NCP 0.11 有界原生服务握手与确定性 Caps 协商。
-- NWP 0.20 可移植 Node/Bridge serving 与 Bridge 生命周期。
-- NIP 0.13 可移植 CA、实时吊销、签名 CRL 与验证策略。
+- NWP 0.21 可移植 Node/Bridge serving 与 Bridge 生命周期。
+- NIP 0.14 可移植 CA、实时吊销、签名 CRL 与验证策略。
 - NDP 0.12 签名 Announce 准入及 registry 冲突/liveness 策略。
 - NOP 0.9 确定性编排、callback 安全、委派、租约与 CR-0007 runtime 决策。
 
