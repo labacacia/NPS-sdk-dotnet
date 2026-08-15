@@ -83,6 +83,43 @@ public sealed class NwpNativeNodeServerTests
     }
 
     [Fact]
+    public async Task ServeAction_ReportsExactDecoderPayloadLength()
+    {
+        var codec = MakeCodec();
+        var provider = new StubActionProvider();
+        var request = codec.Encode(
+            new ActionFrame
+            {
+                ActionId = "orders.ping",
+                Params = JsonSerializer.SerializeToElement(new { value = "decoder-boundary" }),
+                RequestId = "req-wire-input-1",
+            },
+            EncodingTier.MsgPack);
+        var expected = NpsFrameCodec.PeekHeader(request).PayloadLength;
+        var stream = new ScriptedDuplexStream(request);
+        var server = new NwpNativeNodeServer(
+            codec,
+            new NwpNativeNodeOptions
+            {
+                ActionOptions = new ActionNodeOptions
+                {
+                    NodeId = "urn:nps:node:test:actions",
+                    PathPrefix = "/actions",
+                    Actions = new Dictionary<string, ActionSpec>
+                    {
+                        ["orders.ping"] = new() { Async = false, ResultAnchor = "sha256:result" },
+                    },
+                },
+            },
+            actionProvider: provider);
+
+        await server.ServeAsync(stream, EncodingTier.MsgPack);
+
+        Assert.IsType<CapsFrame>(codec.Decode(stream.Written));
+        Assert.Equal((ulong)expected, provider.LastWireInputBytes);
+    }
+
+    [Fact]
     public async Task ServeAsync_RejectsBinaryVectorFrame_WhenPolicyDoesNotEnableIt()
     {
         var codec = MakeCodec();
@@ -300,11 +337,14 @@ public sealed class NwpNativeNodeServerTests
 
     private sealed class StubActionProvider : IActionNodeProvider
     {
+        public ulong LastWireInputBytes { get; private set; }
+
         public Task<ActionExecutionResult> ExecuteAsync(
             ActionFrame frame,
             ActionContext context,
             CancellationToken ct = default)
         {
+            LastWireInputBytes = context.WireInputBytes;
             using var doc = JsonDocument.Parse("""{"status":"ok"}""");
             return Task.FromResult(new ActionExecutionResult
             {

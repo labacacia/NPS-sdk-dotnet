@@ -327,6 +327,6 @@ dotnet test
 
 ## Status
 
-Active development (v1.0.0-alpha.18). 802 standalone SDK tests passing.
+Active development (v1.0.0-alpha.18). 865 standalone SDK tests passing.
 
 Alpha.15 highlights: official `llm.complete` Action/Caps/Stream DTO contracts; typed frame payload helpers for `CapsFrame`, `StreamFrame`, async task results, and `ErrorFrame.Details`; Bridge `bridge_target` canonical wire shape aligned on `extras`; warning-clean .NET package family with SourceLink symbols; native NCP TLS hook and bounded Hello reads; live NIP revocation checks and signed CRL artifacts; `NipCaClient`; `NwpNativeNodeServer`; built-in Bridge dispatchers for HTTP/HTTPS, gRPC JSON unary, MCP JSON-RPC, and A2A JSON-RPC; transport-neutral observability renderers; `LabAcacia.NPS.Conformance`; loopback dev stack.

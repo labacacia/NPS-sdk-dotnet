@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Text.Json;
+using NPS.Core.Frames.Ncp;
 
 namespace NPS.NWP.ActionNode;
 
@@ -21,6 +22,12 @@ public sealed class IdempotentEntry
 
     /// <summary>Stored execution result (for synchronous actions).</summary>
     public JsonElement? Result { get; init; }
+
+    /// <summary>
+    /// Completed stream sequence. Replays preserve payloads and terminal receipts but
+    /// are emitted under a fresh stream id.
+    /// </summary>
+    public IReadOnlyList<StreamFrame>? StreamFrames { get; init; }
 
     /// <summary>anchor_ref used on the original response, if any.</summary>
     public string? AnchorRef { get; init; }

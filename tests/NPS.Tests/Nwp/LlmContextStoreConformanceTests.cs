@@ -19,14 +19,16 @@ public sealed class LlmContextStoreConformanceTests
         using var fixture = LoadFixture();
         foreach (var vector in fixture.RootElement.GetProperty("vectors").EnumerateArray())
         {
-            yield return [vector.GetProperty("id").GetString()!];
+            yield return [vector.Clone()];
         }
     }
 
     [Theory]
     [MemberData(nameof(Vectors))]
-    public void SharedVector_IsExecutedByReferenceStore(string id)
+    public void SharedVector_IsExecutedByReferenceStore(JsonElement vector)
     {
+        var id = Str(vector, "id");
+        AssertFixtureContract(vector);
         switch (id)
         {
             case "nwp.llm-context.001": StatelessCompatibility(); break;
@@ -51,6 +53,135 @@ public sealed class LlmContextStoreConformanceTests
             default: throw new InvalidOperationException($"Unimplemented shared vector: {id}");
         }
     }
+
+    private static void AssertFixtureContract(JsonElement vector)
+    {
+        var id = Str(vector, "id");
+        var input = Obj(vector, "input");
+        var expected = Obj(vector, "expected");
+        Assert.True(input.EnumerateObject().Any(), $"{id} input must not be empty");
+        Assert.True(expected.EnumerateObject().Any(), $"{id} expected must not be empty");
+
+        switch (id[^3..])
+        {
+            case "001":
+                Assert.False(Obj(input, "params").TryGetProperty("context", out _));
+                Assert.Equal("stateless", Str(expected, "mode"));
+                Assert.True(Bool(expected, "dispatched"));
+                Assert.False(Bool(expected, "context_mutated"));
+                break;
+            case "002":
+                Assert.Equal(Str(input, "owner_nid"), Str(expected, "owner_nid"));
+                Assert.Equal(1, Int(expected, "version"));
+                Assert.True(Bool(expected, "committed"));
+                break;
+            case "003":
+                var pre3 = Obj(input, "pre_state");
+                var params3 = Obj(input, "params");
+                Assert.Equal(Int(pre3, "version") + 1, Int(expected, "version"));
+                Assert.Equal(Len(params3, "messages"), Int(expected, "accepted_delta_message_count"));
+                Assert.Equal(Len(pre3, "messages") + Len(params3, "messages") + 1,
+                    Int(expected, "post_message_count"));
+                break;
+            case "004":
+                Assert.Equal(Int(Obj(input, "pre_state"), "version"), Int(expected, "post_version"));
+                Assert.Equal(Int(Obj(input, "pre_state"), "version"), Int(Obj(expected, "hint"), "current_version"));
+                Assert.Equal(NwpErrorCodes.LlmContextVersionConflict, Str(expected, "error"));
+                break;
+            case "005":
+                Assert.Equal(Int(Obj(input, "request"), "base_version"), Int(expected, "parent_version"));
+                Assert.Equal(Int(input, "parent_version_at_child_commit"), Int(expected, "post_parent_version"));
+                Assert.Equal(1, Int(expected, "version"));
+                break;
+            case "006":
+                Assert.Equal(Int(Obj(input, "pre_state"), "version") + 1, Int(expected, "version"));
+                Assert.Equal(Str(Obj(input, "request"), "model"), Str(expected, "resolved_model"));
+                break;
+            case "007":
+                Assert.Equal(Int(Obj(input, "pre_state"), "version"), Int(expected, "post_version"));
+                Assert.Equal(NwpErrorCodes.LlmContextBindingMismatch, Str(expected, "error"));
+                Assert.False(Bool(expected, "provider_dispatched") || Bool(expected, "stateless_fallback"));
+                break;
+            case "008":
+                Assert.NotEqual(Str(input, "owner_nid"), Str(input, "caller_nid"));
+                Assert.DoesNotContain(LlmCompleteAction.CapabilityContext, Strings(input, "caller_capabilities"));
+                Assert.Equal(NwpErrorCodes.LlmContextForbidden, Str(expected, "error"));
+                break;
+            case "009":
+                Assert.Equal(Int(Obj(input, "pre_state"), "version"), Int(expected, "post_version"));
+                Assert.False(Bool(expected, "committed"));
+                Assert.True(Bool(expected, "reservation_released"));
+                break;
+            case "010":
+                var terminal10 = Obj(input.GetProperty("status_sequence").EnumerateArray().Last(), "");
+                var completed10 = Obj(expected, "completed_status");
+                Assert.False(Bool(Obj(expected, "running_status"), "context_id_present"));
+                Assert.Equal(Str(terminal10, "context_id"), Str(completed10, "context_id"));
+                Assert.Equal(Int(terminal10, "version"), Int(completed10, "version"));
+                break;
+            case "011":
+                Assert.Equal(Int(Obj(input, "pre_state"), "version") + 1,
+                    Int(Obj(expected, "release_receipt"), "version"));
+                Assert.Equal(Int(Obj(input, "expiry_branch"), "active_version"),
+                    Int(Obj(expected, "expiry_tombstone"), "version"));
+                break;
+            case "012":
+                var usage12 = Obj(input, "usage");
+                Assert.Equal(Int(usage12, "input_tokens"), Int(usage12, "reused_tokens") + Int(usage12, "evaluated_tokens"));
+                Assert.True(Int(usage12, "wire_input_bytes") < Int(input, "stateless_wire_input_bytes"));
+                Assert.True(Bool(expected, "usage_equation_valid") && Bool(expected, "wire_input_smaller_than_stateless"));
+                break;
+            case "013":
+                var context13 = Obj(Obj(input, "manifest"), "context");
+                Assert.Equal(Strings(input, "implemented_operations"), Strings(context13, "operations"));
+                Assert.Equal(Str(input, "implemented_persistence"), Str(context13, "persistence"));
+                Assert.True(Bool(expected, "manifest_valid"));
+                Assert.Equal(LlmCompleteAction.CapabilityContext, Str(expected, "requires_capability"));
+                break;
+            case "014":
+                Assert.Equal("process", Str(input, "persistence"));
+                Assert.Equal("process_restart", Str(input, "event"));
+                Assert.Equal(NwpErrorCodes.LlmContextNotFound, Str(expected, "error"));
+                Assert.False(Bool(expected, "replacement_created") || Bool(expected, "stateless_fallback"));
+                break;
+            case "015":
+                var original15 = Obj(input, "original");
+                Assert.Equal(string.Concat(Strings(original15, "chunks")), Str(expected, "ordered_content"));
+                Assert.NotEqual(Str(original15, "stream_id"), Str(input, "replay_stream_id"));
+                Assert.Equal(0, Int(expected, "provider_invocations") + Int(expected, "additional_context_commits"));
+                break;
+            case "016":
+                Assert.Equal("valid", Str(input, "authorization_at_admission"));
+                Assert.Equal("revoked", Str(input, "authorization_at_commit"));
+                Assert.Equal(Int(Obj(input, "pre_state"), "version"), Int(expected, "post_version"));
+                Assert.Equal(NwpErrorCodes.AuthNidRevoked, Str(expected, "error"));
+                break;
+            case "017":
+                Assert.Equal(Int(input, "max_contexts_per_principal"), Int(input, "live_contexts"));
+                Assert.Equal(NwpErrorCodes.LlmContextLimitExceeded, Str(expected, "error"));
+                Assert.False(Bool(expected, "context_allocated"));
+                break;
+            case "018":
+                Assert.DoesNotContain(Str(Obj(input, "request"), "operation"), Strings(input, "advertised_operations"));
+                Assert.Equal(NwpErrorCodes.LlmContextOperationUnsupported, Str(expected, "error"));
+                break;
+            case "019":
+                Assert.False(Bool(input, "idempotency_key_present"));
+                Assert.Equal(NwpErrorCodes.ActionParamsInvalid, Str(expected, "error"));
+                Assert.False(Bool(expected, "context_allocated") || Bool(expected, "provider_dispatched"));
+                break;
+            default: throw new InvalidOperationException($"Unimplemented fixture contract: {id}");
+        }
+    }
+
+    private static JsonElement Obj(JsonElement value, string property) =>
+        string.IsNullOrEmpty(property) ? value : value.GetProperty(property);
+    private static string Str(JsonElement value, string property) => value.GetProperty(property).GetString()!;
+    private static int Int(JsonElement value, string property) => value.GetProperty(property).GetInt32();
+    private static bool Bool(JsonElement value, string property) => value.GetProperty(property).GetBoolean();
+    private static int Len(JsonElement value, string property) => value.GetProperty(property).GetArrayLength();
+    private static string[] Strings(JsonElement value, string property) =>
+        value.GetProperty(property).EnumerateArray().Select(item => item.GetString()!).ToArray();
 
     private static void StatelessCompatibility()
     {

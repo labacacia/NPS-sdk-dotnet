@@ -54,8 +54,8 @@ public sealed class NwpNativeNodeServer
             IFrame? response;
             try
             {
-                var frame = await ReadFrameAsync(stream, encodingPolicy, ct).ConfigureAwait(false);
-                response = await DispatchAsync(frame, ct).ConfigureAwait(false);
+                var decoded = await ReadFrameAsync(stream, encodingPolicy, ct).ConfigureAwait(false);
+                response = await DispatchAsync(decoded.Frame, decoded.PayloadLength, ct).ConfigureAwait(false);
             }
             catch (EndOfStreamException)
             {
@@ -89,10 +89,13 @@ public sealed class NwpNativeNodeServer
     }
 
     public async Task<IFrame> DispatchAsync(IFrame frame, CancellationToken ct = default) =>
+        await DispatchAsync(frame, 0, ct).ConfigureAwait(false);
+
+    private async Task<IFrame> DispatchAsync(IFrame frame, ulong wireInputBytes, CancellationToken ct) =>
         frame switch
         {
             QueryFrame query => await DispatchQueryAsync(query, ct).ConfigureAwait(false),
-            ActionFrame action => await DispatchActionAsync(action, ct).ConfigureAwait(false),
+            ActionFrame action => await DispatchActionAsync(action, wireInputBytes, ct).ConfigureAwait(false),
             _ => new ErrorFrame
             {
                 Status = NpsStatusCodes.ClientBadFrame,
@@ -124,7 +127,10 @@ public sealed class NwpNativeNodeServer
         };
     }
 
-    private async Task<CapsFrame> DispatchActionAsync(ActionFrame frame, CancellationToken ct)
+    private async Task<CapsFrame> DispatchActionAsync(
+        ActionFrame frame,
+        ulong wireInputBytes,
+        CancellationToken ct)
     {
         if (_actionProvider is null)
             throw new InvalidOperationException("Action provider is required to serve ActionFrame.");
@@ -147,6 +153,7 @@ public sealed class NwpNativeNodeServer
                 Spec = spec,
                 TimeoutMs = timeout,
                 Priority = string.IsNullOrWhiteSpace(frame.Priority) ? "normal" : frame.Priority!,
+                WireInputBytes = wireInputBytes,
             },
             ct).ConfigureAwait(false);
 
@@ -161,7 +168,10 @@ public sealed class NwpNativeNodeServer
         };
     }
 
-    private async Task<IFrame> ReadFrameAsync(Stream stream, NcpEncodingPolicy encodingPolicy, CancellationToken ct)
+    private async Task<(IFrame Frame, ulong PayloadLength)> ReadFrameAsync(
+        Stream stream,
+        NcpEncodingPolicy encodingPolicy,
+        CancellationToken ct)
     {
         var (header, rawHeader) = await ReadFrameHeaderAsync(stream, ct).ConfigureAwait(false);
         encodingPolicy.EnsureAllows(header);
@@ -170,7 +180,7 @@ public sealed class NwpNativeNodeServer
         var wire = new byte[rawHeader.Length + payload.Length];
         rawHeader.CopyTo(wire, 0);
         payload.CopyTo(wire, rawHeader.Length);
-        return _codec.Decode(wire);
+        return (_codec.Decode(wire), header.PayloadLength);
     }
 
     private async Task WriteFrameAsync(Stream stream, IFrame frame, EncodingTier tier, CancellationToken ct)

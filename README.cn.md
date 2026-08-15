@@ -316,6 +316,6 @@ dotnet test
 
 ## 状态
 
-积极开发中（v1.0.0-alpha.18）。802 个 standalone SDK 测试全部通过。
+积极开发中（v1.0.0-alpha.18）。865 个 standalone SDK 测试全部通过。
 
 Alpha.15 主要内容：官方 `llm.complete` Action/Caps/Stream DTO contract；面向 `CapsFrame`、`StreamFrame`、异步 task result、`ErrorFrame.Details` 的 typed frame payload helper；Bridge `bridge_target` 规范 wire shape 统一到 `extras`；warning-clean .NET 包族与 SourceLink symbol；native NCP TLS hook 与有界 Hello 读取；live NIP revocation check 与 signed CRL artifact；`NipCaClient`；`NwpNativeNodeServer`；内置 HTTP/HTTPS、gRPC JSON unary、MCP JSON-RPC、A2A JSON-RPC Bridge dispatcher；transport-neutral observability renderer；`LabAcacia.NPS.Conformance`；loopback dev stack。

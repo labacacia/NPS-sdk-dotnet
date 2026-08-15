@@ -11,4 +11,9 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\NPS.Core\NPS.Core.csproj" />
+    <ProjectReference Include="..\..\src\NPS.NWP\NPS.NWP.csproj" />
+  </ItemGroup>
+
 </Project>

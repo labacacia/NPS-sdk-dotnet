@@ -16,14 +16,16 @@ using System.Text;
 using NPS.Benchmarks.TokenSavings;
 
 var emit = args.Contains("--emit");
-var report = Benchmark.Run();
+var llmContext = args.Contains("--llm-context");
+var report = llmContext ? LlmContextBenchmark.RunReport() : Benchmark.Run();
 
 Console.WriteLine(report);
 
 if (emit)
 {
     var repoRoot = FindRepoRoot();
-    var outPath  = Path.Combine(repoRoot, "docs", "benchmarks", "token-savings.md");
+    var fileName = llmContext ? "llm-context-savings.md" : "token-savings.md";
+    var outPath  = Path.Combine(repoRoot, "docs", "benchmarks", fileName);
     Directory.CreateDirectory(Path.GetDirectoryName(outPath)!);
     File.WriteAllText(outPath, report, new UTF8Encoding(false));
     Console.Error.WriteLine($"Report written to {outPath}");

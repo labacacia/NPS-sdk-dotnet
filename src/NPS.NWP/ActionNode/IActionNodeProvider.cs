@@ -3,6 +3,7 @@
 
 using System.Text.Json;
 using NPS.Core;
+using NPS.Core.Frames.Ncp;
 using NPS.NWP.Frames;
 using NPS.NWP.Http;
 
@@ -18,6 +19,13 @@ public sealed class ActionExecutionResult
     /// response. <c>null</c> is allowed for side-effecting actions with no return payload.
     /// </summary>
     public JsonElement? Result { get; init; }
+
+    /// <summary>
+    /// Streaming action output. When present, the Action Server writes each frame as
+    /// NDJSON and does not emit a <c>CapsFrame</c>. Providers must emit one terminal
+    /// frame; the server owns the externally visible stream id.
+    /// </summary>
+    public IAsyncEnumerable<StreamFrame>? StreamFrames { get; init; }
 
     /// <summary>
     /// Optional anchor_id for the response schema. Overrides <see cref="ActionSpec.ResultAnchor"/>
@@ -52,6 +60,12 @@ public sealed class ActionContext
 
     /// <summary>Priority hint from <see cref="ActionFrame.Priority"/>, or <c>"normal"</c>.</summary>
     public required string Priority { get; init; }
+
+    /// <summary>
+    /// Exact serialized ActionFrame payload bytes accepted at the NWP decoder boundary.
+    /// Excludes NCP headers, encryption/TLS framing, and response bytes.
+    /// </summary>
+    public ulong WireInputBytes { get; init; }
 }
 
 /// <summary>

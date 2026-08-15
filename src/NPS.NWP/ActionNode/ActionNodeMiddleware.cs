@@ -163,9 +163,10 @@ public sealed class ActionNodeMiddleware
         var parentContext = ExtractTraceContext(ctx);
 
         ActionFrame frame;
+        ulong wireInputBytes;
         try
         {
-            frame = await ReadFrame<ActionFrame>(ctx);
+            (frame, wireInputBytes) = await ReadFrame<ActionFrame>(ctx);
         }
         catch (Exception ex)
         {
@@ -254,6 +255,7 @@ public sealed class ActionNodeMiddleware
             Spec = spec,
             TimeoutMs = effectiveTimeout,
             Priority = priority,
+            WireInputBytes = wireInputBytes,
         };
         try
         {
@@ -291,6 +293,13 @@ public sealed class ActionNodeMiddleware
                     return;
                 }
 
+                if (cached.StreamFrames is not null)
+                {
+                    await WriteStream(ctx, AsAsyncEnumerable(cached.StreamFrames),
+                        frame.RequestId, ctx.RequestAborted);
+                    return;
+                }
+
                 await WriteCaps(ctx, cached.Result, cached.AnchorRef, frame.RequestId);
                 return;
             }
@@ -321,6 +330,7 @@ public sealed class ActionNodeMiddleware
                 Spec = spec,
                 TimeoutMs = effectiveTimeout,
                 Priority = priority,
+                WireInputBytes = wireInputBytes,
             };
 
             // Fire-and-forget; lifetime tied to the task (not the request).
@@ -379,6 +389,36 @@ public sealed class ActionNodeMiddleware
             return;
         }
 
+        if (result.StreamFrames is not null)
+        {
+            var completed = await WriteStream(
+                ctx, result.StreamFrames, frame.RequestId, cts.Token);
+            if (completed is not null && frame.IdempotencyKey is not null)
+            {
+                _idempotency.TryStore(cacheActionId, frame.IdempotencyKey, new IdempotentEntry
+                {
+                    ActionId = frame.ActionId,
+                    ParamsHash = paramsHash,
+                    StreamFrames = completed,
+                    AnchorRef = result.AnchorRef ?? spec.ResultAnchor,
+                    ExpiresAt = Clock().Add(_options.IdempotencyTtl),
+                });
+            }
+
+            sw.Stop();
+            activity?.SetStatus(completed is null
+                ? ActivityStatusCode.Error
+                : ActivityStatusCode.Ok);
+            NwpTelemetry.FramesProcessed.Add(1, new TagList
+            {
+                { "frame_type", "action" },
+                { "result", completed is null ? "stream_failed" : "stream_success" },
+            });
+            NwpTelemetry.FrameDurationMs.Record(sw.Elapsed.TotalMilliseconds,
+                new TagList { { "frame_type", "action" } });
+            return;
+        }
+
         if (frame.IdempotencyKey is not null)
         {
             _idempotency.TryStore(cacheActionId, frame.IdempotencyKey, new IdempotentEntry
@@ -400,6 +440,85 @@ public sealed class ActionNodeMiddleware
 
         await WriteCaps(ctx, result.Result, result.AnchorRef ?? spec.ResultAnchor,
             frame.RequestId, result.TokenEst);
+    }
+
+    private async Task<IReadOnlyList<StreamFrame>?> WriteStream(
+        HttpContext ctx,
+        IAsyncEnumerable<StreamFrame> source,
+        string? requestId,
+        CancellationToken ct)
+    {
+        var streamId = Guid.NewGuid().ToString("N");
+        var emitted = new List<StreamFrame>();
+        uint nextSeq = 0;
+        var terminal = false;
+
+        ctx.Response.StatusCode = 200;
+        ctx.Response.ContentType = "application/x-ndjson";
+        ctx.Response.Headers[NwpHttpHeaders.NodeType] = "action";
+        if (requestId is not null)
+            ctx.Response.Headers["X-NWP-Request-Id"] = requestId;
+
+        try
+        {
+            await foreach (var supplied in source.WithCancellation(ct))
+            {
+                if (terminal)
+                    throw ActionNodeException.Internal(
+                        "Action stream emitted frames after its terminal frame.");
+                if (supplied.Seq != nextSeq)
+                    throw ActionNodeException.Internal(
+                        $"Action stream sequence must be contiguous from zero; expected {nextSeq}, got {supplied.Seq}.");
+                if (supplied.ErrorCode is not null && !supplied.IsLast)
+                    throw ActionNodeException.Internal(
+                        "Action stream error_code is valid only on a terminal frame.");
+
+                var frame = supplied with { StreamId = streamId };
+                emitted.Add(frame);
+                await ctx.Response.WriteAsync(JsonSerializer.Serialize(frame, Json) + "\n", ct);
+                await ctx.Response.Body.FlushAsync(ct);
+                nextSeq++;
+                terminal = frame.IsLast;
+            }
+
+            if (!terminal)
+                throw ActionNodeException.Internal(
+                    "Action stream ended without a terminal frame.");
+            return emitted[^1].ErrorCode is null ? emitted : null;
+        }
+        catch (OperationCanceledException) when (ctx.RequestAborted.IsCancellationRequested)
+        {
+            return null;
+        }
+        catch (Exception ex)
+        {
+            var errorCode = ex is ActionNodeException actionError
+                ? actionError.ErrorCode
+                : NwpErrorCodes.NodeUnavailable;
+            _logger.LogWarning(ex, "Action stream {StreamId} terminated abnormally", streamId);
+            if (!ctx.RequestAborted.IsCancellationRequested && !terminal)
+            {
+                var error = new StreamFrame
+                {
+                    StreamId = streamId,
+                    Seq = nextSeq,
+                    IsLast = true,
+                    ErrorCode = errorCode,
+                    Data = Array.Empty<JsonElement>(),
+                };
+                await ctx.Response.WriteAsync(JsonSerializer.Serialize(error, Json) + "\n");
+                await ctx.Response.Body.FlushAsync();
+            }
+            return null;
+        }
+    }
+
+    private static async IAsyncEnumerable<StreamFrame> AsAsyncEnumerable(
+        IEnumerable<StreamFrame> frames)
+    {
+        foreach (var frame in frames)
+            yield return frame;
+        await Task.CompletedTask;
     }
 
     private async Task RunAsyncTask(
@@ -574,13 +693,15 @@ public sealed class ActionNodeMiddleware
         return v.ValueKind == JsonValueKind.String ? v.GetString() : null;
     }
 
-    private static async Task<T> ReadFrame<T>(HttpContext ctx)
+    private static async Task<(T frame, ulong wireInputBytes)> ReadFrame<T>(HttpContext ctx)
     {
         using var ms = new MemoryStream();
         await ctx.Request.Body.CopyToAsync(ms);
         ms.Position = 0;
-        return JsonSerializer.Deserialize<T>(ms.ToArray(), Json)
+        var raw = ms.ToArray();
+        var frame = JsonSerializer.Deserialize<T>(raw, Json)
             ?? throw new InvalidOperationException("Failed to deserialize frame.");
+        return (frame, (ulong)raw.LongLength);
     }
 
     private Task WriteAsyncResponse(
@@ -658,7 +779,7 @@ public sealed class ActionNodeMiddleware
             Capabilities = new NodeCapabilities
             {
                 Query = false,
-                Stream = false,
+                Stream = opt.LlmProfile?.SupportsStream ?? false,
                 TokenBudgetHint = true,
             },
             Auth = new NodeAuth

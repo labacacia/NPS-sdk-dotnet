@@ -1,8 +1,11 @@
 // Copyright 2026 INNO LOTUS PTY LTD
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
 using NPS.Core;
+using NPS.Core.Frames.Ncp;
 using NPS.NWP.ActionNode;
 using NPS.NWP.Actions;
 using NPS.NWP.Frames;
@@ -21,6 +24,7 @@ public delegate ValueTask LlmContextAuthorizer(
     LlmContextOwner owner,
     string actionId,
     LlmAuthorizationStage stage,
+    IReadOnlyList<string> requiredCapabilities,
     ActionContext context,
     CancellationToken ct);
 
@@ -43,8 +47,13 @@ public sealed class StatefulLlmActionOptions
     public string? ProviderName { get; set; }
     public string? DefaultModel { get; set; }
     public bool SupportsTools { get; set; }
+    public bool SupportsStream { get; set; }
     public bool SupportsJsonMode { get; set; }
     public string? ReasoningVisibility { get; set; }
+    /// <summary>
+    /// Deployment-owned NIP verifier. Stateful requests fail closed when absent;
+    /// the callback must verify every supplied capability at both stages.
+    /// </summary>
     public LlmContextAuthorizer? Authorizer { get; set; }
 }
 
@@ -121,7 +130,7 @@ public sealed class StatefulLlmActionProvider : IActionNodeProvider
             ],
             Provider = _options.ProviderName,
             DefaultModel = _options.DefaultModel,
-            SupportsStream = false,
+            SupportsStream = _options.SupportsStream,
             SupportsTools = _options.SupportsTools,
             SupportsJsonMode = _options.SupportsJsonMode,
             ReasoningVisibility = _options.ReasoningVisibility,
@@ -150,8 +159,30 @@ public sealed class StatefulLlmActionProvider : IActionNodeProvider
         };
         if (!requiresContextAuthorization) return;
 
+        if (frame.ActionId == LlmCompleteAction.ActionId && frame.Async)
+        {
+            LlmCompleteActionRequest request;
+            try
+            {
+                request = LlmCompleteAction.ReadRequest(frame);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or JsonException)
+            {
+                throw ActionNodeException.ParamsInvalid(ex.Message);
+            }
+            if (request.Stream)
+                throw ActionNodeException.ParamsInvalid(
+                    "stream=true cannot be combined with async=true.");
+        }
+
         var owner = Owner(context);
-        await CheckAuthorization(owner, frame.ActionId, LlmAuthorizationStage.Admission, context, ct);
+        await CheckAuthorization(
+            owner,
+            frame.ActionId,
+            LlmAuthorizationStage.Admission,
+            RequiredCapabilities(frame),
+            context,
+            ct);
     }
 
     public Task<ActionExecutionResult> ExecuteAsync(
@@ -186,9 +217,12 @@ public sealed class StatefulLlmActionProvider : IActionNodeProvider
             throw ActionNodeException.ParamsInvalid("This node does not advertise LLM tool-definition support.");
         if (request.Context is null)
             return await _inner.ExecuteAsync(frame, context, ct);
-        if (request.Stream)
+        if (request.Stream && !_options.SupportsStream)
             throw ActionNodeException.ParamsInvalid(
-                "The Action Server context coordinator supports unary/async completion, not streaming.");
+                "This node does not advertise LLM streaming support.");
+        if (request.Stream && frame.Async)
+            throw ActionNodeException.ParamsInvalid(
+                "stream=true cannot be combined with async=true.");
         if (request.Context.Operation is LlmContextOperation.Append
                 or LlmContextOperation.Fork
                 or LlmContextOperation.Reset
@@ -243,6 +277,23 @@ public sealed class StatefulLlmActionProvider : IActionNodeProvider
             throw;
         }
 
+        if (request.Stream)
+        {
+            if (result.StreamFrames is null)
+            {
+                Abort(reservation, NwpErrorCodes.NodeUnavailable);
+                throw ActionNodeException.Internal(
+                    "Stateful streaming llm.complete returned no StreamFrame sequence.");
+            }
+            return new ActionExecutionResult
+            {
+                StreamFrames = CoordinateStream(
+                    result.StreamFrames, reservation, owner, frame, context, ct),
+                AnchorRef = result.AnchorRef ?? LlmCompleteAction.StreamAnchorRef,
+                TokenEst = result.TokenEst,
+            };
+        }
+
         if (ct.IsCancellationRequested)
         {
             Abort(reservation, NwpErrorCodes.NodeUnavailable);
@@ -275,7 +326,13 @@ public sealed class StatefulLlmActionProvider : IActionNodeProvider
 
         try
         {
-            await CheckAuthorization(owner, frame.ActionId, LlmAuthorizationStage.Commit, context, ct);
+            await CheckAuthorization(
+                owner,
+                frame.ActionId,
+                LlmAuthorizationStage.Commit,
+                RequiredCapabilities(frame),
+                context,
+                ct);
         }
         catch (ActionNodeException ex)
         {
@@ -306,6 +363,141 @@ public sealed class StatefulLlmActionProvider : IActionNodeProvider
         response = response with { Context = receipt };
         return Result(response, result);
     }
+
+    private async IAsyncEnumerable<StreamFrame> CoordinateStream(
+        IAsyncEnumerable<StreamFrame> source,
+        LlmContextMutationReservation reservation,
+        LlmContextOwner owner,
+        ActionFrame requestFrame,
+        ActionContext actionContext,
+        [EnumeratorCancellation] CancellationToken ct)
+    {
+        var content = new StringBuilder();
+        var toolCalls = new List<LlmToolCallDto>();
+        var resolved = false;
+
+        try
+        {
+            await foreach (var frame in source.WithCancellation(ct))
+            {
+                IReadOnlyList<LlmCompleteStreamChunkDto> chunks;
+                try
+                {
+                    chunks = LlmCompleteAction.ReadStreamChunks(frame);
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or JsonException)
+                {
+                    throw ActionNodeException.Internal(
+                        $"Stateful llm.complete returned an invalid stream payload: {ex.Message}");
+                }
+
+                if (!frame.IsLast && chunks.Any(chunk =>
+                        chunk.StopReason is not null ||
+                        chunk.Error is not null ||
+                        chunk.Usage is not null ||
+                        chunk.Context is not null))
+                {
+                    throw ActionNodeException.Internal(
+                        "LLM stream stop_reason, error, usage, and context are terminal-only fields.");
+                }
+
+                foreach (var chunk in chunks)
+                {
+                    if (chunk.ContentDelta is not null)
+                        content.Append(chunk.ContentDelta);
+                    if (chunk.ToolCalls is not null)
+                        toolCalls.AddRange(chunk.ToolCalls);
+                }
+
+                var sanitized = chunks.Select(chunk => chunk with { Context = null }).ToArray();
+                if (!frame.IsLast)
+                {
+                    yield return RewriteStreamPayload(frame, sanitized);
+                    continue;
+                }
+
+                var terminal = sanitized.LastOrDefault(chunk => chunk.StopReason is not null);
+                var failed = frame.ErrorCode is not null ||
+                    sanitized.Any(chunk =>
+                        chunk.StopReason == LlmStopReason.Error || chunk.Error is not null);
+                if (failed)
+                {
+                    Abort(reservation, frame.ErrorCode ?? NwpErrorCodes.NodeUnavailable);
+                    resolved = true;
+                    yield return RewriteStreamPayload(
+                        frame with
+                        {
+                            IsLast = true,
+                            ErrorCode = frame.ErrorCode ?? NwpErrorCodes.NodeUnavailable,
+                        },
+                        sanitized);
+                    yield break;
+                }
+                if (terminal?.StopReason is null)
+                {
+                    throw ActionNodeException.Internal(
+                        "Successful LLM stream terminal frame requires stop_reason.");
+                }
+
+                try
+                {
+                    await CheckAuthorization(
+                        owner,
+                        requestFrame.ActionId,
+                        LlmAuthorizationStage.Commit,
+                        RequiredCapabilities(requestFrame),
+                        actionContext,
+                        ct);
+                }
+                catch (ActionNodeException ex)
+                {
+                    Abort(reservation, ex.ErrorCode);
+                    resolved = true;
+                    throw;
+                }
+
+                LlmContextReceiptDto receipt;
+                try
+                {
+                    receipt = _store.Commit(reservation, new LlmMessageDto
+                    {
+                        Role = "assistant",
+                        Content = content.Length == 0 ? null : content.ToString(),
+                        ToolCalls = toolCalls.Count == 0 ? null : toolCalls,
+                    });
+                }
+                catch (LlmContextStoreException ex)
+                {
+                    Abort(reservation, ex.ErrorCode);
+                    resolved = true;
+                    throw MapStoreError(ex);
+                }
+                resolved = true;
+                var committed = sanitized
+                    .Select(chunk => ReferenceEquals(chunk, terminal)
+                        ? chunk with { Context = receipt }
+                        : chunk)
+                    .ToArray();
+                yield return RewriteStreamPayload(frame, committed);
+                yield break;
+            }
+
+            throw ActionNodeException.Internal(
+                "Stateful llm.complete stream ended without a terminal frame.");
+        }
+        finally
+        {
+            if (!resolved)
+                Abort(reservation, NwpErrorCodes.NodeUnavailable);
+        }
+    }
+
+    private static StreamFrame RewriteStreamPayload(
+        StreamFrame frame,
+        IReadOnlyList<LlmCompleteStreamChunkDto> chunks) => frame with
+        {
+            Data = chunks.Select(NwpActionPayloadCodec.ToJsonElement).ToArray(),
+        };
 
     private ActionExecutionResult Status(ActionFrame frame, ActionContext context)
     {
@@ -416,9 +608,44 @@ public sealed class StatefulLlmActionProvider : IActionNodeProvider
         LlmContextOwner owner,
         string actionId,
         LlmAuthorizationStage stage,
+        IReadOnlyList<string> requiredCapabilities,
         ActionContext context,
-        CancellationToken ct) =>
-        _options.Authorizer?.Invoke(owner, actionId, stage, context, ct) ?? ValueTask.CompletedTask;
+        CancellationToken ct)
+    {
+        if (_options.Authorizer is null)
+        {
+            throw new ActionNodeException(
+                403,
+                NpsStatusCodes.AuthForbidden,
+                NwpErrorCodes.LlmContextForbidden,
+                "Stateful LLM context authorization is not configured.");
+        }
+        return _options.Authorizer.Invoke(
+            owner, actionId, stage, requiredCapabilities, context, ct);
+    }
+
+    private static IReadOnlyList<string> RequiredCapabilities(ActionFrame frame)
+    {
+        if (frame.ActionId is LlmContextActions.StatusActionId or LlmContextActions.ReleaseActionId)
+            return [LlmCompleteAction.CapabilityContext];
+
+        var capabilities = new List<string>
+        {
+            LlmCompleteAction.CapabilityComplete,
+            LlmCompleteAction.CapabilityContext,
+        };
+        if (frame.Params is { ValueKind: JsonValueKind.Object } parameters)
+        {
+            if (parameters.TryGetProperty("stream", out var stream)
+                && stream.ValueKind is JsonValueKind.True)
+                capabilities.Add(LlmCompleteAction.CapabilityStream);
+            if (parameters.TryGetProperty("tools", out var tools)
+                && tools.ValueKind is JsonValueKind.Array
+                && tools.GetArrayLength() > 0)
+                capabilities.Add(LlmCompleteAction.CapabilityToolCall);
+        }
+        return capabilities;
+    }
 
     private void Abort(LlmContextMutationReservation reservation, string errorCode)
     {

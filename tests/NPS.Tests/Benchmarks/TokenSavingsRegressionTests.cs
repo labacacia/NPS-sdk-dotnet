@@ -44,6 +44,23 @@ public class TokenSavingsRegressionTests
         Assert.Equal(a, b);
     }
 
+    [Fact]
+    public void StatefulLlmContextBenchmark_MeetsStrictNativeContract()
+    {
+        var result = LlmContextBenchmark.Measure();
+
+        result.EnsureConformant();
+        Assert.True(result.StatefulWireInputBytes < result.StatelessWireInputBytes);
+        Assert.True(result.StatefulEvaluatedTokens < result.StatelessEvaluatedTokens);
+        Assert.True(result.StatefulReusedTokens > 0);
+    }
+
+    [Fact]
+    public void StatefulLlmContextBenchmark_ProducesDeterministicOutput()
+    {
+        Assert.Equal(LlmContextBenchmark.RunReport(), LlmContextBenchmark.RunReport());
+    }
+
     public static IEnumerable<object[]> AllScenarios =>
         Scenarios.All.Select(s => new object[] { s });
 }

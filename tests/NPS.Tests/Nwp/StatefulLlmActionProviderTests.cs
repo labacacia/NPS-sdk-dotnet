@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using NPS.Core;
+using NPS.Core.Frames.Ncp;
 using NPS.NWP.ActionNode;
 using NPS.NWP.Actions;
 using NPS.NWP.Extensions;
@@ -50,6 +51,8 @@ public sealed class StatefulLlmActionProviderTests : IAsyncLifetime
         {
             ProviderName = "willow",
             DefaultModel = "willow-small",
+            SupportsStream = true,
+            Authorizer = (_, _, _, _, _, _) => ValueTask.CompletedTask,
         };
         _host = await BuildHost();
         _client = _host.GetTestClient();
@@ -71,7 +74,7 @@ public sealed class StatefulLlmActionProviderTests : IAsyncLifetime
         var profile = document.RootElement.GetProperty("profiles").GetProperty("llm");
         Assert.Equal("0.2", profile.GetProperty("profile_version").GetString());
         Assert.Equal("willow", profile.GetProperty("provider").GetString());
-        Assert.False(profile.GetProperty("supports_stream").GetBoolean());
+        Assert.True(profile.GetProperty("supports_stream").GetBoolean());
         var context = profile.GetProperty("context");
         Assert.Equal("process", context.GetProperty("persistence").GetString());
         Assert.Equal(7, context.GetProperty("max_contexts_per_principal").GetInt32());
@@ -98,6 +101,78 @@ public sealed class StatefulLlmActionProviderTests : IAsyncLifetime
             new LlmContextStatusRequestDto { ContextId = contextId }));
         Assert.Equal("active", (await Data(status)).GetProperty("state").GetString());
         Assert.Equal(1, _inner.Calls);
+    }
+
+    [Fact]
+    public async Task ReconnectConcurrentAppendAndProcessRestart_FollowContract()
+    {
+        var lost = await Post(Alice, Complete(CreateRequest(), "lost-create"));
+        Assert.Equal(HttpStatusCode.OK, lost.StatusCode);
+
+        using var reconnected = _host.GetTestClient();
+        var recovered = await Data(await Post(reconnected, Alice,
+            LlmContextActions.ToStatusActionFrame(
+                new LlmContextStatusRequestDto { IdempotencyKey = "lost-create" })));
+        Assert.Equal("active", recovered.GetProperty("state").GetString());
+        Assert.Equal(1UL, recovered.GetProperty("version").GetUInt64());
+        var contextId = recovered.GetProperty("context_id").GetString()!;
+        var appendRequest = new LlmCompleteActionRequest
+        {
+            Model = "willow-small",
+            Messages = [new LlmMessageDto { Role = "user", Content = "Two" }],
+            Context = new LlmContextRequestDto
+            {
+                Operation = LlmContextOperation.Append,
+                ContextId = contextId,
+                BaseVersion = 1,
+            },
+        };
+        _inner.Delay = TimeSpan.FromMilliseconds(200);
+        var winnerTask = Post(reconnected, Alice, Complete(appendRequest, "append-winner"));
+        for (var attempt = 0; attempt < 100 && _inner.Calls < 2; attempt++)
+            await Task.Delay(5);
+        Assert.Equal(2, _inner.Calls);
+        var loser = await Post(reconnected, Alice, Complete(appendRequest, "append-loser"));
+        Assert.Equal(HttpStatusCode.Conflict, loser.StatusCode);
+        Assert.Contains(NwpErrorCodes.LlmContextVersionConflict,
+            await loser.Content.ReadAsStringAsync());
+        var winner = await Data(await winnerTask);
+        Assert.Equal(2UL, winner.GetProperty("context").GetProperty("version").GetUInt64());
+        Assert.Equal(2, _inner.Calls);
+
+        var originalStore = _store;
+        var originalInner = _inner;
+        _store = new InMemoryLlmContextStore(new LlmContextStoreOptions());
+        _inner = new TestLlmProvider();
+        var restartedHost = await BuildHost();
+        try
+        {
+            using var restarted = restartedHost.GetTestClient();
+            var appendAfterRestart = new LlmCompleteActionRequest
+            {
+                Model = "willow-small",
+                Messages = [new LlmMessageDto { Role = "user", Content = "Three" }],
+                Context = new LlmContextRequestDto
+                {
+                    Operation = LlmContextOperation.Append,
+                    ContextId = contextId,
+                    BaseVersion = 2,
+                },
+            };
+            var missing = await Post(restarted, Alice,
+                Complete(appendAfterRestart, "append-after-restart"));
+            Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+            Assert.Contains(NwpErrorCodes.LlmContextNotFound,
+                await missing.Content.ReadAsStringAsync());
+            Assert.Equal(0, _inner.Calls);
+        }
+        finally
+        {
+            await restartedHost.StopAsync();
+            restartedHost.Dispose();
+            _store = originalStore;
+            _inner = originalInner;
+        }
     }
 
     [Fact]
@@ -151,7 +226,7 @@ public sealed class StatefulLlmActionProviderTests : IAsyncLifetime
     [Fact]
     public async Task CommitReauthorizationFailure_AbortsAndSurfacesAuthError()
     {
-        _llmOptions.Authorizer = (_, _, stage, _, _) =>
+        _llmOptions.Authorizer = (_, _, stage, _, _, _) =>
         {
             if (stage == LlmAuthorizationStage.Commit)
             {
@@ -220,6 +295,107 @@ public sealed class StatefulLlmActionProviderTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task StreamingCreate_CommitsAtTerminalAndReplaysWithFreshStreamId()
+    {
+        var frame = Complete(CreateRequest() with { Stream = true }, "stream-create");
+        var first = await StreamFrames(await Post(Alice, frame));
+        var replay = await StreamFrames(await Post(Alice, frame));
+
+        Assert.Equal(2, first.Count);
+        Assert.False(first[0].IsLast);
+        Assert.True(first[1].IsLast);
+        Assert.NotEqual(first[0].StreamId, replay[0].StreamId);
+        Assert.All(first, item => Assert.Equal(first[0].StreamId, item.StreamId));
+        Assert.All(replay, item => Assert.Equal(replay[0].StreamId, item.StreamId));
+
+        var firstChunk = Assert.Single(LlmCompleteAction.ReadStreamChunks(first[0]));
+        var terminal = Assert.Single(LlmCompleteAction.ReadStreamChunks(first[1]));
+        var replayTerminal = Assert.Single(LlmCompleteAction.ReadStreamChunks(replay[1]));
+        Assert.Null(firstChunk.Context);
+        Assert.Equal("Fir", firstChunk.ContentDelta);
+        Assert.Equal("st", terminal.ContentDelta);
+        Assert.Equal(LlmStopReason.EndTurn, terminal.StopReason);
+        Assert.NotNull(terminal.Context);
+        Assert.Equal(terminal.Context, replayTerminal.Context);
+        Assert.Equal(1UL, terminal.Context!.Version);
+        Assert.Equal(1, _inner.Calls);
+
+        var snapshot = _store.Snapshot(Owner(Alice), terminal.Context.ContextId);
+        Assert.Equal("First", snapshot.Transcript[^1].Content);
+    }
+
+    [Fact]
+    public async Task StreamingAbnormalEnd_AbortsAndEmitsTerminalProtocolError()
+    {
+        _inner.Mode = TestProviderMode.StreamAbnormal;
+        var frames = await StreamFrames(await Post(
+            Alice,
+            Complete(CreateRequest() with { Stream = true }, "stream-abnormal")));
+
+        Assert.Equal(2, frames.Count);
+        Assert.False(frames[0].IsLast);
+        Assert.True(frames[1].IsLast);
+        Assert.Equal(NwpErrorCodes.NodeUnavailable, frames[1].ErrorCode);
+        var status = await Data(await Post(Alice, LlmContextActions.ToStatusActionFrame(
+            new LlmContextStatusRequestDto { IdempotencyKey = "stream-abnormal" })));
+        Assert.Equal("failed", status.GetProperty("state").GetString());
+        Assert.False(status.TryGetProperty("context_id", out _));
+    }
+
+    [Fact]
+    public async Task StreamingCommitReauthorizationFailure_AbortsBeforeTerminalReceipt()
+    {
+        _llmOptions.Authorizer = (_, _, stage, _, _, _) =>
+        {
+            if (stage == LlmAuthorizationStage.Commit)
+            {
+                throw new ActionNodeException(
+                    401,
+                    NpsStatusCodes.AuthUnauthenticated,
+                    NwpErrorCodes.AuthNidRevoked,
+                    "revoked before stream commit");
+            }
+            return ValueTask.CompletedTask;
+        };
+
+        var frames = await StreamFrames(await Post(
+            Alice,
+            Complete(CreateRequest() with { Stream = true }, "stream-revoked")));
+        Assert.Equal(2, frames.Count);
+        Assert.Equal(NwpErrorCodes.AuthNidRevoked, frames[^1].ErrorCode);
+        Assert.DoesNotContain(
+            frames.SelectMany(LlmCompleteAction.ReadStreamChunks),
+            chunk => chunk.Context is not null);
+
+        var status = await Data(await Post(Alice, LlmContextActions.ToStatusActionFrame(
+            new LlmContextStatusRequestDto { IdempotencyKey = "stream-revoked" })));
+        Assert.Equal(NwpErrorCodes.AuthNidRevoked, status.GetProperty("error_code").GetString());
+    }
+
+    [Fact]
+    public async Task StreamingDuplicateWhileLive_ReturnsConflictWithoutJoiningStream()
+    {
+        _inner.StreamGate = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var frame = Complete(CreateRequest() with { Stream = true }, "stream-live");
+        using var first = await Post(
+            Alice,
+            frame,
+            HttpCompletionOption.ResponseHeadersRead);
+
+        var duplicate = await Post(Alice, frame);
+        Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
+        Assert.Contains(
+            NwpErrorCodes.ActionIdempotencyConflict,
+            await duplicate.Content.ReadAsStringAsync());
+        Assert.Equal(1, _inner.Calls);
+
+        _inner.StreamGate.SetResult(true);
+        var completed = await StreamFrames(first);
+        Assert.True(completed[^1].IsLast);
+    }
+
+    [Fact]
     public async Task AsyncTaskStatusAndCancel_AreCallerScoped()
     {
         _inner.Delay = TimeSpan.FromSeconds(5);
@@ -267,7 +443,7 @@ public sealed class StatefulLlmActionProviderTests : IAsyncLifetime
     public async Task CachedReplay_RechecksAuthorizationBeforeReturningResult()
     {
         var admitted = true;
-        _llmOptions.Authorizer = (_, _, stage, _, _) =>
+        _llmOptions.Authorizer = (_, _, stage, _, _, _) =>
         {
             if (stage == LlmAuthorizationStage.Admission && !admitted)
             {
@@ -288,10 +464,57 @@ public sealed class StatefulLlmActionProviderTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task AuthorizationReceivesExactCapabilities_AndFailsClosedWhenMissing()
+    {
+        var checks = new List<(string Action, LlmAuthorizationStage Stage, string[] Capabilities)>();
+        _llmOptions.Authorizer = (_, action, stage, capabilities, _, _) =>
+        {
+            checks.Add((action, stage, capabilities.ToArray()));
+            return ValueTask.CompletedTask;
+        };
+
+        Assert.Equal(HttpStatusCode.OK,
+            (await Post(Alice, Complete(CreateRequest(), "capabilities"))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await Post(Alice, LlmContextActions.ToStatusActionFrame(
+                new LlmContextStatusRequestDto { IdempotencyKey = "capabilities" }))).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity,
+            (await Post(Alice, Complete(CreateRequest() with
+            {
+                Stream = true,
+                Tools = [new LlmToolDefinitionDto { Name = "lookup" }],
+            }, "extended-capabilities"))).StatusCode);
+
+        Assert.Collection(
+            checks,
+            check => Assert.Equal(
+                [LlmCompleteAction.CapabilityComplete, LlmCompleteAction.CapabilityContext],
+                check.Capabilities),
+            check => Assert.Equal(
+                [LlmCompleteAction.CapabilityComplete, LlmCompleteAction.CapabilityContext],
+                check.Capabilities),
+            check => Assert.Equal([LlmCompleteAction.CapabilityContext], check.Capabilities),
+            check => Assert.Equal(
+                [
+                    LlmCompleteAction.CapabilityComplete,
+                    LlmCompleteAction.CapabilityContext,
+                    LlmCompleteAction.CapabilityStream,
+                    LlmCompleteAction.CapabilityToolCall,
+                ],
+                check.Capabilities));
+
+        _llmOptions.Authorizer = null;
+        var denied = await Post(Alice, Complete(CreateRequest(), "no-authorizer"));
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        Assert.Contains(NwpErrorCodes.LlmContextForbidden, await denied.Content.ReadAsStringAsync());
+        Assert.Equal(1, _inner.Calls);
+    }
+
+    [Fact]
     public async Task MalformedStatefulRequests_FailBeforeProviderDispatch()
     {
         var missingKey = Complete(CreateRequest(), key: null);
-        var streamed = Complete(CreateRequest() with { Stream = true }, "streamed");
+        var streamedAsync = Complete(CreateRequest() with { Stream = true }, "streamed", async: true);
         var tools = Complete(CreateRequest() with
         {
             Tools = [new LlmToolDefinitionDto { Name = "lookup" }],
@@ -301,7 +524,7 @@ public sealed class StatefulLlmActionProviderTests : IAsyncLifetime
             Context = new LlmContextRequestDto { Operation = LlmContextOperation.Reset },
         }, "reset-without-version");
 
-        foreach (var frame in new[] { missingKey, streamed, tools, resetWithoutVersion })
+        foreach (var frame in new[] { missingKey, streamedAsync, tools, resetWithoutVersion })
         {
             var response = await Post(Alice, frame);
             Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
@@ -355,7 +578,17 @@ public sealed class StatefulLlmActionProviderTests : IAsyncLifetime
         return host;
     }
 
-    private async Task<HttpResponseMessage> Post(string? agent, ActionFrame frame)
+    private async Task<HttpResponseMessage> Post(
+        string? agent,
+        ActionFrame frame,
+        HttpCompletionOption completion = HttpCompletionOption.ResponseContentRead)
+        => await Post(_client, agent, frame, completion);
+
+    private static async Task<HttpResponseMessage> Post(
+        HttpClient client,
+        string? agent,
+        ActionFrame frame,
+        HttpCompletionOption completion = HttpCompletionOption.ResponseContentRead)
     {
         var content = new StringContent(
             JsonSerializer.Serialize(frame, NwpActionPayloadCodec.JsonOptions),
@@ -363,7 +596,7 @@ public sealed class StatefulLlmActionProviderTests : IAsyncLifetime
             NwpHttpHeaders.MimeFrame);
         var request = new HttpRequestMessage(HttpMethod.Post, "/llm/invoke") { Content = content };
         if (agent is not null) request.Headers.Add(NwpHttpHeaders.Agent, agent);
-        return await _client.SendAsync(request);
+        return await client.SendAsync(request, completion);
     }
 
     private static ActionFrame Complete(
@@ -416,6 +649,18 @@ public sealed class StatefulLlmActionProviderTests : IAsyncLifetime
         return document.RootElement.GetProperty("data")[0].Clone();
     }
 
+    private static async Task<IReadOnlyList<StreamFrame>> StreamFrames(
+        HttpResponseMessage response)
+    {
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("application/x-ndjson", response.Content.Headers.ContentType?.MediaType);
+        var lines = (await response.Content.ReadAsStringAsync())
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        return lines.Select(line =>
+            JsonSerializer.Deserialize<StreamFrame>(line, NwpActionPayloadCodec.JsonOptions)!)
+            .ToArray();
+    }
+
     private static LlmContextOwner Owner(string nid) => new(nid, "workspace-a");
 }
 
@@ -424,6 +669,7 @@ public enum TestProviderMode
     Success,
     Failure,
     ModelError,
+    StreamAbnormal,
 }
 
 internal sealed class TestLlmProvider : IActionNodeProvider
@@ -432,6 +678,7 @@ internal sealed class TestLlmProvider : IActionNodeProvider
 
     public TestProviderMode Mode { get; set; }
     public TimeSpan Delay { get; set; }
+    public TaskCompletionSource<bool>? StreamGate { get; set; }
     public int Calls => _calls;
 
     public async Task<ActionExecutionResult> ExecuteAsync(
@@ -442,6 +689,16 @@ internal sealed class TestLlmProvider : IActionNodeProvider
         Interlocked.Increment(ref _calls);
         if (Delay > TimeSpan.Zero) await Task.Delay(Delay, ct);
         if (Mode == TestProviderMode.Failure) throw ActionNodeException.Internal("provider failed");
+
+        var request = LlmCompleteAction.ReadRequest(frame);
+        if (request.Stream)
+        {
+            return new ActionExecutionResult
+            {
+                StreamFrames = Stream(Mode, ct),
+                TokenEst = 1,
+            };
+        }
 
         var response = Mode == TestProviderMode.ModelError
             ? new LlmCompleteActionResponse
@@ -464,7 +721,7 @@ internal sealed class TestLlmProvider : IActionNodeProvider
                 {
                     InputTokens = 2,
                     OutputTokens = 1,
-                    WireInputBytes = 128,
+                    WireInputBytes = context.WireInputBytes,
                 },
             };
         return new ActionExecutionResult
@@ -472,5 +729,31 @@ internal sealed class TestLlmProvider : IActionNodeProvider
             Result = LlmCompleteAction.ToResponsePayload(response),
             TokenEst = 1,
         };
+    }
+
+    private async IAsyncEnumerable<StreamFrame> Stream(
+        TestProviderMode mode,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+    {
+        yield return LlmCompleteAction.ToStreamFrame(
+            "provider-stream",
+            0,
+            false,
+            [new LlmCompleteStreamChunkDto { ContentDelta = "Fir" }],
+            includeAnchorRef: true);
+        if (StreamGate is not null) await StreamGate.Task.WaitAsync(ct);
+        await Task.Yield();
+        ct.ThrowIfCancellationRequested();
+        if (mode == TestProviderMode.StreamAbnormal) yield break;
+        yield return LlmCompleteAction.ToStreamFrame(
+            "provider-stream",
+            1,
+            true,
+            [new LlmCompleteStreamChunkDto
+            {
+                ContentDelta = "st",
+                StopReason = LlmStopReason.EndTurn,
+                Usage = new LlmUsageDto { InputTokens = 2, OutputTokens = 1 },
+            }]);
     }
 }
