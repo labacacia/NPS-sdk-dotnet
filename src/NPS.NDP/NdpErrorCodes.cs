@@ -65,4 +65,10 @@ public static class NdpErrorCodes
 
     /// <summary>NDP Registry is temporarily unavailable.</summary>
     public const string RegistryUnavailable       = "NDP-REGISTRY-UNAVAILABLE";
+
+    /// <summary>Durable registry state could not be committed or loaded.</summary>
+    public const string StateUnavailable          = "NDP-STATE-UNAVAILABLE";
+
+    /// <summary>Persisted registry state failed integrity validation.</summary>
+    public const string StateCorrupt              = "NDP-STATE-CORRUPT";
 }

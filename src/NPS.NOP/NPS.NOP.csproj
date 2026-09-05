@@ -9,14 +9,14 @@
     <RootNamespace>NPS.NOP</RootNamespace>
     <PackageId>LabAcacia.NPS.NOP</PackageId>
     <AssemblyName>NPS.NOP</AssemblyName>
-    <Version>1.0.0-alpha.18</Version>
+    <Version>1.0.0-alpha.19</Version>
     <Description>NPS — Neural Orchestration Protocol frame types, DAG validation, and multi-Agent task orchestration.</Description>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Authors>LabAcacia / INNO LOTUS PTY LTD</Authors>
     <Company>INNO LOTUS PTY LTD</Company>
     <PackageTags>nps;nop;ai;agent;protocol;orchestration;dag</PackageTags>
-    <PackageProjectUrl>https://github.com/labacacia/nps</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/labacacia/nps</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/labacacia/NPS-Dev</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/labacacia/NPS-Dev</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>

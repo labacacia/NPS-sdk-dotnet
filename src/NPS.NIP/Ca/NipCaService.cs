@@ -870,6 +870,8 @@ public static class NipErrorCodes
 
     /// <summary>ocsp_staple missing, malformed, or nextUpdate elapsed under Phase-3 enforcement (NIP v0.9 §5.1.4, v0.11 §7.5).</summary>
     public const string OcspStapleExpired = "NIP-OCSP-STAPLE-EXPIRED";
+    public const string OcspUnknown       = "NIP-OCSP-UNKNOWN";
+    public const string RevocationStateStale = "NIP-REVOCATION-STATE-STALE";
     public const string NidNotFound      = "NIP-CA-NID-NOT-FOUND";
     public const string NidAlreadyExists = "NIP-CA-NID-ALREADY-EXISTS";
     public const string SerialDuplicate  = "NIP-CA-SERIAL-DUPLICATE";

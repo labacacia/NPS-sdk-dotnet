@@ -49,4 +49,9 @@ public static class NopErrorCodes
     public const string RuntimeIdleTimeout = "NOP-RUNTIME-IDLE-TIMEOUT";
     /// <summary>Worker exceeded the max runtime → NPS-SERVER-TIMEOUT.</summary>
     public const string RuntimeMaxRuntime = "NOP-RUNTIME-MAX-RUNTIME";
+
+    // ── alpha.19 replay / aggregation hardening ──────────────────────────────
+    public const string ReplayConflict = "NOP-REPLAY-CONFLICT";
+    public const string ReplayLimit = "NOP-REPLAY-LIMIT";
+    public const string AggregationInvalid = "NOP-AGGREGATION-INVALID";
 }

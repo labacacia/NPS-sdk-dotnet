@@ -92,7 +92,7 @@ public sealed record NpsConformanceManifest
         return new NpsConformanceManifest
         {
             Profile = profile,
-            ProfileVersion = profile == NpsConformanceProfiles.NodeL2 ? "0.3" : "0.1",
+            ProfileVersion = profile == NpsConformanceProfiles.NodeL2 ? "0.7" : "0.1",
             Iut = new NpsConformanceActor { Name = iutName, Version = iutVersion, Nid = iutNid },
             Peer = new NpsConformanceActor { Name = peerName, Version = peerVersion },
             Run = new NpsConformanceRun { Date = DateTime.UtcNow.ToString("O"), Environment = environment },
@@ -138,6 +138,13 @@ public static class NpsConformanceCatalog
 
     public static IReadOnlyList<NpsConformanceCase> NodeL2 { get; } =
     [
+        C("TC-N2-AaaS-01", NpsConformanceProfiles.NodeL2, "L2-01", "Internal work uses NOP TaskFrame"),
+        C("TC-N2-AaaS-02", NpsConformanceProfiles.NodeL2, "L2-02", "OpenTelemetry TaskFrame context injection"),
+        C("TC-N2-AaaS-03", NpsConformanceProfiles.NodeL2, "L2-03", "CGN-Estimate budget and token_est response"),
+        C("TC-N2-AaaS-04", NpsConformanceProfiles.NodeL2, "L2-04", "NOP preflight gates worker dispatch"),
+        C("TC-N2-AaaS-05", NpsConformanceProfiles.NodeL2, "L2-05", "NOP retry and timeout semantics"),
+        C("TC-N2-AaaS-06", NpsConformanceProfiles.NodeL2, "L2-06", "Asynchronous Action lifecycle", optional: true),
+        C("TC-N2-AaaS-07", NpsConformanceProfiles.NodeL2, "L2-07", "AlignStream CGN back-pressure", optional: true),
         C("TC-N2-AnchorTopo-01", NpsConformanceProfiles.NodeL2, "L2-08", "Snapshot of a 3-member cluster"),
         C("TC-N2-AnchorTopo-02", NpsConformanceProfiles.NodeL2, "L2-08", "Version monotonicity across joins"),
         C("TC-N2-AnchorTopo-03", NpsConformanceProfiles.NodeL2, "L2-08", "Sub-Anchor member surfaces"),
@@ -150,10 +157,25 @@ public static class NpsConformanceCatalog
         C("TC-N2-AnchorTopo-07", NpsConformanceProfiles.NodeL2, "L2-08", "Unsupported topology filter"),
         C("TC-N2-AnchorTopo-08", NpsConformanceProfiles.NodeL2, "L2-08", "Unsupported reserved topology type"),
         C("TC-N2-AnchorStream-04", NpsConformanceProfiles.NodeL2, "L2-08", "resync_required when version is too old"),
-        C("TC-N2-Tls-01", NpsConformanceProfiles.NodeL2, "NPS-RFC-0006", "ALPN nps/1.0 negotiated over TLS 1.3"),
-        C("TC-N2-Tls-02", NpsConformanceProfiles.NodeL2, "NPS-RFC-0006", "Mutual TLS required"),
-        C("TC-N2-Tls-03", NpsConformanceProfiles.NodeL2, "NPS-RFC-0006", "Client cert trust anchor and NID binding"),
-        C("TC-N2-Tls-04", NpsConformanceProfiles.NodeL2, "NPS-RFC-0006", "IdentFrame/certificate NID mismatch"),
+        C("TC-N2-Tls-01", NpsConformanceProfiles.NodeL2, "NPS-RFC-0006", "ALPN nps/1.0 negotiated over TLS 1.3", optional: true),
+        C("TC-N2-Tls-02", NpsConformanceProfiles.NodeL2, "NPS-RFC-0006", "Mutual TLS required", optional: true),
+        C("TC-N2-Tls-03", NpsConformanceProfiles.NodeL2, "NPS-RFC-0006", "Client cert trust anchor and NID binding", optional: true),
+        C("TC-N2-Tls-04", NpsConformanceProfiles.NodeL2, "NPS-RFC-0006", "IdentFrame/certificate NID mismatch", optional: true),
+        C("TC-N2-BridgeIn-01", NpsConformanceProfiles.NodeL2, "NPS-CR-0010", "MCP inbound required method set", optional: true),
+        C("TC-N2-BridgeIn-02", NpsConformanceProfiles.NodeL2, "NPS-CR-0010", "gRPC inbound round-trip", optional: true),
+        C("TC-N2-BridgeIn-03", NpsConformanceProfiles.NodeL2, "NPS-CR-0010", "A2A inbound round-trip", optional: true),
+        C("TC-N2-BridgeIn-04", NpsConformanceProfiles.NodeL2, "NPS-CR-0010", "Bare action resolution and ambiguity rejection", optional: true),
+        C("TC-N2-BridgeIn-05", NpsConformanceProfiles.NodeL2, "NPS-CR-0010", "Foreign-protocol error mapping", optional: true),
+        C("TC-N2-BridgeIn-06", NpsConformanceProfiles.NodeL2, "NPS-CR-0010", "Undeclared protocol or direction refusal", optional: true),
+        C("TC-N2-HA-01", NpsConformanceProfiles.NodeL2, "NPS-CR-0009", "cluster_epoch on topology read surfaces", optional: true),
+        C("TC-N2-HA-02", NpsConformanceProfiles.NodeL2, "NPS-CR-0009", "Planned anchor_failover wire shape", optional: true),
+        C("TC-N2-HA-03", NpsConformanceProfiles.NodeL2, "NPS-CR-0009", "Active-loss failover is terminal", optional: true),
+        C("TC-N2-HA-04", NpsConformanceProfiles.NodeL2, "NPS-CR-0009", "Quorum-loss wire shape and read-only mode", optional: true),
+        C("TC-N2-HA-05", NpsConformanceProfiles.NodeL2, "NPS-CR-0009", "Standby rejects topology writes", optional: true),
+        C("TC-N2-HA-06", NpsConformanceProfiles.NodeL2, "NPS-CR-0009", "Superseded leader is epoch fenced", optional: true),
+        C("TC-N2-HA-07", NpsConformanceProfiles.NodeL2, "NPS-CR-0009", "Registry resolves highest cluster_epoch", optional: true),
+        C("TC-N2-HA-08", NpsConformanceProfiles.NodeL2, "NPS-CR-0009", "Equal-epoch split-brain rejection", optional: true),
+        C("TC-N2-HA-09", NpsConformanceProfiles.NodeL2, "NPS-CR-0009", "Single-Anchor epoch-one compatibility", optional: true),
     ];
 
     public static IReadOnlyList<NpsConformanceCase> ForProfile(string profile) => profile switch
@@ -170,6 +192,15 @@ public static class NpsConformanceCatalog
 public static class NpsConformanceValidator
 {
     private static readonly HashSet<string> ValidResults = ["pass", "fail", "skip", "na"];
+    private static readonly HashSet<string> ReasonedShouldCases =
+        ["TC-N2-AaaS-06", "TC-N2-AaaS-07"];
+    private static readonly string[][] L2AllOrNothingFamilies =
+    [
+        ["TC-N2-Tls-01", "TC-N2-Tls-02", "TC-N2-Tls-03", "TC-N2-Tls-04"],
+        ["TC-N2-BridgeIn-01", "TC-N2-BridgeIn-02", "TC-N2-BridgeIn-03", "TC-N2-BridgeIn-04", "TC-N2-BridgeIn-05", "TC-N2-BridgeIn-06"],
+        ["TC-N2-HA-01", "TC-N2-HA-02", "TC-N2-HA-03", "TC-N2-HA-04", "TC-N2-HA-05", "TC-N2-HA-06"],
+        ["TC-N2-HA-07", "TC-N2-HA-08"],
+    ];
 
     public static NpsConformanceValidation Validate(NpsConformanceManifest manifest)
     {
@@ -187,6 +218,9 @@ public static class NpsConformanceValidator
                 return new(false, $"Case '{result.Id}' has invalid result '{result.Result}'.");
             if (result.Result == "na" && !known[result.Id].Optional)
                 return new(false, $"Case '{result.Id}' is required and cannot be marked na.");
+            if (result.Result == "na" && ReasonedShouldCases.Contains(result.Id)
+                && string.IsNullOrWhiteSpace(result.Message))
+                return new(false, $"Case '{result.Id}' requires a non-empty message for a SHOULD exception.");
         }
 
         var missing = catalog.Where(c => !seen.Contains(c.Id)).Select(c => c.Id).ToList();
@@ -195,6 +229,36 @@ public static class NpsConformanceValidator
 
         if (manifest.Cases.Any(c => c.Result is "fail" or "skip"))
             return new(false, "Conformance manifest contains fail or skip results.");
+
+        var expectedVersion = manifest.Profile == NpsConformanceProfiles.NodeL2 ? "0.7" : "0.1";
+        if (manifest.ProfileVersion != expectedVersion)
+            return new(false, $"Profile '{manifest.Profile}' requires manifest version '{expectedVersion}'.");
+
+        var expectedSummary = new NpsConformanceSummary
+        {
+            Pass = manifest.Cases.Count(c => c.Result == "pass"),
+            Fail = manifest.Cases.Count(c => c.Result == "fail"),
+            Skip = manifest.Cases.Count(c => c.Result == "skip"),
+            NotApplicable = manifest.Cases.Count(c => c.Result == "na"),
+        };
+        if (manifest.Summary != expectedSummary)
+            return new(false, "Conformance manifest summary does not match case results.");
+
+        if (manifest.Profile == NpsConformanceProfiles.NodeL2)
+        {
+            var results = manifest.Cases.ToDictionary(c => c.Id, c => c.Result, StringComparer.Ordinal);
+            foreach (var family in L2AllOrNothingFamilies)
+            {
+                var familyResults = family.Select(id => results[id]).Distinct(StringComparer.Ordinal).ToArray();
+                if (familyResults.Length != 1 || familyResults[0] is not ("pass" or "na"))
+                    return new(false, $"L2 case family '{family[0]}' must be all pass or all na.");
+            }
+
+            var anchorHaIsNa = results["TC-N2-HA-01"] == "na";
+            var singleAnchorIsNa = results["TC-N2-HA-09"] == "na";
+            if (anchorHaIsNa == singleAnchorIsNa)
+                return new(false, "L2 multi-Anchor HA and single-Anchor compatibility cases must have opposite applicability.");
+        }
 
         return new(true, "Conformance manifest is valid.");
     }

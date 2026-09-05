@@ -65,7 +65,7 @@ public class BridgeInboundOptions
     public string ServerName { get; set; } = "nps-bridge-server";
 
     /// <summary>Server version returned by MCP <c>initialize</c> and the A2A AgentCard.</summary>
-    public string ServerVersion { get; set; } = "1.0.0-alpha.18";
+    public string ServerVersion { get; set; } = "1.0.0-alpha.19";
 
     /// <summary>Server description returned by the A2A AgentCard.</summary>
     public string? Description { get; set; } = "NPS Bridge Node inbound surface.";

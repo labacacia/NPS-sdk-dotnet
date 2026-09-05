@@ -162,6 +162,8 @@ public static class NwpErrorCodes
     public const string SubscribeFilterUnsupported = "NWP-SUBSCRIBE-FILTER-UNSUPPORTED";
     public const string SubscribeInterrupted = "NWP-SUBSCRIBE-INTERRUPTED";
     public const string SubscribeSeqTooOld = "NWP-SUBSCRIBE-SEQ-TOO-OLD";
+    public const string SubscribeLeaseInvalid = "NWP-SUBSCRIBE-LEASE-INVALID";
+    public const string SubscribeLeaseExpired = "NWP-SUBSCRIBE-LEASE-EXPIRED";
 
     // Capacity / graph
     public const string BudgetExceeded = "NWP-BUDGET-EXCEEDED";
