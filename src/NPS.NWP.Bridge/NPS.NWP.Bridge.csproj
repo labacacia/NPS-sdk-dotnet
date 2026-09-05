@@ -9,7 +9,7 @@
     <RootNamespace>NPS.NWP.Bridge</RootNamespace>
     <PackageId>LabAcacia.NPS.NWP.Bridge</PackageId>
     <AssemblyName>NPS.NWP.Bridge</AssemblyName>
-    <Version>1.0.0-alpha.18</Version>
+    <Version>1.0.0-alpha.19</Version>
     <Description>NPS — NWP Bridge Node: stateless adapters between NPS frames and non-NPS protocols, bidirectional per NPS-CR-0010. Outbound HTTP/HTTPS, gRPC JSON unary, MCP JSON-RPC, and A2A JSON-RPC dispatchers; inbound MCP / A2A / gRPC servers over a pluggable INwpBackend (in-process or HTTP), with ASP.NET Core hosting. Absorbs LabAcacia.McpIngress, LabAcacia.A2aIngress, and LabAcacia.GrpcIngress.</Description>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Authors>LabAcacia / INNO LOTUS PTY LTD</Authors>

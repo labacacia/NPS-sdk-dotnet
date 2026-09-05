@@ -1,9 +1,8 @@
 <Project>
 
   <PropertyGroup>
-    <Version>1.0.0-alpha.18</Version>
-    <PackageReleaseNotes>1.0.0-alpha.18: official stateful LLM context DTO/store/coordinator; cross-SDK cancellation and task ownership; unary request correlation and usage accounting; NativeAOT nullable UInt64 resolver smoke gate.</PackageReleaseNotes>
-    <PackageReleaseNotes Condition="'$(Version)' == '1.0.0-alpha.19'">1.0.0-alpha.19: closes NCP/NWP/NIP/NDP/NOP runtime hardening gaps; executes 47 shared conformance vectors; aligns Node profile evidence, six-SDK parity, and release-readiness gates.</PackageReleaseNotes>
+    <Version>1.0.0-alpha.19</Version>
+    <PackageReleaseNotes>1.0.0-alpha.19: closes NCP/NWP/NIP/NDP/NOP runtime hardening gaps; executes 47 shared conformance vectors; aligns Node profile evidence, six-SDK parity, and release-readiness gates.</PackageReleaseNotes>
     <!-- XML documentation files are generated, but the alpha SDK still has broad
          public-surface doc gaps; keep compile output clean until the doc sweep. -->
     <NoWarn>$(NoWarn);CS1591;CS1573;CS1574;CS1734</NoWarn>
