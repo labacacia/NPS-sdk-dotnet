@@ -6,6 +6,12 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using NPS.Core.Codecs;
+using NPS.Core.Frames;
+using NPS.Core.Registry;
+using NPS.Daemon.Npsd.Inbox;
+using NPS.NWP.Frames;
+using NPS.NWP.Registry;
 
 namespace NPS.Tests.Daemons.Npsd;
 
@@ -15,6 +21,11 @@ public class InboxTests
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
     };
+
+    private static NpsFrameCodec CreateNwpCodec() => new(
+        new Tier1JsonCodec(),
+        new Tier2MsgPackCodec(),
+        new FrameRegistryBuilder().AddNcp().AddNwp().Build());
 
     private static async Task<string> IssueAgentAsync(NpsdTestServerFixture fx, string identifier)
     {
@@ -41,7 +52,7 @@ public class InboxTests
         var post = await fx.Client.PostAsync($"/v1/inbox/{Uri.EscapeDataString(nid)}", content);
         Assert.Equal(HttpStatusCode.Created, post.StatusCode);
         var postBody = await post.Content.ReadFromJsonAsync<JsonElement>(s_json);
-        var msgId    = ulong.Parse(postBody.GetProperty("message_id").GetString()!);
+        var msgId = ulong.Parse(postBody.GetProperty("message_id").GetString()!);
         Assert.True(msgId > 0);
 
         var get = await fx.Client.GetAsync($"/v1/inbox/{Uri.EscapeDataString(nid)}?wait=0");
@@ -49,7 +60,7 @@ public class InboxTests
         var body = await get.Content.ReadFromJsonAsync<JsonElement>(s_json);
         Assert.Equal(1, body.GetProperty("count").GetInt32());
 
-        var first  = body.GetProperty("messages").EnumerateArray().First();
+        var first = body.GetProperty("messages").EnumerateArray().First();
         Assert.Equal(msgId, ulong.Parse(first.GetProperty("message_id").GetString()!));
         Assert.Equal("application/test+plain", first.GetProperty("content_type").GetString());
         var b64 = first.GetProperty("payload_b64").GetString()!;
@@ -85,7 +96,7 @@ public class InboxTests
         await using var fx = await NpsdTestServerFixture.CreateAsync();
         var nid = await IssueAgentAsync(fx, "consumer-empty");
 
-        var sw   = System.Diagnostics.Stopwatch.StartNew();
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         var resp = await fx.Client.GetAsync($"/v1/inbox/{Uri.EscapeDataString(nid)}?wait=1");
         sw.Stop();
 
@@ -189,5 +200,162 @@ public class InboxTests
             $"/v1/inbox/{Uri.EscapeDataString(nid)}",
             new ByteArrayContent(new byte[2048]));
         Assert.Equal(HttpStatusCode.RequestEntityTooLarge, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task Undelivered_ActionFrame_survives_host_restart_bit_identical()
+    {
+        var dataDir = Path.Combine(Path.GetTempPath(), $"npsd-inbox-restart-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dataDir);
+
+        try
+        {
+            var wire = CreateNwpCodec().Encode(
+                new ActionFrame
+                {
+                    ActionId = "orders.persist",
+                    IdempotencyKey = "restart-proof",
+                },
+                EncodingTier.Json);
+            string nid;
+            ulong messageId;
+
+            await using (var first = await NpsdTestServerFixture.CreatePersistentAsync(dataDir))
+            {
+                nid = await IssueAgentAsync(first, "durable-consumer");
+                var content = new ByteArrayContent(wire);
+                content.Headers.ContentType = new MediaTypeHeaderValue("application/nps-frame");
+                var deposited = await first.Client.PostAsync(
+                    $"/v1/inbox/{Uri.EscapeDataString(nid)}",
+                    content);
+                Assert.Equal(HttpStatusCode.Created, deposited.StatusCode);
+                messageId = ulong.Parse((await deposited.Content.ReadFromJsonAsync<JsonElement>(s_json))
+                    .GetProperty("message_id").GetString()!);
+            }
+
+            Assert.True(File.Exists(Path.Combine(dataDir, "inbox.sqlite")));
+
+            await using (var second = await NpsdTestServerFixture.CreatePersistentAsync(dataDir))
+            {
+                var pulled = await second.Client.GetFromJsonAsync<JsonElement>(
+                    $"/v1/inbox/{Uri.EscapeDataString(nid)}?wait=0&batch=1",
+                    s_json);
+                var message = Assert.Single(pulled.GetProperty("messages").EnumerateArray());
+                Assert.Equal(messageId, ulong.Parse(message.GetProperty("message_id").GetString()!));
+                Assert.Equal(wire, Convert.FromBase64String(message.GetProperty("payload_b64").GetString()!));
+
+                var ack = await second.Client.DeleteAsync(
+                    $"/v1/inbox/{Uri.EscapeDataString(nid)}/{messageId}");
+                Assert.Equal(HttpStatusCode.NoContent, ack.StatusCode);
+            }
+
+            await using (var third = await NpsdTestServerFixture.CreatePersistentAsync(dataDir))
+            {
+                var afterAck = await third.Client.GetFromJsonAsync<JsonElement>(
+                    $"/v1/inbox/{Uri.EscapeDataString(nid)}?wait=0",
+                    s_json);
+                Assert.Equal(0, afterAck.GetProperty("count").GetInt32());
+            }
+        }
+        finally
+        {
+            try { Directory.Delete(dataDir, recursive: true); } catch { /* leave for diagnostics */ }
+        }
+    }
+
+    [Fact]
+    public async Task Durable_store_preserves_priority_and_expires_by_absolute_deadline()
+    {
+        var dataDir = Path.Combine(Path.GetTempPath(), $"npsd-inbox-store-{Guid.NewGuid():N}");
+        var sqlitePath = Path.Combine(dataDir, "inbox.sqlite");
+        var now = new DateTimeOffset(2026, 9, 5, 0, 0, 0, TimeSpan.Zero);
+
+        try
+        {
+            ulong low;
+            ulong high;
+            using (var first = InboxStore.CreateFileForTests(sqlitePath, () => now))
+            {
+                low = first.Enqueue("urn:nps:test", [0x01], "application/octet-stream", 0,
+                    TimeSpan.FromMinutes(10), 10);
+                high = first.Enqueue("urn:nps:test", [0x02], "application/octet-stream", 5,
+                    TimeSpan.FromSeconds(30), 10);
+            }
+
+            using (var second = InboxStore.CreateFileForTests(sqlitePath, () => now))
+            {
+                var ordered = await second.PeekAsync(
+                    "urn:nps:test", 10, TimeSpan.Zero, CancellationToken.None);
+                Assert.Equal(new[] { high, low }, ordered.Select(message => message.MessageId).ToArray());
+            }
+
+            now = now.AddMinutes(1);
+            using (var third = InboxStore.CreateFileForTests(sqlitePath, () => now))
+            {
+                var remaining = await third.PeekAsync(
+                    "urn:nps:test", 10, TimeSpan.Zero, CancellationToken.None);
+                Assert.Equal(low, Assert.Single(remaining).MessageId);
+                Assert.True(third.Ack("urn:nps:test", low));
+            }
+
+            using var fourth = InboxStore.CreateFileForTests(sqlitePath, () => now);
+            Assert.Equal(0, fourth.Depth("urn:nps:test"));
+        }
+        finally
+        {
+            try { Directory.Delete(dataDir, recursive: true); } catch { /* leave for diagnostics */ }
+        }
+    }
+
+    [Fact]
+    public async Task Pull_ack_sequence_drains_fifo_and_empty_pull_is_immediate()
+    {
+        await using var fixture = await NpsdTestServerFixture.CreateAsync();
+        var nid = await IssueAgentAsync(fixture, "fifo-consumer");
+
+        for (byte value = 1; value <= 3; value++)
+        {
+            var response = await fixture.Client.PostAsync(
+                $"/v1/inbox/{Uri.EscapeDataString(nid)}",
+                new ByteArrayContent([value]));
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        }
+
+        for (byte expected = 1; expected <= 3; expected++)
+        {
+            var pulled = await fixture.Client.GetFromJsonAsync<JsonElement>(
+                $"/v1/inbox/{Uri.EscapeDataString(nid)}?wait=0&batch=1",
+                s_json);
+            var message = Assert.Single(pulled.GetProperty("messages").EnumerateArray());
+            Assert.Equal(expected, Convert.FromBase64String(
+                message.GetProperty("payload_b64").GetString()!)[0]);
+            var messageId = message.GetProperty("message_id").GetString();
+            var ack = await fixture.Client.DeleteAsync(
+                $"/v1/inbox/{Uri.EscapeDataString(nid)}/{messageId}");
+            Assert.Equal(HttpStatusCode.NoContent, ack.StatusCode);
+        }
+
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var empty = await fixture.Client.GetFromJsonAsync<JsonElement>(
+            $"/v1/inbox/{Uri.EscapeDataString(nid)}?wait=0&batch=1",
+            s_json);
+        stopwatch.Stop();
+        Assert.Equal(0, empty.GetProperty("count").GetInt32());
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(1));
+    }
+
+    [Fact]
+    public async Task Health_advertises_durable_ephemeral_pull_and_declines_resident_push()
+    {
+        await using var fixture = await NpsdTestServerFixture.CreateAsync();
+        var health = await fixture.Client.GetFromJsonAsync<JsonElement>("/health", s_json);
+        var delivery = health.GetProperty("inbox_delivery");
+
+        Assert.Equal("sqlite", delivery.GetProperty("storage").GetString());
+        Assert.True(delivery.GetProperty("durable_undelivered").GetBoolean());
+        Assert.Equal("ephemeral", Assert.Single(
+            delivery.GetProperty("supported_activation_modes").EnumerateArray()).GetString());
+        Assert.Equal("http-pull-with-explicit-ack", delivery.GetProperty("delivery").GetString());
+        Assert.False(delivery.GetProperty("resident_push").GetBoolean());
     }
 }

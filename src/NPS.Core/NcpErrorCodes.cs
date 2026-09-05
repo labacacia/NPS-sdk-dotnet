@@ -95,4 +95,7 @@ public static class NcpErrorCodes
     /// → NPS-PROTO-PREAMBLE-INVALID
     /// </summary>
     public const string PreambleInvalid       = "NCP-PREAMBLE-INVALID";
+
+    /// <summary>QUIC 0-RTT data is rejected until the handshake is confirmed. → NPS-PROTO-VERSION-INCOMPATIBLE</summary>
+    public const string EarlyDataRejected     = "NCP-EARLY-DATA-REJECTED";
 }

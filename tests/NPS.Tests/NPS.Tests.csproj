@@ -7,10 +7,15 @@
     <IsPackable>false</IsPackable>
     <HasNpsDaemonSources Condition="Exists('..\..\..\..\tools\daemons\npsd\Npsd.csproj')">true</HasNpsDaemonSources>
     <HasNpsDaemonSources Condition="'$(HasNpsDaemonSources)' == ''">false</HasNpsDaemonSources>
+    <NpsSuiteRoot Condition="Exists('..\..\..\..\spec\conformance\node-profile-case-inventory.json')">..\..\..\..</NpsSuiteRoot>
+    <NpsSuiteRoot Condition="'$(NpsSuiteRoot)' == '' And Exists('..\..\spec\conformance\node-profile-case-inventory.json')">..\..</NpsSuiteRoot>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(HasNpsDaemonSources)' != 'true'">
     <Compile Remove="Daemons\**\*.cs" />
+    <Compile Remove="Conformance\AdvertisedImplementationManifestTests.cs" />
+    <Compile Remove="Conformance\NodeProfileCaseInventoryTests.cs" />
+    <Compile Remove="Conformance\NpsdNodeL1ManifestTests.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -29,6 +34,65 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="$(NpsSuiteRoot)\spec\conformance\node-profile-case-inventory.json">
+      <Link>conformance\node-profile-case-inventory.json</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="$(NpsSuiteRoot)\spec\conformance\node-profile-implementation-manifests.json">
+      <Link>conformance\node-profile-implementation-manifests.json</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="$(NpsSuiteRoot)\spec\conformance\aaas-l2-requirement-disposition.json">
+      <Link>conformance\aaas-l2-requirement-disposition.json</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\..\..\tools\daemons\npsd\conformance\NPS-NODE-L1-MANIFEST.json" Condition="'$(HasNpsDaemonSources)' == 'true'">
+      <Link>conformance\implementation\NPS-NODE-L1-MANIFEST.json</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\..\..\tools\daemons\nps-ingress\conformance\NPS-NODE-L2-TLS-EVIDENCE.json" Condition="'$(HasNpsDaemonSources)' == 'true'">
+      <Link>conformance\implementation\NPS-NODE-L2-TLS-EVIDENCE.json</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\..\..\tools\daemons\nps-runner\conformance\NPS-NODE-L3-MANIFEST.json" Condition="'$(HasNpsDaemonSources)' == 'true'">
+      <Link>conformance\implementation\NPS-NODE-L3-MANIFEST.json</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\..\..\spec\services\conformance\NPS-Node-L1.md" Condition="'$(HasNpsDaemonSources)' == 'true'">
+      <Link>conformance\spec\NPS-Node-L1.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\..\..\spec\services\conformance\NPS-Node-L1.cn.md" Condition="'$(HasNpsDaemonSources)' == 'true'">
+      <Link>conformance\spec\NPS-Node-L1.cn.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\..\..\spec\services\conformance\NPS-Node-L2.md" Condition="'$(HasNpsDaemonSources)' == 'true'">
+      <Link>conformance\spec\NPS-Node-L2.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\..\..\spec\services\conformance\NPS-Node-L2.cn.md" Condition="'$(HasNpsDaemonSources)' == 'true'">
+      <Link>conformance\spec\NPS-Node-L2.cn.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\..\..\spec\services\conformance\NPS-NODE-L1-CERTIFIED.md" Condition="'$(HasNpsDaemonSources)' == 'true'">
+      <Link>conformance\spec\NPS-NODE-L1-CERTIFIED.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\..\..\spec\services\conformance\NPS-NODE-L1-CERTIFIED.cn.md" Condition="'$(HasNpsDaemonSources)' == 'true'">
+      <Link>conformance\spec\NPS-NODE-L1-CERTIFIED.cn.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\..\..\spec\services\conformance\NPS-NODE-L2-CERTIFIED.md" Condition="'$(HasNpsDaemonSources)' == 'true'">
+      <Link>conformance\spec\NPS-NODE-L2-CERTIFIED.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\..\..\spec\services\conformance\NPS-NODE-L2-CERTIFIED.cn.md" Condition="'$(HasNpsDaemonSources)' == 'true'">
+      <Link>conformance\spec\NPS-NODE-L2-CERTIFIED.cn.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>
